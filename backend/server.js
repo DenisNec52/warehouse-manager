@@ -26,10 +26,10 @@ app.get("/", (_req, res) => {
 app.get("/favicon.ico", (_req, res) => res.status(204).end());
 
 // ── ROUTES ────────────────────────────────────────────────────────────────────
-app.use("/api/auth",       require("./routes/auth"));
-app.use("/api/movements",  require("./routes/movements"));
-app.use("/api/inventory",  require("./routes/inventory"));
-app.use("/api/categories", require("./routes/categories"));
+//app.use("/api/auth",       require("./routes/auth"));
+//app.use("/api/movements",  require("./routes/movements"));
+//app.use("/api/inventory",  require("./routes/inventory"));
+//app.use("/api/categories", require("./routes/categories"));
 
 // ── HEALTH CHECK ──────────────────────────────────────────────────────────────
 app.get("/api/health", (_req, res) => res.json({
