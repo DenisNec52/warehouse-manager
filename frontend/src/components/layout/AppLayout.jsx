@@ -24,11 +24,11 @@ const NAV = [
   { to:"/",             label:"Dashboard",    icon:LayoutDashboard, exact:true },
   { to:"/products",     label:"Prodotti",     icon:Package },
   { to:"/movements",    label:"Movimenti",    icon:ArrowLeftRight },
-  { to:"/categories",   label:"Categorie",    icon:Tag },
 ];
 
 const NAV_ADMIN = [
   { to:"/users",        label:"Utenti",       icon:Users },
+  { to:"/categories",   label:"Categorie",    icon:Tag },
 ];
 
 const NAV_BOTTOM = [
