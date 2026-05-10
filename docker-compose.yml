@@ -1,0 +1,48 @@
+# docker-compose.yml — sviluppo locale con MongoDB
+# Uso: docker-compose up -d
+
+version: "3.9"
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: wh-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: warehouse
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wh-backend
+    ports:
+      - "5000:5000"
+    env_file: ./backend/.env
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017/warehouse
+    depends_on:
+      - mongodb
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: wh-frontend
+    ports:
+      - "5173:5173"
+    env_file: ./frontend/.env
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  mongo_data:

@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── CSS Variables per il tema dinamico ──────────────────────── */
+:root {
+  --brand-50:  #eff6ff;
+  --brand-100: #dbeafe;
+  --brand-500: #3b82f6;
+  --brand-600: #2563eb;
+  --brand-700: #1d4ed8;
+  --radius:    8px;
+  --radius-sm: 6px;
+  --radius-lg: 12px;
+  --sidebar-w: 260px;
+}
+
+/* Tema aggiornato via JS in base al profilo utente */
+body.theme-green   { --brand-500:#10b981; --brand-600:#059669; --brand-700:#047857; --brand-50:#ecfdf5; --brand-100:#d1fae5; }
+body.theme-purple  { --brand-500:#8b5cf6; --brand-600:#7c3aed; --brand-700:#6d28d9; --brand-50:#f5f3ff; --brand-100:#ede9fe; }
+body.theme-orange  { --brand-500:#f97316; --brand-600:#ea580c; --brand-700:#c2410c; --brand-50:#fff7ed; --brand-100:#ffedd5; }
+body.theme-red     { --brand-500:#ef4444; --brand-600:#dc2626; --brand-700:#b91c1c; --brand-50:#fef2f2; --brand-100:#fee2e2; }
+body.theme-pink    { --brand-500:#ec4899; --brand-600:#db2777; --brand-700:#be185d; --brand-50:#fdf2f8; --brand-100:#fce7f3; }
+body.theme-teal    { --brand-500:#14b8a6; --brand-600:#0d9488; --brand-700:#0f766e; --brand-50:#f0fdfa; --brand-100:#ccfbf1; }
+
+/* Custom accent via CSS var (color picker) */
+body.theme-custom  { --brand-500:var(--custom-accent); --brand-600:var(--custom-accent-dark); --brand-700:var(--custom-accent-darker); }
+
+/* Radius variants */
+body.radius-none { --radius:0;  --radius-sm:0;  --radius-lg:0;  }
+body.radius-sm   { --radius:4px;--radius-sm:2px;--radius-lg:6px; }
+body.radius-md   { --radius:8px;--radius-sm:6px;--radius-lg:12px; }
+body.radius-lg   { --radius:12px;--radius-sm:8px;--radius-lg:16px; }
+body.radius-full { --radius:20px;--radius-sm:12px;--radius-lg:28px; }
+
+/* ── Scrollbar ────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:#d1d5db; border-radius:99px; }
+.dark ::-webkit-scrollbar-thumb { background:#374151; }
+
+/* ── Selection ───────────────────────────────────────────────── */
+::selection { background:var(--brand-500); color:white; }
+
+/* ── Utilities ────────────────────────────────────────────────── */
+@layer components {
+  /* Card */
+  .card { @apply bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 shadow-card rounded; }
+  .card-hover { @apply card hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200 cursor-pointer; }
+
+  /* Buttons */
+  .btn { @apply inline-flex items-center justify-center gap-2 font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-sm; }
+  .btn-sm  { @apply btn text-xs px-3 py-1.5; }
+  .btn-md  { @apply btn text-sm px-4 py-2; }
+  .btn-lg  { @apply btn text-sm px-5 py-2.5; }
+  .btn-primary  { @apply bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white shadow-sm; }
+  .btn-secondary{ @apply bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300; }
+  .btn-danger   { @apply bg-red-500 hover:bg-red-600 text-white shadow-sm; }
+  .btn-ghost    { @apply text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/60 hover:text-gray-900 dark:hover:text-gray-100; }
+  .btn-outline  { @apply border border-gray-200 dark:border-gray-600 hover:border-[var(--brand-500)] text-gray-700 dark:text-gray-300; }
+
+  /* Form */
+  .form-input {
+    @apply w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600
+           text-gray-900 dark:text-gray-100 placeholder:text-gray-400
+           rounded-sm px-3.5 py-2.5 text-sm outline-none
+           focus:ring-2 focus:ring-[var(--brand-500)]/30 focus:border-[var(--brand-500)]
+           transition-all duration-200;
+  }
+  .form-label { @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5; }
+  .form-error { @apply text-xs text-red-500 mt-1 flex items-center gap-1; }
+
+  /* Badge */
+  .badge { @apply inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full; }
+  .badge-blue   { @apply badge bg-blue-50   text-blue-700   dark:bg-blue-900/30  dark:text-blue-300; }
+  .badge-green  { @apply badge bg-green-50  text-green-700  dark:bg-green-900/30 dark:text-green-300; }
+  .badge-red    { @apply badge bg-red-50    text-red-700    dark:bg-red-900/30   dark:text-red-300; }
+  .badge-yellow { @apply badge bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300; }
+  .badge-gray   { @apply badge bg-gray-100  text-gray-600   dark:bg-gray-700     dark:text-gray-300; }
+
+  /* Stat card */
+  .stat-card { @apply card p-5 relative overflow-hidden; }
+  .stat-card-accent { @apply absolute top-0 left-0 right-0 h-0.5; }
+
+  /* Table */
+  .table-wrap { @apply overflow-x-auto -mx-1; }
+  .data-table { @apply w-full text-sm; }
+  .data-table th { @apply text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 whitespace-nowrap; }
+  .data-table td { @apply px-4 py-3.5 border-b border-gray-50 dark:border-gray-700/50 text-gray-700 dark:text-gray-300; }
+  .data-table tr { @apply transition-colors duration-100; }
+  .data-table tbody tr:hover td { @apply bg-gray-50/80 dark:bg-gray-700/30; }
+  .data-table tr:last-child td  { @apply border-b-0; }
+
+  /* Nav item sidebar */
+  .nav-item { @apply flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/60 hover:text-gray-900 dark:hover:text-white transition-all duration-150 cursor-pointer; }
+  .nav-item.active { @apply bg-[var(--brand-50)] text-[var(--brand-600)] dark:bg-[var(--brand-500)]/10 dark:text-[var(--brand-300,#93c5fd)]; }
+
+  /* Skeleton */
+  .skeleton { @apply animate-pulse bg-gray-200 dark:bg-gray-700 rounded; }
+}
+
+/* ── Skeleton loading ─────────────────────────────────────────── */
+.skeleton-text  { @apply skeleton h-4 w-full; }
+.skeleton-title { @apply skeleton h-6 w-3/4; }
+
+/* ── Reading progress ─────────────────────────────────────────── */
+.reading-progress { position:fixed;top:0;left:0;height:2px;background:var(--brand-500);z-index:9999;transition:width .1s linear; }

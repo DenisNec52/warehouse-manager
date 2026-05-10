@@ -1,50 +1,43 @@
+// ══════════════════════════════════════════════════════════════
+// routes/categories.js
+// ══════════════════════════════════════════════════════════════
 const express  = require("express");
+const { body } = require("express-validator");
 const Category = require("../models/Category");
-const auth     = require("../middleware/auth");
+const { protect, requireAdmin } = require("../middleware/auth");
+const validate = require("../middleware/validate");
 const router   = express.Router();
 
-router.use(auth);
+router.use(protect);
 
-// GET /api/categories — tutti gli utenti
 router.get("/", async (_req, res) => {
-  try {
-    const cats = await Category.find().sort({ createdAt: 1 }).lean();
-    res.json({ categories: cats.map(c => c.name) });
-  } catch (err) {
-    res.status(500).json({ message: "Errore nel recupero reparti." });
-  }
+  const cats = await Category.find({ isActive: true }).sort("name").lean();
+  res.json({ categories: cats });
 });
 
-// POST /api/categories — solo Amministratore
-router.post("/", async (req, res) => {
-  try {
-    if (req.user.role !== "Amministratore")
-      return res.status(403).json({ message: "Solo l'Amministratore può aggiungere reparti." });
-
-    const { name } = req.body;
-    if (!name?.trim())
-      return res.status(400).json({ message: "Nome reparto obbligatorio." });
-
-    const exists = await Category.findOne({ name: name.trim() });
-    if (exists) return res.status(409).json({ message: "Reparto già esistente." });
-
-    const cat = await Category.create({ name: name.trim(), createdBy: req.user.name });
-    res.status(201).json({ category: cat.name });
-  } catch (err) {
-    res.status(500).json({ message: "Errore nella creazione del reparto." });
+router.post("/", requireAdmin,
+  [body("name").trim().notEmpty().withMessage("Nome obbligatorio")],
+  validate,
+  async (req, res) => {
+    try {
+      const cat = await Category.create({ ...req.body, createdBy: req.user._id });
+      res.status(201).json({ category: cat });
+    } catch (err) {
+      if (err.code === 11000) return res.status(409).json({ message: "Categoria già esistente." });
+      res.status(500).json({ message: "Errore." });
+    }
   }
+);
+
+router.put("/:id", requireAdmin, async (req, res) => {
+  const cat = await Category.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  if (!cat) return res.status(404).json({ message: "Categoria non trovata." });
+  res.json({ category: cat });
 });
 
-// DELETE /api/categories/:name — solo Amministratore
-router.delete("/:name", async (req, res) => {
-  try {
-    if (req.user.role !== "Amministratore")
-      return res.status(403).json({ message: "Solo l'Amministratore può eliminare reparti." });
-    await Category.deleteOne({ name: req.params.name });
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ message: "Errore nella rimozione del reparto." });
-  }
+router.delete("/:id", requireAdmin, async (req, res) => {
+  await Category.findByIdAndUpdate(req.params.id, { isActive: false });
+  res.json({ message: "Categoria eliminata." });
 });
 
 module.exports = router;
