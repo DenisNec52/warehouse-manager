@@ -1,18 +1,17 @@
 /**
  * pages/ProductsPage.jsx
- *
- * Lista prodotti con ricerca, filtri, paginazione e modal CRUD.
+ * Fix: categorie congelate all'apertura del modal per evitare
+ * re-render che causano perdita del focus negli input.
  */
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, Filter, Edit, Trash2, Eye, AlertTriangle, X, Package, ArrowDown, ArrowUp } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, AlertTriangle, X, Package, ArrowDown, ArrowUp } from "lucide-react";
 import { productsAPI, categoriesAPI, movementsAPI } from "@/lib/api";
 import { Link, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import clsx from "clsx";
 
-// ── Modal Prodotto (crea/modifica) ───────────────────────────
 function ProductModal({ product, categories, onClose }) {
   const qc = useQueryClient();
   const isEdit = !!product;
@@ -34,8 +33,8 @@ function ProductModal({ product, categories, onClose }) {
   const mutation = useMutation({
     mutationFn: (d) => isEdit ? productsAPI.update(product._id, d) : productsAPI.create(d),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey:["products"] });
-      qc.invalidateQueries({ queryKey:["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
       toast.success(isEdit ? "Prodotto aggiornato" : "Prodotto creato");
       onClose();
     },
@@ -57,53 +56,86 @@ function ProductModal({ product, categories, onClose }) {
     mutation.mutate(form);
   };
 
-  const Field = ({ label, name, type="text", required, ...rest }) => (
-    <div>
-      <label className="form-label">{label}{required && <span className="text-red-400 ml-0.5">*</span>}</label>
-      <input className={clsx("form-input", errors[name] && "border-red-400")}
-        type={type} value={form[name]}
-        onChange={e => set(name, type==="number" ? Number(e.target.value) : e.target.value)}
-        {...rest}/>
-      {errors[name] && <p className="form-error">{errors[name]}</p>}
-    </div>
-  );
-
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
-      <motion.div initial={{opacity:0,y:40}} animate={{opacity:1,y:0}} exit={{opacity:0,y:40}}
+      <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
         className="relative z-10 w-full sm:max-w-lg bg-white dark:bg-gray-900 rounded-t-[var(--radius-lg)] sm:rounded-[var(--radius-lg)] shadow-modal max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
-          <h2 className="font-semibold text-gray-900 dark:text-white">{isEdit ? "Modifica prodotto" : "Nuovo prodotto"}</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-white">
+            {isEdit ? "Modifica prodotto" : "Nuovo prodotto"}
+          </h2>
           <button className="btn btn-ghost btn-sm p-1.5" onClick={onClose}><X size={16}/></button>
         </div>
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
           <div className="p-5 space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2"><Field label="Nome prodotto" name="name" required placeholder="es. Bulloni M8 x 25mm"/></div>
-              <Field label="Codice" name="code" required placeholder="es. ART-001"/>
-              <Field label="Unità" name="unit" placeholder="pz, kg, lt, m..."/>
-              <Field label="Quantità" name="quantity" type="number" required min={0}/>
-              <Field label="Soglia minima" name="minQuantity" type="number" min={0}/>
+              <div className="col-span-2">
+                <label className="form-label">Nome prodotto <span className="text-red-400">*</span></label>
+                <input className={clsx("form-input", errors.name && "border-red-400")}
+                  value={form.name} onChange={e => set("name", e.target.value)}
+                  placeholder="es. Bulloni M8 x 25mm"/>
+                {errors.name && <p className="form-error">{errors.name}</p>}
+              </div>
+              <div>
+                <label className="form-label">Codice <span className="text-red-400">*</span></label>
+                <input className={clsx("form-input", errors.code && "border-red-400")}
+                  value={form.code} onChange={e => set("code", e.target.value)}
+                  placeholder="es. ART-001"/>
+                {errors.code && <p className="form-error">{errors.code}</p>}
+              </div>
+              <div>
+                <label className="form-label">Unità</label>
+                <input className="form-input" value={form.unit}
+                  onChange={e => set("unit", e.target.value)} placeholder="pz, kg, lt, m..."/>
+              </div>
+              <div>
+                <label className="form-label">Quantità <span className="text-red-400">*</span></label>
+                <input className="form-input" type="number" min={0}
+                  value={form.quantity} onChange={e => set("quantity", Number(e.target.value))}/>
+              </div>
+              <div>
+                <label className="form-label">Soglia minima</label>
+                <input className="form-input" type="number" min={0}
+                  value={form.minQuantity} onChange={e => set("minQuantity", Number(e.target.value))}/>
+              </div>
               <div className="col-span-2">
                 <label className="form-label">Categoria</label>
-                <select className="form-input" value={form.category} onChange={e => set("category", e.target.value)}>
+                <select className="form-input" value={form.category}
+                  onChange={e => set("category", e.target.value)}>
                   <option value="">Nessuna categoria</option>
-                  {categories?.map(c => <option key={c._id} value={c._id}>{c.icon} {c.name}</option>)}
+                  {categories?.map(c => (
+                    <option key={c._id} value={c._id}>{c.icon} {c.name}</option>
+                  ))}
                 </select>
               </div>
-              <Field label="Posizione scaffale" name="location" placeholder="es. A3-S2"/>
-              <Field label="Fornitore" name="supplier"/>
-              <Field label="Prezzo unitario €" name="unitPrice" type="number" min={0} step={0.01}/>
+              <div>
+                <label className="form-label">Posizione scaffale</label>
+                <input className="form-input" value={form.location}
+                  onChange={e => set("location", e.target.value)} placeholder="es. A3-S2"/>
+              </div>
+              <div>
+                <label className="form-label">Fornitore</label>
+                <input className="form-input" value={form.supplier}
+                  onChange={e => set("supplier", e.target.value)}/>
+              </div>
+              <div>
+                <label className="form-label">Prezzo unitario €</label>
+                <input className="form-input" type="number" min={0} step={0.01}
+                  value={form.unitPrice} onChange={e => set("unitPrice", Number(e.target.value))}/>
+              </div>
               <div className="col-span-2">
                 <label className="form-label">Note</label>
-                <textarea className="form-input resize-none" rows={2} value={form.notes} onChange={e => set("notes", e.target.value)}/>
+                <textarea className="form-input resize-none" rows={2}
+                  value={form.notes} onChange={e => set("notes", e.target.value)}/>
               </div>
             </div>
           </div>
           <div className="px-5 pb-5 flex gap-3 shrink-0">
-            <button type="button" className="btn btn-md btn-secondary flex-1" onClick={onClose}>Annulla</button>
+            <button type="button" className="btn btn-md btn-secondary flex-1" onClick={onClose}>
+              Annulla
+            </button>
             <button type="submit" className="btn btn-md btn-primary flex-1" disabled={mutation.isPending}>
               {mutation.isPending ? "Salvataggio..." : (isEdit ? "Aggiorna" : "Crea prodotto")}
             </button>
@@ -114,17 +146,16 @@ function ProductModal({ product, categories, onClose }) {
   );
 }
 
-// ── Modal Movimento rapido ────────────────────────────────────
 function MovementModal({ product, onClose }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ type:"IN", quantity:1, reason:"", note:"" });
+  const [form, setForm] = useState({ type: "IN", quantity: 1, reason: "" });
 
   const mutation = useMutation({
     mutationFn: (d) => movementsAPI.create({ productId: product._id, ...d }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey:["products"] });
-      qc.invalidateQueries({ queryKey:["dashboard"] });
-      toast.success(`${form.type==="IN" ? "Entrata" : "Uscita"} registrata`);
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success(`${form.type === "IN" ? "Entrata" : "Uscita"} registrata`);
       onClose();
     },
     onError: (err) => toast.error(err.response?.data?.message || "Errore"),
@@ -132,9 +163,9 @@ function MovementModal({ product, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
-      <motion.div initial={{opacity:0,y:40}} animate={{opacity:1,y:0}} exit={{opacity:0,y:40}}
+      <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
         className="relative z-10 w-full sm:max-w-sm bg-white dark:bg-gray-900 rounded-t-[var(--radius-lg)] sm:rounded-[var(--radius-lg)] shadow-modal">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <h2 className="font-semibold text-gray-900 dark:text-white">Registra movimento</h2>
@@ -143,27 +174,29 @@ function MovementModal({ product, onClose }) {
         <div className="p-5 space-y-4">
           <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded">
             <p className="font-medium text-gray-900 dark:text-white text-sm">{product.name}</p>
-            <p className="text-xs text-gray-400">{product.code} · Stock attuale: <strong>{product.quantity} {product.unit}</strong></p>
+            <p className="text-xs text-gray-400">
+              {product.code} · Stock attuale: <strong>{product.quantity} {product.unit}</strong>
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => setForm(f=>({...f,type:"IN"}))}
-              className={clsx("btn btn-md gap-2", form.type==="IN" ? "bg-green-500 text-white" : "btn-secondary")}>
+            <button onClick={() => setForm(f => ({ ...f, type: "IN" }))}
+              className={clsx("btn btn-md gap-2", form.type === "IN" ? "bg-green-500 text-white" : "btn-secondary")}>
               <ArrowDown size={14}/> Entrata
             </button>
-            <button onClick={() => setForm(f=>({...f,type:"OUT"}))}
-              className={clsx("btn btn-md gap-2", form.type==="OUT" ? "bg-red-500 text-white" : "btn-secondary")}>
+            <button onClick={() => setForm(f => ({ ...f, type: "OUT" }))}
+              className={clsx("btn btn-md gap-2", form.type === "OUT" ? "bg-red-500 text-white" : "btn-secondary")}>
               <ArrowUp size={14}/> Uscita
             </button>
           </div>
           <div>
             <label className="form-label">Quantità *</label>
             <input className="form-input" type="number" min={1} value={form.quantity}
-              onChange={e => setForm(f=>({...f,quantity:Number(e.target.value)}))}/>
+              onChange={e => setForm(f => ({ ...f, quantity: Number(e.target.value) }))}/>
           </div>
           <div>
             <label className="form-label">Motivazione</label>
-            <input className="form-input" placeholder="es. Ordine #123, Riassortimento..." value={form.reason}
-              onChange={e => setForm(f=>({...f,reason:e.target.value}))}/>
+            <input className="form-input" placeholder="es. Ordine #123, Riassortimento..."
+              value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}/>
           </div>
           <div className="flex gap-3">
             <button className="btn btn-md btn-secondary flex-1" onClick={onClose}>Annulla</button>
@@ -178,21 +211,21 @@ function MovementModal({ product, onClose }) {
   );
 }
 
-// ── Pagina Prodotti ───────────────────────────────────────────
 export default function ProductsPage() {
-  const [search,    setSearch]    = useState("");
-  const [category,  setCategory]  = useState("");
-  const [lowOnly,   setLowOnly]   = useState(false);
-  const [page,      setPage]      = useState(1);
-  const [modal,     setModal]     = useState(null);  // null | "create" | { product }
-  const [movModal,  setMovModal]  = useState(null);
+  const [search,     setSearch]     = useState("");
+  const [category,   setCategory]   = useState("");
+  const [lowOnly,    setLowOnly]    = useState(false);
+  const [page,       setPage]       = useState(1);
+  const [modal,      setModal]      = useState(null);
+  const [movModal,   setMovModal]   = useState(null);
+  const [frozenCats, setFrozenCats] = useState([]);
   const qc = useQueryClient();
   const [sp] = useSearchParams();
 
   const params = {
-    search: search || undefined,
+    search:   search   || undefined,
     category: category || undefined,
-    lowStock: (lowOnly || sp.get("lowStock")==="true") ? "true" : undefined,
+    lowStock: (lowOnly || sp.get("lowStock") === "true") ? "true" : undefined,
     page,
     limit: 20,
   };
@@ -209,29 +242,35 @@ export default function ProductsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id) => productsAPI.delete(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey:["products"] }); toast.success("Prodotto eliminato"); },
-    onError: () => toast.error("Errore eliminazione"),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ["products"] }); toast.success("Prodotto eliminato"); },
+    onError:    () => toast.error("Errore eliminazione"),
   });
 
   const handleDelete = (p) => {
-    if (!confirm(`Eliminare "${p.name}"?`)) return;
+    if (!confirm("Eliminare \"" + p.name + "\"?")) return;
     deleteMutation.mutate(p._id);
+  };
+
+  // Congela le categorie al momento dell'apertura del modal.
+  // Senza questo, ogni refetch di React Query ricrea il modal
+  // e causa la perdita del focus negli input.
+  const openModal = (val) => {
+    setFrozenCats(cats || []);
+    setModal(val);
   };
 
   return (
     <div>
-      {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Prodotti</h1>
           <p className="text-sm text-gray-500 mt-0.5">{data?.pagination?.total ?? "—"} articoli in magazzino</p>
         </div>
-        <button className="btn btn-md btn-primary gap-2" onClick={() => setModal("create")}>
+        <button className="btn btn-md btn-primary gap-2" onClick={() => openModal("create")}>
           <Plus size={16}/> Nuovo prodotto
         </button>
       </div>
 
-      {/* Filtri */}
       <div className="card p-3 mb-4 flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[180px]">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
@@ -241,7 +280,7 @@ export default function ProductsPage() {
         <select className="form-input py-2 text-sm w-auto" value={category}
           onChange={e => { setCategory(e.target.value); setPage(1); }}>
           <option value="">Tutte le categorie</option>
-          {(cats||[]).map(c => <option key={c._id} value={c._id}>{c.icon} {c.name}</option>)}
+          {(cats || []).map(c => <option key={c._id} value={c._id}>{c.icon} {c.name}</option>)}
         </select>
         <button
           className={clsx("btn btn-md gap-2", lowOnly ? "bg-yellow-500 text-white" : "btn-secondary")}
@@ -250,7 +289,6 @@ export default function ProductsPage() {
         </button>
       </div>
 
-      {/* Tabella */}
       <div className="card overflow-hidden">
         {isLoading ? (
           <div className="p-8 flex justify-center">
@@ -266,7 +304,7 @@ export default function ProductsPage() {
                 </tr>
               </thead>
               <tbody>
-                {(data?.products||[]).map(p => (
+                {(data?.products || []).map(p => (
                   <tr key={p._id}>
                     <td>
                       <div className="font-medium text-gray-900 dark:text-white">{p.name}</div>
@@ -276,13 +314,15 @@ export default function ProductsPage() {
                         </div>
                       )}
                     </td>
-                    <td><code className="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">{p.code}</code></td>
                     <td>
-                      {p.category ? (
-                        <span className="badge badge-gray gap-1">
-                          {p.category.icon} {p.category.name}
-                        </span>
-                      ) : <span className="text-gray-300">—</span>}
+                      <code className="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">
+                        {p.code}
+                      </code>
+                    </td>
+                    <td>
+                      {p.category
+                        ? <span className="badge badge-gray gap-1">{p.category.icon} {p.category.name}</span>
+                        : <span className="text-gray-300">—</span>}
                     </td>
                     <td>
                       <span className={clsx("font-semibold tabular-nums",
@@ -292,18 +332,24 @@ export default function ProductsPage() {
                       <span className="text-gray-400 text-xs ml-1">{p.unit}</span>
                     </td>
                     <td className="text-gray-500 text-sm">{p.location || "—"}</td>
-                    <td className="tabular-nums text-sm">{p.unitPrice > 0 ? `€ ${p.unitPrice.toFixed(2)}` : "—"}</td>
+                    <td className="tabular-nums text-sm">
+                      {p.unitPrice > 0 ? "€ " + p.unitPrice.toFixed(2) : "—"}
+                    </td>
                     <td>
                       <div className="flex items-center gap-1">
-                        <button className="btn btn-ghost btn-sm p-1.5 text-green-600" title="Movimento rapido"
-                          onClick={() => setMovModal(p)}><ArrowDown size={14}/></button>
-                        <Link to={`/products/${p._id}`} className="btn btn-ghost btn-sm p-1.5" title="Dettaglio">
+                        <button className="btn btn-ghost btn-sm p-1.5 text-green-600"
+                          title="Movimento rapido" onClick={() => setMovModal(p)}>
+                          <ArrowDown size={14}/>
+                        </button>
+                        <Link to={"/products/" + p._id} className="btn btn-ghost btn-sm p-1.5" title="Dettaglio">
                           <Eye size={14}/>
                         </Link>
-                        <button className="btn btn-ghost btn-sm p-1.5" title="Modifica" onClick={() => setModal(p)}>
+                        <button className="btn btn-ghost btn-sm p-1.5" title="Modifica"
+                          onClick={() => openModal(p)}>
                           <Edit size={14}/>
                         </button>
-                        <button className="btn btn-ghost btn-sm p-1.5 text-red-500" title="Elimina" onClick={() => handleDelete(p)}>
+                        <button className="btn btn-ghost btn-sm p-1.5 text-red-500" title="Elimina"
+                          onClick={() => handleDelete(p)}>
                           <Trash2 size={14}/>
                         </button>
                       </div>
@@ -322,29 +368,34 @@ export default function ProductsPage() {
           </div>
         )}
 
-        {/* Paginazione */}
         {data?.pagination?.pages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-800">
             <p className="text-xs text-gray-400">Pagina {data.pagination.page} di {data.pagination.pages}</p>
             <div className="flex gap-2">
-              <button className="btn btn-sm btn-secondary" disabled={page<=1} onClick={() => setPage(p=>p-1)}>← Prec</button>
-              <button className="btn btn-sm btn-secondary" disabled={page>=data.pagination.pages} onClick={() => setPage(p=>p+1)}>Succ →</button>
+              <button className="btn btn-sm btn-secondary" disabled={page <= 1}
+                onClick={() => setPage(p => p - 1)}>← Prec</button>
+              <button className="btn btn-sm btn-secondary" disabled={page >= data.pagination.pages}
+                onClick={() => setPage(p => p + 1)}>Succ →</button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Modali */}
       <AnimatePresence>
         {modal && (
           <ProductModal
+            key={typeof modal === "string" ? "new" : modal._id}
             product={modal === "create" ? null : modal}
-            categories={cats}
+            categories={frozenCats}
             onClose={() => setModal(null)}
           />
         )}
         {movModal && (
-          <MovementModal product={movModal} onClose={() => setMovModal(null)}/>
+          <MovementModal
+            key={movModal._id}
+            product={movModal}
+            onClose={() => setMovModal(null)}
+          />
         )}
       </AnimatePresence>
     </div>
