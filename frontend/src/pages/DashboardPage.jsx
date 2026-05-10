@@ -1,25 +1,22 @@
 /**
  * pages/DashboardPage.jsx
- * Dashboard con form entrata/uscita identico al modal prodotti.
+ * Dashboard con ricerca prodotto + stesso MovementModal di ProductsPage.
  */
 import { useState, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import { ArrowDown, ArrowUp, Search, Package, ArrowLeftRight, X } from "lucide-react";
-import { dashboardAPI, productsAPI, movementsAPI } from "@/lib/api";
+import { dashboardAPI, productsAPI } from "@/lib/api";
+import { MovementModal } from "@/pages/ProductsPage";
 import { useAuthStore } from "@/lib/store";
 import { Link } from "react-router-dom";
-import toast from "react-hot-toast";
 import clsx from "clsx";
 
-// ── Form movimento — identico al MovementModal di ProductsPage ─
+// ── Ricerca + selezione prodotto per movimento rapido ─────────
 function MovimentoRapido({ type }) {
-  const qc = useQueryClient();
   const isIN = type === "IN";
   const [search,      setSearch]      = useState("");
   const [selected,    setSelected]    = useState(null);
-  const [quantity,    setQuantity]    = useState("");
-  const [reason,      setReason]      = useState("");
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef();
 
@@ -29,56 +26,41 @@ function MovimentoRapido({ type }) {
     enabled:  search.length > 1,
   });
 
-  const mutation = useMutation({
-    mutationFn: (d) => movementsAPI.create(d),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
-      qc.invalidateQueries({ queryKey: ["movements"] });
-      qc.invalidateQueries({ queryKey: ["products"] });
-      toast.success(`${isIN ? "Entrata" : "Uscita"} registrata — ${selected.name}`);
-      setSelected(null);
-      setSearch("");
-      setQuantity("");
-      setReason("");
-      setTimeout(() => searchRef.current?.focus(), 100);
-    },
-    onError: (err) => toast.error(err.response?.data?.message || "Errore"),
-  });
-
-  const handleSubmit = () => {
-    if (!selected) return toast.error("Seleziona un prodotto");
-    const qty = parseInt(quantity);
-    if (!qty || qty < 1) return toast.error("Inserisci una quantità valida");
-    mutation.mutate({ productId: selected._id, type, quantity: qty, reason });
-  };
-
   const reset = () => {
     setSelected(null);
     setSearch("");
-    setShowResults(false);
     setTimeout(() => searchRef.current?.focus(), 50);
   };
 
   return (
-    <div className="card p-5">
-      {/* Preview prodotto selezionato */}
-      {selected && (
+    <div className={clsx("card p-5 border-t-2", isIN ? "border-t-green-500" : "border-t-red-500")}>
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className={clsx("w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold",
+          isIN ? "bg-green-100 text-green-600 dark:bg-green-900/30" : "bg-red-100 text-red-600 dark:bg-red-900/30")}>
+          {isIN ? "↓" : "↑"}
+        </div>
+        <h3 className="font-semibold text-gray-900 dark:text-white text-sm">
+          {isIN ? "Entrata in magazzino" : "Uscita dal magazzino"}
+        </h3>
+      </div>
+
+      {/* Prodotto selezionato */}
+      {selected ? (
         <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded mb-4 flex items-center justify-between">
           <div>
             <p className="font-medium text-gray-900 dark:text-white text-sm">{selected.name}</p>
             <p className="text-xs text-gray-400">
-              {selected.code} · Stock attuale: <strong>{selected.quantity} {selected.unit}</strong>
+              {selected.code} · Stock: <strong>{selected.quantity} {selected.unit}</strong>
             </p>
           </div>
           <button onClick={reset} className="text-gray-400 hover:text-red-500 transition-colors ml-2">
             <X size={14}/>
           </button>
         </div>
-      )}
-
-      {/* Ricerca prodotto */}
-      {!selected && (
-        <div className="mb-4">
+      ) : (
+        /* Ricerca prodotto */
+        <div className="relative mb-4">
           <label className="form-label">Cerca prodotto</label>
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
@@ -118,71 +100,20 @@ function MovimentoRapido({ type }) {
         </div>
       )}
 
-      {/* Pulsanti IN / OUT — identici al modal prodotti */}
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        <button
-          className={clsx("btn btn-md gap-2", isIN ? "bg-green-500 text-white" : "btn-secondary")}
-          onClick={() => {}}>
-          <ArrowDown size={14}/> Entrata
-        </button>
-        <button
-          className={clsx("btn btn-md gap-2", !isIN ? "bg-red-500 text-white" : "btn-secondary")}
-          onClick={() => {}}>
-          <ArrowUp size={14}/> Uscita
-        </button>
-      </div>
-
-      {/* Quantità — solo numeri, tastiera numerica mobile */}
-      <div className="mb-4">
-        <label className="form-label">Quantità *</label>
-        <input
-          className="form-input text-base font-semibold tabular-nums"
-          type="number"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          min={1}
-          step={1}
-          value={quantity}
-          placeholder="0"
-          onChange={e => setQuantity(e.target.value.replace(/[^0-9]/g, ""))}
-          onKeyDown={e => {
-            const allowed = ["Backspace","Delete","Tab","Enter","ArrowLeft","ArrowRight","ArrowUp","ArrowDown"];
-            if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault();
-            if (e.key === "Enter") handleSubmit();
-          }}
-        />
-      </div>
-
-      {/* Motivazione */}
-      <div className="mb-4">
-        <label className="form-label">
-          Motivazione <span className="text-gray-400 font-normal text-xs">(opzionale)</span>
-        </label>
-        <input
-          className="form-input"
-          placeholder="es. Ordine #123, Riassortimento..."
-          value={reason}
-          onChange={e => setReason(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && handleSubmit()}
-        />
-      </div>
-
-      {/* Bottoni azione */}
-      <div className="flex gap-3">
-        <button
-          className="btn btn-md btn-secondary flex-1"
-          onClick={reset}
-          disabled={!selected && !quantity && !reason}>
-          Pulisci
-        </button>
-        <button
-          className={clsx("btn btn-md flex-1 gap-2",
-            isIN ? "bg-green-500 hover:bg-green-600 text-white" : "bg-red-500 hover:bg-red-600 text-white")}
-          disabled={!selected || mutation.isPending}
-          onClick={handleSubmit}>
-          {mutation.isPending ? "..." : (isIN ? "↓ Registra Entrata" : "↑ Registra Uscita")}
-        </button>
-      </div>
+      {/* Bottone apri modal — attivo solo dopo selezione prodotto */}
+      <button
+        className={clsx(
+          "btn btn-lg w-full gap-2",
+          isIN ? "bg-green-500 hover:bg-green-600 text-white" : "bg-red-500 hover:bg-red-600 text-white",
+          !selected && "opacity-50 cursor-not-allowed"
+        )}
+        disabled={!selected}
+        onClick={() => {/* il modal si apre via stato in Dashboard */
+          document.dispatchEvent(new CustomEvent("open-movement", { detail: { product: selected, type } }));
+        }}
+      >
+        {isIN ? "↓ Registra Entrata" : "↑ Registra Uscita"}
+      </button>
     </div>
   );
 }
@@ -207,12 +138,21 @@ function StatCard({ label, value, icon: Icon, color, sub }) {
   );
 }
 
-// ── Dashboard principale ──────────────────────────────────────
+// ── Dashboard ─────────────────────────────────────────────────
 export default function DashboardPage() {
   const { user } = useAuthStore();
+  const [movModal, setMovModal] = useState(null); // { product, type }
+
   const { data } = useQuery({
     queryKey: ["dashboard"],
     queryFn:  () => dashboardAPI.stats().then(r => r.data),
+  });
+
+  // Ascolta evento dal componente MovimentoRapido
+  useState(() => {
+    const handler = (e) => setMovModal(e.detail);
+    document.addEventListener("open-movement", handler);
+    return () => document.removeEventListener("open-movement", handler);
   });
 
   const stats  = data?.stats;
@@ -229,33 +169,20 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Stats — senza valore economico e scorte */}
+      {/* Stats */}
       <div className="grid grid-cols-2 gap-4 mb-6">
-        <StatCard label="Prodotti totali"  value={stats?.totalProducts}  icon={Package}        color="#3b82f6" sub="Articoli registrati"/>
-        <StatCard label="Movimenti oggi"   value={stats?.todayMovements} icon={ArrowLeftRight} color="#10b981" sub="Entrate + uscite"/>
+        <StatCard label="Prodotti totali" value={stats?.totalProducts}  icon={Package}        color="#3b82f6" sub="Articoli registrati"/>
+        <StatCard label="Movimenti oggi"  value={stats?.todayMovements} icon={ArrowLeftRight} color="#10b981" sub="Entrate + uscite"/>
       </div>
 
-      {/* Form entrata e uscita */}
-      <div className="mb-3">
-        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Registra movimento</h2>
-        <div className="grid lg:grid-cols-2 gap-4">
-          <div>
-            <p className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-2 flex items-center gap-1">
-              <ArrowDown size={12}/> Entrata
-            </p>
-            <MovimentoRapido type="IN"/>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-red-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-              <ArrowUp size={12}/> Uscita
-            </p>
-            <MovimentoRapido type="OUT"/>
-          </div>
-        </div>
+      {/* Form entrata/uscita */}
+      <div className="grid lg:grid-cols-2 gap-4 mb-6">
+        <MovimentoRapido type="IN"/>
+        <MovimentoRapido type="OUT"/>
       </div>
 
       {/* Ultimi movimenti */}
-      <div className="card mt-6">
+      <div className="card">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Movimenti recenti</h3>
           <Link to="/movements" className="text-xs text-[var(--brand-500)] hover:underline">Vedi tutti →</Link>
@@ -300,6 +227,17 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Modal movimento — identico a ProductsPage */}
+      <AnimatePresence>
+        {movModal && (
+          <MovementModal
+            key={movModal.product._id + movModal.type}
+            product={{ ...movModal.product, _defaultType: movModal.type }}
+            onClose={() => setMovModal(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

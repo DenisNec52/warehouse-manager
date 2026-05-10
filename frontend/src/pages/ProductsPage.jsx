@@ -14,11 +14,8 @@ function ProductModal({ product, categories, onClose }) {
   const qc = useQueryClient();
   const isEdit = !!product;
   const [form, setForm] = useState({
-
     code:        product?.code        || "",
     quantity:    product?.quantity    ?? 0,
-    minQuantity: product?.minQuantity ?? 10,
-    unit:        product?.unit        || "pz",
     category:    product?.category?._id || product?.category || "",
     notes:       product?.notes       || "",
   });
@@ -47,7 +44,7 @@ function ProductModal({ product, categories, onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     setErrors({});
-    mutation.mutate(form);
+    mutation.mutate({ ...form, category: form.category || null });
   };
 
   return (
@@ -75,27 +72,19 @@ function ProductModal({ product, categories, onClose }) {
                 ))}
               </select>
             </div>
-            {/* Nome */}
-            <div>
-              <label className="form-label">Nome prodotto <span className="text-red-400">*</span></label>
-              <input className={clsx("form-input", errors.name && "border-red-400")}
-                value={form.name} onChange={e => set("name", e.target.value)}
-                placeholder="es. Bulloni M8 x 25mm"/>
-              {errors.name && <p className="form-error">{errors.name}</p>}
-            </div>
-            {/* Codice */}
+            {/* Codice — diventa anche il nome */}
             <div>
               <label className="form-label">Codice <span className="text-red-400">*</span></label>
               <input className={clsx("form-input", errors.code && "border-red-400")}
                 value={form.code} onChange={e => set("code", e.target.value.toUpperCase())}
-                placeholder="es. ART-001"/>
+                placeholder="es. ART-001, VITE-M8..."/>
               {errors.code && <p className="form-error">{errors.code}</p>}
             </div>
             {/* Quantità */}
             <div>
               <label className="form-label">Quantità <span className="text-red-400">*</span></label>
-              <input className="form-input" type="number" min={0}
-                value={form.quantity} onChange={e => set("quantity", Number(e.target.value))}/>
+              <input className="form-input" type="number" inputMode="numeric" pattern="[0-9]*" min={0}
+                value={form.quantity} onChange={e => set("quantity", Number(e.target.value.replace(/[^0-9]/g,"")))}/>
             </div>
             {/* Note */}
             <div>
@@ -119,20 +108,28 @@ function ProductModal({ product, categories, onClose }) {
   );
 }
 
-function MovementModal({ product, onClose }) {
+// Esportato per riuso nella Dashboard
+export function MovementModal({ product, onClose }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ type: "IN", quantity: 1, reason: "" });
+  const [form, setForm] = useState({ type: "IN", quantity: "", reason: "" });
 
   const mutation = useMutation({
     mutationFn: (d) => movementsAPI.create({ productId: product._id, ...d }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["movements"] });
       toast.success(form.type === "IN" ? "Entrata registrata" : "Uscita registrata");
       onClose();
     },
     onError: (err) => toast.error(err.response?.data?.message || "Errore"),
   });
+
+  const handleSubmit = () => {
+    const qty = parseInt(form.quantity);
+    if (!qty || qty < 1) return toast.error("Inserisci una quantità valida");
+    mutation.mutate({ ...form, quantity: qty });
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -163,18 +160,26 @@ function MovementModal({ product, onClose }) {
           </div>
           <div>
             <label className="form-label">Quantità *</label>
-            <input className="form-input" type="number" min={1} value={form.quantity}
-              onChange={e => setForm(f => ({ ...f, quantity: Number(e.target.value) }))}/>
+            <input className="form-input text-lg font-semibold tabular-nums"
+              type="number" inputMode="numeric" pattern="[0-9]*" min={1}
+              value={form.quantity} placeholder="0"
+              onChange={e => setForm(f => ({ ...f, quantity: e.target.value.replace(/[^0-9]/g,"") }))}
+              onKeyDown={e => {
+                const allowed = ["Backspace","Delete","Tab","Enter","ArrowLeft","ArrowRight","ArrowUp","ArrowDown"];
+                if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault();
+                if (e.key === "Enter") handleSubmit();
+              }}/>
           </div>
           <div>
             <label className="form-label">Motivazione</label>
             <input className="form-input" placeholder="es. Ordine #123..."
-              value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}/>
+              value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
+              onKeyDown={e => e.key === "Enter" && handleSubmit()}/>
           </div>
           <div className="flex gap-3">
             <button className="btn btn-md btn-secondary flex-1" onClick={onClose}>Annulla</button>
             <button className="btn btn-md btn-primary flex-1" disabled={mutation.isPending}
-              onClick={() => mutation.mutate(form)}>
+              onClick={handleSubmit}>
               {mutation.isPending ? "..." : "Registra"}
             </button>
           </div>
@@ -269,15 +274,16 @@ export default function ProductsPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Prodotto</th><th>Codice</th><th>Categoria</th>
-                  <th>Quantità</th><th>Note</th><th></th>
+                  <th>Codice</th><th>Categoria</th><th>Quantità</th><th>Note</th><th></th>
                 </tr>
               </thead>
               <tbody>
                 {(data?.products || []).map(p => (
                   <tr key={p._id}>
                     <td>
-                      <div className="font-medium text-gray-900 dark:text-white">{p.name}</div>
+                      <code className="text-sm font-bold bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                        {p.code}
+                      </code>
                       {p.isLowStock && (
                         <div className="flex items-center gap-1 text-xs text-yellow-600 mt-0.5">
                           <AlertTriangle size={10}/> Scorta bassa
@@ -285,17 +291,12 @@ export default function ProductsPage() {
                       )}
                     </td>
                     <td>
-                      <code className="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">
-                        {p.code}
-                      </code>
-                    </td>
-                    <td>
                       {p.category
                         ? <span className="badge badge-gray gap-1">{p.category.icon} {p.category.name}</span>
                         : <span className="text-gray-300">—</span>}
                     </td>
                     <td>
-                      <span className={clsx("font-semibold tabular-nums",
+                      <span className={clsx("font-semibold tabular-nums text-lg",
                         p.isLowStock ? "text-yellow-600" : "text-gray-900 dark:text-white")}>
                         {p.quantity}
                       </span>
