@@ -44,11 +44,14 @@ function ProductModal({ product, categories, onClose }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setErrors({});
-    mutation.mutate(form);
-  };
+const handleSubmit = (e) => {
+  e.preventDefault();
+  setErrors({});
+  mutation.mutate({
+    ...form,
+    category: form.category || null,
+  });
+};
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
