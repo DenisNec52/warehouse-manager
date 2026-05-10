@@ -1,31 +1,31 @@
 /**
  * pages/DashboardPage.jsx
- * Form entrata/uscita inline — già aperto, nessun modal.
  */
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowDown, ArrowUp, Search, Package, ArrowLeftRight, Plus, X } from "lucide-react";
-import { dashboardAPI, productsAPI, movementsAPI, categoriesAPI } from "@/lib/api";
+import { ArrowDown, ArrowUp, Search, Package, ArrowLeftRight, Plus, X, Users, Activity } from "lucide-react";
+import { dashboardAPI, productsAPI, movementsAPI, categoriesAPI, usersAPI } from "@/lib/api";
 import { ProductModal } from "@/pages/ProductsPage";
 import { useAuthStore } from "@/lib/store";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import clsx from "clsx";
 
-// ── Form inline entrata/uscita ────────────────────────────────
-function FormMovimento({ type }) {
-  const qc    = useQueryClient();
-  const isIN  = type === "IN";
+// ── Form unico IN/OUT ─────────────────────────────────────────
+function FormMovimento() {
+  const qc   = useQueryClient();
+  const [type,        setType]        = useState("IN");
   const [search,      setSearch]      = useState("");
   const [selected,    setSelected]    = useState(null);
   const [quantity,    setQuantity]    = useState("");
   const [reason,      setReason]      = useState("");
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef();
+  const isIN = type === "IN";
 
   const { data: searchData } = useQuery({
-    queryKey: ["products-search", type, search],
+    queryKey: ["products-search", search],
     queryFn:  () => productsAPI.list({ search, limit: 8 }).then(r => r.data),
     enabled:  search.length > 1,
   });
@@ -37,20 +37,13 @@ function FormMovimento({ type }) {
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["movements"] });
       toast.success(`${isIN ? "Entrata" : "Uscita"} registrata — ${selected.name}`);
-      setSelected(null);
-      setSearch("");
-      setQuantity("");
-      setReason("");
+      setSelected(null); setSearch(""); setQuantity(""); setReason("");
       setTimeout(() => searchRef.current?.focus(), 100);
     },
     onError: (err) => toast.error(err.response?.data?.message || "Errore"),
   });
 
-  const reset = () => {
-    setSelected(null);
-    setSearch("");
-    setTimeout(() => searchRef.current?.focus(), 50);
-  };
+  const reset = () => { setSelected(null); setSearch(""); setTimeout(() => searchRef.current?.focus(), 50); };
 
   const handleSubmit = () => {
     if (!selected) return toast.error("Seleziona un prodotto");
@@ -60,120 +53,80 @@ function FormMovimento({ type }) {
   };
 
   return (
-    <div className={clsx("card overflow-hidden")}>
-      {/* Header colorato */}
-      <div className={clsx(
-        "px-5 py-3 flex items-center gap-2",
-        isIN ? "bg-green-500" : "bg-red-500"
-      )}>
-        <span className="text-white text-lg font-bold">{isIN ? "↓" : "↑"}</span>
-        <h3 className="font-semibold text-white text-sm">
-          {isIN ? "Entrata in magazzino" : "Uscita dal magazzino"}
-        </h3>
+    <div className="card overflow-hidden">
+      <div className="grid grid-cols-2">
+        <button onClick={() => setType("IN")}
+          className={clsx("py-3.5 text-sm font-bold flex items-center justify-center gap-2 transition-all",
+            isIN ? "bg-green-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700")}>
+          <ArrowDown size={15}/> Entrata
+        </button>
+        <button onClick={() => setType("OUT")}
+          className={clsx("py-3.5 text-sm font-bold flex items-center justify-center gap-2 transition-all",
+            !isIN ? "bg-red-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700")}>
+          <ArrowUp size={15}/> Uscita
+        </button>
       </div>
-
       <div className="p-5 space-y-3">
-        {/* Prodotto selezionato o ricerca */}
         {selected ? (
           <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded flex items-center justify-between">
             <div>
               <p className="font-semibold text-gray-900 dark:text-white text-sm">{selected.name}</p>
-              <p className="text-xs text-gray-400">
-                {selected.code} · Stock attuale: <strong>{selected.quantity} {selected.unit}</strong>
-              </p>
+              <p className="text-xs text-gray-400">{selected.code} · Stock: <strong>{selected.quantity} {selected.unit}</strong></p>
             </div>
-            <button onClick={reset} className="text-gray-400 hover:text-red-500 transition-colors ml-3 shrink-0">
-              <X size={14}/>
-            </button>
+            <button onClick={reset} className="text-gray-400 hover:text-red-500 transition-colors ml-3 shrink-0"><X size={14}/></button>
           </div>
         ) : (
           <div>
             <label className="form-label">Prodotto</label>
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
-              <input
-                ref={searchRef}
-                className="form-input pl-9"
-                placeholder="Cerca per nome o codice..."
-                value={search}
-                autoComplete="off"
+              <input ref={searchRef} className="form-input pl-9" placeholder="Cerca per nome o codice..."
+                value={search} autoComplete="off"
                 onChange={e => { setSearch(e.target.value); setShowResults(true); }}
                 onFocus={() => setShowResults(true)}
-                onBlur={() => setTimeout(() => setShowResults(false), 150)}
-              />
+                onBlur={() => setTimeout(() => setShowResults(false), 150)}/>
               {showResults && search.length > 1 && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-[var(--radius)] shadow-modal z-30 max-h-52 overflow-y-auto">
-                  {searchData?.products?.length > 0 ? (
-                    searchData.products.map(p => (
-                      <div key={p._id}
-                        className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
-                        onMouseDown={() => { setSelected(p); setShowResults(false); setSearch(""); }}>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">{p.name}</p>
-                          <p className="text-xs text-gray-400 font-mono">{p.code}</p>
-                        </div>
-                        <span className={clsx("text-sm font-bold tabular-nums",
-                          p.quantity <= p.minQuantity ? "text-red-500" : "text-gray-500")}>
-                          {p.quantity} {p.unit}
-                        </span>
+                  {searchData?.products?.length > 0 ? searchData.products.map(p => (
+                    <div key={p._id} className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                      onMouseDown={() => { setSelected(p); setShowResults(false); setSearch(""); }}>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">{p.name}</p>
+                        <p className="text-xs text-gray-400 font-mono">{p.code}</p>
                       </div>
-                    ))
-                  ) : (
-                    <div className="px-3 py-3 text-sm text-gray-400 text-center">Nessun prodotto trovato</div>
-                  )}
+                      <span className={clsx("text-sm font-bold tabular-nums", p.quantity <= p.minQuantity ? "text-red-500" : "text-gray-500")}>
+                        {p.quantity} {p.unit}
+                      </span>
+                    </div>
+                  )) : <div className="px-3 py-3 text-sm text-gray-400 text-center">Nessun prodotto trovato</div>}
                 </div>
               )}
             </div>
           </div>
         )}
-
-        {/* Quantità — solo numeri, tastiera numerica mobile */}
         <div>
           <label className="form-label">Quantità</label>
-          <input
-            className="form-input text-lg font-semibold tabular-nums"
-            type="number"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            min={1}
-            value={quantity}
-            placeholder="0"
+          <input className="form-input text-lg font-semibold tabular-nums" type="number"
+            inputMode="numeric" pattern="[0-9]*" min={1} value={quantity} placeholder="0"
             onChange={e => setQuantity(e.target.value.replace(/[^0-9]/g, ""))}
             onKeyDown={e => {
               const allowed = ["Backspace","Delete","Tab","Enter","ArrowLeft","ArrowRight","ArrowUp","ArrowDown"];
               if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault();
               if (e.key === "Enter") handleSubmit();
-            }}
-          />
+            }}/>
         </div>
-
-        {/* Note */}
         <div>
-          <label className="form-label">
-            Note <span className="text-gray-400 font-normal text-xs">(opzionale)</span>
-          </label>
-          <input
-            className="form-input"
-            placeholder={isIN ? "es. Consegna fornitore..." : "es. Utilizzo reparto..."}
-            value={reason}
-            onChange={e => setReason(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleSubmit()}
-          />
+          <label className="form-label">Note <span className="text-gray-400 font-normal text-xs">(opzionale)</span></label>
+          <input className="form-input" placeholder={isIN ? "es. Consegna fornitore..." : "es. Utilizzo reparto..."}
+            value={reason} onChange={e => setReason(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSubmit()}/>
         </div>
-
-        {/* Bottone conferma */}
         <button
-          className={clsx(
-            "btn btn-lg w-full gap-2 mt-1",
+          className={clsx("btn btn-lg w-full gap-2",
             isIN ? "bg-green-500 hover:bg-green-600 text-white" : "bg-red-500 hover:bg-red-600 text-white",
-            (!selected || mutation.isPending) && "opacity-50 cursor-not-allowed"
-          )}
-          disabled={!selected || mutation.isPending}
-          onClick={handleSubmit}
-        >
-          {mutation.isPending
-            ? "Registrazione..."
-            : isIN ? "↓ Conferma Entrata" : "↑ Conferma Uscita"}
+            (!selected || mutation.isPending) && "opacity-50 cursor-not-allowed")}
+          disabled={!selected || mutation.isPending} onClick={handleSubmit}>
+          {mutation.isPending ? "Registrazione..." : isIN ? "↓ Conferma Entrata" : "↑ Conferma Uscita"}
         </button>
       </div>
     </div>
@@ -191,8 +144,7 @@ function StatCard({ label, value, icon: Icon, color, sub }) {
           <p className="text-3xl font-bold text-gray-900 dark:text-white tabular-nums">{value ?? "—"}</p>
           {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
         </div>
-        <div className="w-10 h-10 rounded-[var(--radius-sm)] flex items-center justify-center"
-          style={{ background: color + "20" }}>
+        <div className="w-10 h-10 rounded-[var(--radius-sm)] flex items-center justify-center" style={{ background: color + "20" }}>
           <Icon size={18} style={{ color }}/>
         </div>
       </div>
@@ -200,10 +152,96 @@ function StatCard({ label, value, icon: Icon, color, sub }) {
   );
 }
 
+// ── Utilizzo utenti (solo admin) ──────────────────────────────
+function UserActivity() {
+  const { data: movData } = useQuery({
+    queryKey: ["movements-activity"],
+    queryFn:  () => movementsAPI.list({ limit: 200 }).then(r => r.data),
+  });
+
+  const { data: usersData } = useQuery({
+    queryKey: ["users"],
+    queryFn:  () => usersAPI.list().then(r => r.data.users),
+  });
+
+  // Calcola movimenti per utente
+  const activityMap = {};
+  (movData?.movements || []).forEach(m => {
+    const name = m.performedBy?.name || m.performedByName || "Sconosciuto";
+    if (!activityMap[name]) activityMap[name] = { name, total: 0, IN: 0, OUT: 0, lastSeen: null };
+    activityMap[name].total++;
+    activityMap[name][m.type]++;
+    if (!activityMap[name].lastSeen || m.createdAt > activityMap[name].lastSeen) {
+      activityMap[name].lastSeen = m.createdAt;
+    }
+  });
+
+  const activity = Object.values(activityMap).sort((a, b) => b.total - a.total);
+  const maxTotal = Math.max(...activity.map(a => a.total), 1);
+
+  // Utenti che non hanno mai fatto movimenti
+  const activeNames = new Set(activity.map(a => a.name));
+  const inactiveUsers = (usersData || []).filter(u => !activeNames.has(u.name) && u.isActive);
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+        <Activity size={15} className="text-[var(--brand-500)]"/>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Utilizzo per utente</h3>
+        <span className="text-xs text-gray-400 ml-auto">ultimi 200 movimenti</span>
+      </div>
+      <div className="p-5 space-y-3">
+        {activity.length > 0 ? activity.map(a => (
+          <div key={a.name}>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-full bg-[var(--brand-500)] flex items-center justify-center text-white text-xs font-bold shrink-0">
+                  {a.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">{a.name}</span>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="text-green-600 font-semibold">↓{a.IN}</span>
+                <span className="text-red-500 font-semibold">↑{a.OUT}</span>
+                <span className="text-gray-400">{a.lastSeen ? new Date(a.lastSeen).toLocaleDateString("it-IT") : "—"}</span>
+              </div>
+            </div>
+            {/* Barra utilizzo */}
+            <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div className="h-full rounded-full bg-[var(--brand-500)] transition-all duration-500"
+                style={{ width: `${Math.round((a.total / maxTotal) * 100)}%` }}/>
+            </div>
+            <p className="text-xs text-gray-400 mt-0.5">{a.total} movimenti totali</p>
+          </div>
+        )) : (
+          <p className="text-sm text-gray-400 text-center py-4">Nessun movimento registrato ancora</p>
+        )}
+
+        {/* Utenti inattivi */}
+        {inactiveUsers.length > 0 && (
+          <div className="pt-3 border-t border-gray-100 dark:border-gray-800">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Nessuna attività</p>
+            {inactiveUsers.map(u => (
+              <div key={u._id} className="flex items-center gap-2 py-1.5">
+                <div className="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400 text-xs font-bold shrink-0">
+                  {u.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-sm text-gray-400">{u.name}</span>
+                <span className="text-xs text-gray-300 dark:text-gray-600 ml-auto">nessun movimento</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────
 export default function DashboardPage() {
   const { user }  = useAuthStore();
   const qc        = useQueryClient();
+  const isAdmin   = user?.role === "admin";
   const [productModal, setProductModal] = useState(false);
   const [frozenCats,   setFrozenCats]   = useState([]);
 
@@ -217,45 +255,50 @@ export default function DashboardPage() {
     queryFn:  () => categoriesAPI.list().then(r => r.data.categories),
   });
 
-  const openProductModal = () => {
-    setFrozenCats(cats || []);
-    setProductModal(true);
-  };
-
   const stats  = data?.stats;
   const recent = data?.recentMovements || [];
 
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-            Ciao, {user?.name?.split(" ")[0]} 👋
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            Gestisci il magazzino direttamente da qui
-          </p>
-        </div>
-        <button className="btn btn-md btn-primary gap-2" onClick={openProductModal}>
-          <Plus size={16}/> Nuovo prodotto
-        </button>
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+          Ciao, {user?.name?.split(" ")[0]} 👋
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+          Gestisci il magazzino direttamente da qui
+        </p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      {/* Stats + bottone nuovo prodotto */}
+      <div className="grid grid-cols-2 gap-4 mb-3">
         <StatCard label="Prodotti totali" value={stats?.totalProducts}  icon={Package}        color="#3b82f6" sub="Articoli registrati"/>
         <StatCard label="Movimenti oggi"  value={stats?.todayMovements} icon={ArrowLeftRight} color="#10b981" sub="Entrate + uscite"/>
       </div>
 
-      {/* Form entrata/uscita inline — già aperti */}
-      <div className="grid lg:grid-cols-2 gap-4 mb-6">
-        <FormMovimento type="IN"/>
-        <FormMovimento type="OUT"/>
+      {/* Bottone nuovo prodotto sotto le stats */}
+      <button className="btn btn-md btn-primary gap-2 mb-6 w-full sm:w-auto"
+        onClick={() => { setFrozenCats(cats || []); setProductModal(true); }}>
+        <Plus size={16}/> Nuovo prodotto
+      </button>
+
+      {/* Layout: form a sinistra, attività admin a destra */}
+      <div className={clsx("gap-6", isAdmin ? "grid lg:grid-cols-2" : "max-w-lg")}>
+        {/* Form movimento */}
+        <div>
+          <FormMovimento/>
+        </div>
+
+        {/* Utilizzo utenti — solo admin */}
+        {isAdmin && (
+          <div>
+            <UserActivity/>
+          </div>
+        )}
       </div>
 
       {/* Ultimi movimenti */}
-      <div className="card">
+      <div className="card mt-6">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Movimenti recenti</h3>
           <Link to="/movements" className="text-xs text-[var(--brand-500)] hover:underline">Vedi tutti →</Link>
@@ -269,12 +312,8 @@ export default function DashboardPage() {
               {recent.map(m => (
                 <tr key={m._id}>
                   <td>
-                    <div className="font-medium text-gray-900 dark:text-white">
-                      {m.product?.name || m.productSnapshot?.name}
-                    </div>
-                    <div className="text-xs text-gray-400 font-mono">
-                      {m.product?.code || m.productSnapshot?.code}
-                    </div>
+                    <div className="font-medium text-gray-900 dark:text-white">{m.product?.name || m.productSnapshot?.name}</div>
+                    <div className="text-xs text-gray-400 font-mono">{m.product?.code || m.productSnapshot?.code}</div>
                   </td>
                   <td>
                     <span className={clsx("badge", m.type === "IN" ? "badge-green" : "badge-red")}>
@@ -282,37 +321,23 @@ export default function DashboardPage() {
                       {m.type === "IN" ? "Entrata" : "Uscita"}
                     </span>
                   </td>
-                  <td className="font-semibold tabular-nums">
-                    {m.quantity} {m.product?.unit || m.productSnapshot?.unit}
-                  </td>
+                  <td className="font-semibold tabular-nums">{m.quantity} {m.product?.unit || m.productSnapshot?.unit}</td>
                   <td className="text-gray-500 text-sm">{m.performedBy?.name || m.performedByName}</td>
                   <td className="text-gray-400 text-xs">
-                    {new Date(m.createdAt).toLocaleString("it-IT", {
-                      day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
-                    })}
+                    {new Date(m.createdAt).toLocaleString("it-IT", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {!recent.length && (
-            <div className="py-10 text-center text-sm text-gray-400">Nessun movimento ancora</div>
-          )}
+          {!recent.length && <div className="py-10 text-center text-sm text-gray-400">Nessun movimento ancora</div>}
         </div>
       </div>
 
-      {/* Modal nuovo prodotto */}
       <AnimatePresence>
         {productModal && (
-          <ProductModal
-            key="new-product"
-            product={null}
-            categories={frozenCats}
-            onClose={() => {
-              setProductModal(false);
-              qc.invalidateQueries({ queryKey: ["dashboard"] });
-            }}
-          />
+          <ProductModal key="new-product" product={null} categories={frozenCats}
+            onClose={() => { setProductModal(false); qc.invalidateQueries({ queryKey: ["dashboard"] }); }}/>
         )}
       </AnimatePresence>
     </div>
