@@ -1,7 +1,5 @@
 /**
  * pages/ProductsPage.jsx
- * Fix: categorie congelate all'apertura del modal per evitare
- * re-render che causano perdita del focus negli input.
  */
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -18,14 +16,10 @@ function ProductModal({ product, categories, onClose }) {
   const [form, setForm] = useState({
     name:        product?.name        || "",
     code:        product?.code        || "",
-    description: product?.description || "",
     quantity:    product?.quantity    ?? 0,
     minQuantity: product?.minQuantity ?? 10,
     unit:        product?.unit        || "pz",
     category:    product?.category?._id || product?.category || "",
-    location:    product?.location    || "",
-    supplier:    product?.supplier    || "",
-    unitPrice:   product?.unitPrice   ?? 0,
     notes:       product?.notes       || "",
   });
   const [errors, setErrors] = useState({});
@@ -61,78 +55,57 @@ function ProductModal({ product, categories, onClose }) {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
       <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
-        className="relative z-10 w-full sm:max-w-lg bg-white dark:bg-gray-900 rounded-t-[var(--radius-lg)] sm:rounded-[var(--radius-lg)] shadow-modal max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
+        className="relative z-10 w-full sm:max-w-md bg-white dark:bg-gray-900 rounded-t-[var(--radius-lg)] sm:rounded-[var(--radius-lg)] shadow-modal">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <h2 className="font-semibold text-gray-900 dark:text-white">
             {isEdit ? "Modifica prodotto" : "Nuovo prodotto"}
           </h2>
           <button className="btn btn-ghost btn-sm p-1.5" onClick={onClose}><X size={16}/></button>
         </div>
-        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
-          <div className="p-5 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <label className="form-label">Nome prodotto <span className="text-red-400">*</span></label>
-                <input className={clsx("form-input", errors.name && "border-red-400")}
-                  value={form.name} onChange={e => set("name", e.target.value)}
-                  placeholder="es. Bulloni M8 x 25mm"/>
-                {errors.name && <p className="form-error">{errors.name}</p>}
-              </div>
-              <div>
-                <label className="form-label">Codice <span className="text-red-400">*</span></label>
-                <input className={clsx("form-input", errors.code && "border-red-400")}
-                  value={form.code} onChange={e => set("code", e.target.value)}
-                  placeholder="es. ART-001"/>
-                {errors.code && <p className="form-error">{errors.code}</p>}
-              </div>
-              <div>
-                <label className="form-label">Unità</label>
-                <input className="form-input" value={form.unit}
-                  onChange={e => set("unit", e.target.value)} placeholder="pz, kg, lt, m..."/>
-              </div>
-              <div>
-                <label className="form-label">Quantità <span className="text-red-400">*</span></label>
-                <input className="form-input" type="number" min={0}
-                  value={form.quantity} onChange={e => set("quantity", Number(e.target.value))}/>
-              </div>
-              <div>
-                <label className="form-label">Soglia minima</label>
-                <input className="form-input" type="number" min={0}
-                  value={form.minQuantity} onChange={e => set("minQuantity", Number(e.target.value))}/>
-              </div>
-              <div className="col-span-2">
-                <label className="form-label">Categoria</label>
-                <select className="form-input" value={form.category}
-                  onChange={e => set("category", e.target.value)}>
-                  <option value="">Nessuna categoria</option>
-                  {categories?.map(c => (
-                    <option key={c._id} value={c._id}>{c.icon} {c.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="form-label">Posizione scaffale</label>
-                <input className="form-input" value={form.location}
-                  onChange={e => set("location", e.target.value)} placeholder="es. A3-S2"/>
-              </div>
-              <div>
-                <label className="form-label">Fornitore</label>
-                <input className="form-input" value={form.supplier}
-                  onChange={e => set("supplier", e.target.value)}/>
-              </div>
-              <div>
-                <label className="form-label">Prezzo unitario €</label>
-                <input className="form-input" type="number" min={0} step={0.01}
-                  value={form.unitPrice} onChange={e => set("unitPrice", Number(e.target.value))}/>
-              </div>
-              <div className="col-span-2">
-                <label className="form-label">Note</label>
-                <textarea className="form-input resize-none" rows={2}
-                  value={form.notes} onChange={e => set("notes", e.target.value)}/>
-              </div>
+        <form onSubmit={handleSubmit}>
+          <div className="p-5 space-y-3">
+            {/* Categoria */}
+            <div>
+              <label className="form-label">Categoria</label>
+              <select className="form-input" value={form.category}
+                onChange={e => set("category", e.target.value)}>
+                <option value="">Nessuna categoria</option>
+                {categories?.map(c => (
+                  <option key={c._id} value={c._id}>{c.icon} {c.name}</option>
+                ))}
+              </select>
+            </div>
+            {/* Nome */}
+            <div>
+              <label className="form-label">Nome prodotto <span className="text-red-400">*</span></label>
+              <input className={clsx("form-input", errors.name && "border-red-400")}
+                value={form.name} onChange={e => set("name", e.target.value)}
+                placeholder="es. Bulloni M8 x 25mm"/>
+              {errors.name && <p className="form-error">{errors.name}</p>}
+            </div>
+            {/* Codice */}
+            <div>
+              <label className="form-label">Codice <span className="text-red-400">*</span></label>
+              <input className={clsx("form-input", errors.code && "border-red-400")}
+                value={form.code} onChange={e => set("code", e.target.value.toUpperCase())}
+                placeholder="es. ART-001"/>
+              {errors.code && <p className="form-error">{errors.code}</p>}
+            </div>
+            {/* Quantità */}
+            <div>
+              <label className="form-label">Quantità <span className="text-red-400">*</span></label>
+              <input className="form-input" type="number" min={0}
+                value={form.quantity} onChange={e => set("quantity", Number(e.target.value))}/>
+            </div>
+            {/* Note */}
+            <div>
+              <label className="form-label">Note</label>
+              <textarea className="form-input resize-none" rows={2}
+                value={form.notes} onChange={e => set("notes", e.target.value)}
+                placeholder="Informazioni aggiuntive..."/>
             </div>
           </div>
-          <div className="px-5 pb-5 flex gap-3 shrink-0">
+          <div className="px-5 pb-5 flex gap-3">
             <button type="button" className="btn btn-md btn-secondary flex-1" onClick={onClose}>
               Annulla
             </button>
@@ -155,7 +128,7 @@ function MovementModal({ product, onClose }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
-      toast.success(`${form.type === "IN" ? "Entrata" : "Uscita"} registrata`);
+      toast.success(form.type === "IN" ? "Entrata registrata" : "Uscita registrata");
       onClose();
     },
     onError: (err) => toast.error(err.response?.data?.message || "Errore"),
@@ -175,7 +148,7 @@ function MovementModal({ product, onClose }) {
           <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded">
             <p className="font-medium text-gray-900 dark:text-white text-sm">{product.name}</p>
             <p className="text-xs text-gray-400">
-              {product.code} · Stock attuale: <strong>{product.quantity} {product.unit}</strong>
+              {product.code} · Stock: <strong>{product.quantity} {product.unit}</strong>
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -195,7 +168,7 @@ function MovementModal({ product, onClose }) {
           </div>
           <div>
             <label className="form-label">Motivazione</label>
-            <input className="form-input" placeholder="es. Ordine #123, Riassortimento..."
+            <input className="form-input" placeholder="es. Ordine #123..."
               value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}/>
           </div>
           <div className="flex gap-3">
@@ -251,9 +224,6 @@ export default function ProductsPage() {
     deleteMutation.mutate(p._id);
   };
 
-  // Congela le categorie al momento dell'apertura del modal.
-  // Senza questo, ogni refetch di React Query ricrea il modal
-  // e causa la perdita del focus negli input.
   const openModal = (val) => {
     setFrozenCats(cats || []);
     setModal(val);
@@ -300,7 +270,7 @@ export default function ProductsPage() {
               <thead>
                 <tr>
                   <th>Prodotto</th><th>Codice</th><th>Categoria</th>
-                  <th>Quantità</th><th>Posizione</th><th>Prezzo</th><th></th>
+                  <th>Quantità</th><th>Note</th><th></th>
                 </tr>
               </thead>
               <tbody>
@@ -331,10 +301,7 @@ export default function ProductsPage() {
                       </span>
                       <span className="text-gray-400 text-xs ml-1">{p.unit}</span>
                     </td>
-                    <td className="text-gray-500 text-sm">{p.location || "—"}</td>
-                    <td className="tabular-nums text-sm">
-                      {p.unitPrice > 0 ? "€ " + p.unitPrice.toFixed(2) : "—"}
-                    </td>
+                    <td className="text-gray-500 text-sm max-w-[150px] truncate">{p.notes || "—"}</td>
                     <td>
                       <div className="flex items-center gap-1">
                         <button className="btn btn-ghost btn-sm p-1.5 text-green-600"
@@ -362,12 +329,10 @@ export default function ProductsPage() {
               <div className="py-12 text-center">
                 <Package size={32} className="mx-auto text-gray-300 mb-3"/>
                 <p className="text-gray-500 font-medium">Nessun prodotto trovato</p>
-                <p className="text-gray-400 text-sm mt-1">Prova a modificare i filtri o aggiungi un nuovo prodotto</p>
               </div>
             )}
           </div>
         )}
-
         {data?.pagination?.pages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-800">
             <p className="text-xs text-gray-400">Pagina {data.pagination.page} di {data.pagination.pages}</p>

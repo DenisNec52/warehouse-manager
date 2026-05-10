@@ -1,6 +1,5 @@
 /**
  * pages/UsersPage.jsx — Gestione utenti (solo admin)
- * Permette di creare, modificare, cambiare password e disabilitare utenti.
  */
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -20,13 +19,12 @@ function UserModal({ user, onClose }) {
     role:     user?.role     || "operatore",
     password: "",
   });
-  const [showPw,  setShowPw]  = useState(false);
-  const [changePw,setChangePw]= useState(false);
+  const [showPw,   setShowPw]   = useState(false);
+  const [changePw, setChangePw] = useState(false);
 
   const mut = useMutation({
     mutationFn: async (d) => {
       if (!isEdit) return usersAPI.create(d);
-      // In modifica: aggiorna dati + eventuale reset password separato
       await usersAPI.update(user._id, { name: d.name, role: d.role });
       if (changePw && d.password) {
         await usersAPI.resetPassword(user._id, { newPassword: d.password });
@@ -45,19 +43,18 @@ function UserModal({ user, onClose }) {
   const handleSubmit = () => {
     if (!form.name.trim())     return toast.error("Nome obbligatorio");
     if (!form.username.trim()) return toast.error("Username obbligatorio");
-    if (!isEdit && !form.password) return toast.error("Password obbligatoria per il nuovo utente");
+    if (!isEdit && !form.password) return toast.error("Password obbligatoria");
     if (changePw && form.password.length < 6) return toast.error("Password minimo 6 caratteri");
     mut.mutate(form);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
-      <motion.div initial={{opacity:0,scale:.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.95}}
+      <motion.div initial={{ opacity: 0, scale: .95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .95 }}
         className="relative z-10 w-full max-w-sm bg-white dark:bg-gray-900 rounded-[var(--radius-lg)] shadow-modal">
 
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <h2 className="font-semibold text-gray-900 dark:text-white">
             {isEdit ? "Modifica utente" : "Nuovo utente"}
@@ -76,11 +73,13 @@ function UserModal({ user, onClose }) {
           {/* Username */}
           <div>
             <label className="form-label">Username *</label>
-            <input className="form-input" value={form.username}
+            <input
+              className={clsx("form-input", isEdit && "opacity-60 cursor-not-allowed")}
+              value={form.username}
               onChange={e => s("username", e.target.value)}
               disabled={isEdit}
               placeholder="es. mario.rossi"
-              className={clsx("form-input", isEdit && "opacity-60 cursor-not-allowed")}/>
+            />
             {isEdit && <p className="text-xs text-gray-400 mt-1">Lo username non può essere modificato</p>}
           </div>
 
@@ -102,9 +101,8 @@ function UserModal({ user, onClose }) {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="form-label mb-0">Password</label>
-                <button type="button"
-                  className="text-xs text-blue-500 hover:underline"
-                  onClick={() => { setChangePw(v => !v); setForm(f => ({...f, password:""})); }}>
+                <button type="button" className="text-xs text-blue-500 hover:underline"
+                  onClick={() => { setChangePw(v => !v); s("password", ""); }}>
                   {changePw ? "Annulla" : "Cambia password"}
                 </button>
               </div>
@@ -128,14 +126,13 @@ function UserModal({ user, onClose }) {
             <div className="grid grid-cols-2 gap-2">
               {[["admin","Admin"],["operatore","Operatore"]].map(([v,l]) => (
                 <button key={v} type="button" onClick={() => s("role", v)}
-                  className={clsx("btn btn-md gap-2", form.role===v ? "btn-primary" : "btn-secondary")}>
-                  {v==="admin" ? <ShieldCheck size={14}/> : <User size={14}/>}{l}
+                  className={clsx("btn btn-md gap-2", form.role === v ? "btn-primary" : "btn-secondary")}>
+                  {v === "admin" ? <ShieldCheck size={14}/> : <User size={14}/>}{l}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Azioni */}
           <div className="flex gap-3 pt-2">
             <button className="btn btn-md btn-secondary flex-1" onClick={onClose}>Annulla</button>
             <button className="btn btn-md btn-primary flex-1" disabled={mut.isPending} onClick={handleSubmit}>
@@ -160,7 +157,7 @@ export default function UsersPage() {
 
   const delMut = useMutation({
     mutationFn: id => usersAPI.delete(id),
-    onSuccess:  () => { qc.invalidateQueries({ queryKey:["users"] }); toast.success("Utente disabilitato"); },
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ["users"] }); toast.success("Utente disabilitato"); },
     onError:    () => toast.error("Errore"),
   });
 
@@ -181,12 +178,8 @@ export default function UsersPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Utente</th>
-                <th>Username</th>
-                <th>Ruolo</th>
-                <th>Ultimo accesso</th>
-                <th>Stato</th>
-                <th></th>
+                <th>Utente</th><th>Username</th><th>Ruolo</th>
+                <th>Ultimo accesso</th><th>Stato</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -195,7 +188,7 @@ export default function UsersPage() {
                   <td>
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                        style={{ background: u.role==="admin" ? "#3b82f6" : "#6b7280" }}>
+                        style={{ background: u.role === "admin" ? "#3b82f6" : "#6b7280" }}>
                         {u.name?.charAt(0).toUpperCase()}
                       </div>
                       <span className="font-medium text-gray-900 dark:text-white">{u.name}</span>
@@ -207,14 +200,14 @@ export default function UsersPage() {
                     </code>
                   </td>
                   <td>
-                    <span className={clsx("badge", u.role==="admin" ? "badge-blue" : "badge-gray")}>
-                      {u.role==="admin" ? <ShieldCheck size={10}/> : <User size={10}/>}
+                    <span className={clsx("badge", u.role === "admin" ? "badge-blue" : "badge-gray")}>
+                      {u.role === "admin" ? <ShieldCheck size={10}/> : <User size={10}/>}
                       {u.role}
                     </span>
                   </td>
                   <td className="text-gray-400 text-xs">
                     {u.lastLogin
-                      ? new Date(u.lastLogin).toLocaleString("it-IT",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})
+                      ? new Date(u.lastLogin).toLocaleString("it-IT", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })
                       : "Mai effettuato"}
                   </td>
                   <td>
@@ -230,7 +223,7 @@ export default function UsersPage() {
                       </button>
                       {u._id !== me?._id && (
                         <button className="btn btn-ghost btn-sm p-1.5 text-red-500" title="Disabilita"
-                          onClick={() => { if (confirm(`Disabilitare "${u.name}"?`)) delMut.mutate(u._id); }}>
+                          onClick={() => { if (confirm("Disabilitare " + u.name + "?")) delMut.mutate(u._id); }}>
                           <Trash2 size={13}/>
                         </button>
                       )}
