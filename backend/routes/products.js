@@ -134,10 +134,11 @@ router.post("/",
       }
 
       res.status(201).json({ product });
-    } catch (err) {
+} catch (err) {
+      console.error("[products/post]", err.message, JSON.stringify(err.errors || {}));
       if (err.code === 11000)
         return res.status(409).json({ message: "Codice prodotto già esistente." });
-      res.status(500).json({ message: "Errore creazione prodotto." });
+      res.status(500).json({ message: err.message || "Errore creazione prodotto." });
     }
   }
 );
