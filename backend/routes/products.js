@@ -99,7 +99,6 @@ router.get("/:id", async (req, res) => {
 // ── POST /api/products — crea prodotto ────────────────────────
 router.post("/",
   [
-    body("name").trim().notEmpty().withMessage("Nome obbligatorio"),
     body("code").trim().notEmpty().withMessage("Codice obbligatorio"),
     body("quantity").isInt({ min: 0 }).withMessage("Quantità deve essere >= 0"),
     body("minQuantity").optional().isInt({ min: 0 }),
@@ -115,6 +114,7 @@ router.post("/",
 
       const product = await Product.create({
         ...req.body,
+        name:      req.body.name || req.body.code.toUpperCase(),
         code:      req.body.code.toUpperCase(),
         createdBy: req.user._id,
       });
