@@ -93,10 +93,7 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
-
-        <p className="text-center text-xs text-gray-400 mt-4">
-          Demo: <span className="font-mono">admin / Admin123!</span>
-        </p>
+        
       </motion.div>
     </div>
   );

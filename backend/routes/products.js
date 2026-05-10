@@ -112,6 +112,9 @@ router.post("/",
       if (existing)
         return res.status(409).json({ message: `Codice ${req.body.code.toUpperCase()} già esistente.` });
 
+        // Converti categoria vuota in null per evitare errore ObjectId
+        if (!req.body.category) req.body.category = null;
+
       const product = await Product.create({
         ...req.body,
         name:      req.body.name || req.body.code.toUpperCase(),

@@ -58,7 +58,7 @@ router.delete("/:id", async (req, res) => {
 
 // Reset password utente
 router.put("/:id/password",
-  [body("newPassword").isLength({ min: 6 }).withMessage("Password min 6 caratteri")],
+  [body("newPassword").isLength({ min: 8 }).withMessage("Password min 6 caratteri")],
   validate,
   async (req, res) => {
     const user = await User.findById(req.params.id);
