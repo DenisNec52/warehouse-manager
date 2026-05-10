@@ -10,7 +10,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import clsx from "clsx";
 
-function ProductModal({ product, categories, onClose }) {
+export function ProductModal({ product, categories, onClose }) {
   const qc = useQueryClient();
   const isEdit = !!product;
   const [form, setForm] = useState({
@@ -109,9 +109,9 @@ function ProductModal({ product, categories, onClose }) {
 }
 
 // Esportato per riuso nella Dashboard
-export function MovementModal({ product, onClose }) {
+export function MovementModal({ product, onClose, defaultType = "IN" }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ type: "IN", quantity: "", reason: "" });
+  const [form, setForm] = useState({ type: defaultType, quantity: "", reason: "" });
 
   const mutation = useMutation({
     mutationFn: (d) => movementsAPI.create({ productId: product._id, ...d }),

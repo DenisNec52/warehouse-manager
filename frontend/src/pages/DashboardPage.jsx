@@ -1,19 +1,22 @@
 /**
  * pages/DashboardPage.jsx
- * Dashboard con ricerca prodotto + stesso MovementModal di ProductsPage.
+ * Dashboard con:
+ * - Creazione prodotto rapida
+ * - Entrata/uscita con stesso modal di ProductsPage
+ * - Ultimi movimenti
  */
-import { useState, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useRef, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowDown, ArrowUp, Search, Package, ArrowLeftRight, X } from "lucide-react";
-import { dashboardAPI, productsAPI } from "@/lib/api";
-import { MovementModal } from "@/pages/ProductsPage";
+import { ArrowDown, ArrowUp, Search, Package, ArrowLeftRight, Plus, X } from "lucide-react";
+import { dashboardAPI, productsAPI, categoriesAPI } from "@/lib/api";
+import { MovementModal, ProductModal } from "@/pages/ProductsPage";
 import { useAuthStore } from "@/lib/store";
 import { Link } from "react-router-dom";
 import clsx from "clsx";
 
-// ── Ricerca + selezione prodotto per movimento rapido ─────────
-function MovimentoRapido({ type }) {
+// ── Ricerca prodotto per movimento ────────────────────────────
+function MovimentoRapido({ type, onOpen }) {
   const isIN = type === "IN";
   const [search,      setSearch]      = useState("");
   const [selected,    setSelected]    = useState(null);
@@ -34,10 +37,11 @@ function MovimentoRapido({ type }) {
 
   return (
     <div className={clsx("card p-5 border-t-2", isIN ? "border-t-green-500" : "border-t-red-500")}>
-      {/* Header */}
       <div className="flex items-center gap-2 mb-4">
         <div className={clsx("w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold",
-          isIN ? "bg-green-100 text-green-600 dark:bg-green-900/30" : "bg-red-100 text-red-600 dark:bg-red-900/30")}>
+          isIN
+            ? "bg-green-100 text-green-600 dark:bg-green-900/30"
+            : "bg-red-100 text-red-600 dark:bg-red-900/30")}>
           {isIN ? "↓" : "↑"}
         </div>
         <h3 className="font-semibold text-gray-900 dark:text-white text-sm">
@@ -45,7 +49,6 @@ function MovimentoRapido({ type }) {
         </h3>
       </div>
 
-      {/* Prodotto selezionato */}
       {selected ? (
         <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded mb-4 flex items-center justify-between">
           <div>
@@ -59,7 +62,6 @@ function MovimentoRapido({ type }) {
           </button>
         </div>
       ) : (
-        /* Ricerca prodotto */
         <div className="relative mb-4">
           <label className="form-label">Cerca prodotto</label>
           <div className="relative">
@@ -100,7 +102,6 @@ function MovimentoRapido({ type }) {
         </div>
       )}
 
-      {/* Bottone apri modal — attivo solo dopo selezione prodotto */}
       <button
         className={clsx(
           "btn btn-lg w-full gap-2",
@@ -108,9 +109,7 @@ function MovimentoRapido({ type }) {
           !selected && "opacity-50 cursor-not-allowed"
         )}
         disabled={!selected}
-        onClick={() => {/* il modal si apre via stato in Dashboard */
-          document.dispatchEvent(new CustomEvent("open-movement", { detail: { product: selected, type } }));
-        }}
+        onClick={() => onOpen(selected, type)}
       >
         {isIN ? "↓ Registra Entrata" : "↑ Registra Uscita"}
       </button>
@@ -141,32 +140,48 @@ function StatCard({ label, value, icon: Icon, color, sub }) {
 // ── Dashboard ─────────────────────────────────────────────────
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const [movModal, setMovModal] = useState(null); // { product, type }
+  const qc = useQueryClient();
+  const [movModal,     setMovModal]     = useState(null); // { product, type }
+  const [productModal, setProductModal] = useState(false);
+  const [frozenCats,   setFrozenCats]   = useState([]);
 
   const { data } = useQuery({
     queryKey: ["dashboard"],
     queryFn:  () => dashboardAPI.stats().then(r => r.data),
   });
 
-  // Ascolta evento dal componente MovimentoRapido
-  useState(() => {
-    const handler = (e) => setMovModal(e.detail);
-    document.addEventListener("open-movement", handler);
-    return () => document.removeEventListener("open-movement", handler);
+  const { data: cats } = useQuery({
+    queryKey: ["categories"],
+    queryFn:  () => categoriesAPI.list().then(r => r.data.categories),
   });
+
+  const openProductModal = () => {
+    setFrozenCats(cats || []);
+    setProductModal(true);
+  };
+
+  const openMovModal = (product, type) => {
+    setMovModal({ product, type });
+  };
 
   const stats  = data?.stats;
   const recent = data?.recentMovements || [];
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-          Ciao, {user?.name?.split(" ")[0]} 👋
-        </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-          Registra un movimento o controlla lo stato del magazzino
-        </p>
+      {/* Header con bottone nuovo prodotto */}
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+            Ciao, {user?.name?.split(" ")[0]} 👋
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            Gestisci il magazzino direttamente da qui
+          </p>
+        </div>
+        <button className="btn btn-md btn-primary gap-2" onClick={openProductModal}>
+          <Plus size={16}/> Nuovo prodotto
+        </button>
       </div>
 
       {/* Stats */}
@@ -175,10 +190,10 @@ export default function DashboardPage() {
         <StatCard label="Movimenti oggi"  value={stats?.todayMovements} icon={ArrowLeftRight} color="#10b981" sub="Entrate + uscite"/>
       </div>
 
-      {/* Form entrata/uscita */}
+      {/* Entrata / Uscita rapida */}
       <div className="grid lg:grid-cols-2 gap-4 mb-6">
-        <MovimentoRapido type="IN"/>
-        <MovimentoRapido type="OUT"/>
+        <MovimentoRapido type="IN"  onOpen={openMovModal}/>
+        <MovimentoRapido type="OUT" onOpen={openMovModal}/>
       </div>
 
       {/* Ultimi movimenti */}
@@ -228,12 +243,25 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Modal movimento — identico a ProductsPage */}
+      {/* Modal nuovo prodotto — stesso di ProductsPage */}
       <AnimatePresence>
+        {productModal && (
+          <ProductModal
+            key="new-product"
+            product={null}
+            categories={frozenCats}
+            onClose={() => {
+              setProductModal(false);
+              qc.invalidateQueries({ queryKey: ["dashboard"] });
+            }}
+          />
+        )}
+        {/* Modal movimento — stesso di ProductsPage */}
         {movModal && (
           <MovementModal
             key={movModal.product._id + movModal.type}
-            product={{ ...movModal.product, _defaultType: movModal.type }}
+            product={movModal.product}
+            defaultType={movModal.type}
             onClose={() => setMovModal(null)}
           />
         )}
