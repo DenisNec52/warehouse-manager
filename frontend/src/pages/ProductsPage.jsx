@@ -14,7 +14,7 @@ function ProductModal({ product, categories, onClose }) {
   const qc = useQueryClient();
   const isEdit = !!product;
   const [form, setForm] = useState({
-    name:        product?.name        || "",
+
     code:        product?.code        || "",
     quantity:    product?.quantity    ?? 0,
     minQuantity: product?.minQuantity ?? 10,
@@ -44,14 +44,11 @@ function ProductModal({ product, categories, onClose }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-const handleSubmit = (e) => {
-  e.preventDefault();
-  setErrors({});
-  mutation.mutate({
-    ...form,
-    category: form.category || null,
-  });
-};
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setErrors({});
+    mutation.mutate(form);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
