@@ -221,7 +221,7 @@ export default function UsersPage() {
                         onClick={() => setModal(u)}>
                         <Edit size={13}/>
                       </button>
-                      {u._id !== me?._id && (
+                      {u._id !== me?._id && u.role !== "admin" && (
                         <button className="btn btn-ghost btn-sm p-1.5 text-red-500" title="Disabilita"
                           onClick={() => { if (confirm("Disabilitare " + u.name + "?")) delMut.mutate(u._id); }}>
                           <Trash2 size={13}/>
