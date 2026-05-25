@@ -92,5 +92,4 @@ export const checklistAPI = {
   submissions:   (p)     => api.get("/checklist/submissions", { params: p }),
   monthlyReport: (month) => api.get("/checklist/monthly-report", { params: { month } }),
 };
-
 export default api;
