@@ -11,7 +11,8 @@ import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Package, ArrowLeftRight, Tag, Users, Bell,
-  Settings, LogOut, Menu, X, ChevronDown, Sun, Moon, Palette
+  Settings, LogOut, Menu, X, Sun, Moon, Palette,
+  Home, ClipboardCheck, ClipboardList
 } from "lucide-react";
 import { useAuthStore, useThemeStore } from "@/lib/store";
 import { authAPI } from "@/lib/api";
@@ -21,14 +22,17 @@ import NotificationBell from "@/components/ui/NotificationBell";
 import clsx from "clsx";
 
 const NAV = [
-  { to:"/",             label:"Dashboard",    icon:LayoutDashboard, exact:true },
-  { to:"/products",     label:"Prodotti",     icon:Package },
-  { to:"/movements",    label:"Movimenti",    icon:ArrowLeftRight },
+  { to:"/",          label:"Home",       icon:Home,            exact:true },
+  { to:"/warehouse", label:"Magazzino",  icon:LayoutDashboard              },
+  { to:"/checklist", label:"Pulizia 5S", icon:ClipboardCheck               },
+  { to:"/products",  label:"Prodotti",   icon:Package                      },
+  { to:"/movements", label:"Movimenti",  icon:ArrowLeftRight                },
 ];
 
 const NAV_ADMIN = [
-  { to:"/users",        label:"Utenti",       icon:Users },
-  { to:"/categories",   label:"Categorie",    icon:Tag },
+  { to:"/users",           label:"Utenti",       icon:Users         },
+  { to:"/categories",      label:"Categorie",    icon:Tag           },
+  { to:"/admin/checklist", label:"Gestione 5S",  icon:ClipboardList },
 ];
 
 const NAV_BOTTOM = [

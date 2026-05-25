@@ -23,6 +23,9 @@ import UsersPage       from "@/pages/UsersPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import SettingsPage    from "@/pages/SettingsPage";
 import NotFoundPage    from "@/pages/NotFoundPage";
+import HomePage           from "@/pages/HomePage";
+import ChecklistPage      from "@/pages/ChecklistPage";
+import ChecklistAdminPage from "@/pages/ChecklistAdminPage";
 
 // Layout
 import AppLayout from "@/components/layout/AppLayout";
@@ -102,19 +105,21 @@ export default function App() {
             <AppLayout />
           </RequireAuth>
         }>
-          <Route index element={<PageWrapper><DashboardPage /></PageWrapper>} />
-          <Route path="products"         element={<PageWrapper><ProductsPage /></PageWrapper>} />
-          <Route path="products/:id"     element={<PageWrapper><ProductDetail /></PageWrapper>} />
-          <Route path="movements"        element={<PageWrapper><MovementsPage /></PageWrapper>} />
-          <Route path="categories"       element={<PageWrapper><CategoriesPage /></PageWrapper>} />
-          <Route path="notifications"    element={<PageWrapper><NotificationsPage /></PageWrapper>} />
-          <Route path="settings"         element={<PageWrapper><SettingsPage /></PageWrapper>} />
-          {/* Solo admin */}
-          <Route path="users" element={
-            <RequireAdmin>
-              <PageWrapper><UsersPage /></PageWrapper>
-            </RequireAdmin>
-          }/>
+        <Route index element={<PageWrapper><HomePage/></PageWrapper>}/>
+        <Route path="warehouse"        element={<PageWrapper><DashboardPage/></PageWrapper>}/>
+        <Route path="products"         element={<PageWrapper><ProductsPage/></PageWrapper>}/>
+        <Route path="products/:id"     element={<PageWrapper><ProductDetail/></PageWrapper>}/>
+        <Route path="movements"        element={<PageWrapper><MovementsPage/></PageWrapper>}/>
+        <Route path="categories"       element={<PageWrapper><CategoriesPage/></PageWrapper>}/>
+        <Route path="notifications"    element={<PageWrapper><NotificationsPage/></PageWrapper>}/>
+        <Route path="settings"         element={<PageWrapper><SettingsPage/></PageWrapper>}/>
+        <Route path="checklist"        element={<PageWrapper><ChecklistPage/></PageWrapper>}/>
+        <Route path="users" element={
+          <RequireAdmin><PageWrapper><UsersPage/></PageWrapper></RequireAdmin>
+        }/>
+        <Route path="admin/checklist" element={
+          <RequireAdmin><PageWrapper><ChecklistAdminPage/></PageWrapper></RequireAdmin>
+        }/>
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

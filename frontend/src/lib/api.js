@@ -83,4 +83,14 @@ export const dashboardAPI = {
   charts: (p) => api.get("/dashboard/charts", { params: p }),
 };
 
+export const checklistAPI = {
+  get:           ()      => api.get("/checklist"),
+  update:        (d)     => api.put("/checklist", d),
+  submit:        (d)     => api.post("/checklist/submit", d),
+  myToday:       ()      => api.get("/checklist/my-today"),
+  today:         ()      => api.get("/checklist/submissions/today"),
+  submissions:   (p)     => api.get("/checklist/submissions", { params: p }),
+  monthlyReport: (month) => api.get("/checklist/monthly-report", { params: { month } }),
+};
+
 export default api;

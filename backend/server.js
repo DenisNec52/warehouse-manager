@@ -50,6 +50,7 @@ app.use("/api/categories",   require("./routes/categories"));
 app.use("/api/movements",    require("./routes/movements"));
 app.use("/api/notifications",require("./routes/notifications"));
 app.use("/api/dashboard",    require("./routes/dashboard"));
+app.use("/api/checklist",    require("./routes/checklist"));
 
 // ── Health check ──────────────────────────────────────────────
 app.get("/api/health", (_req, res) => res.json({
