@@ -1,0 +1,180 @@
+[
+  {
+    "categoria": "FLANGE",
+    "pedana": "PED. 1",
+    "articoli": [
+      { "codice": "1166-1", "quantita": 4, "unita": "Pz" },
+      { "codice": "4526",   "quantita": 1, "unita": "Pz" },
+      { "codice": "1965",   "quantita": 1, "unita": "Pz" },
+      { "codice": "1534-1", "quantita": 1, "unita": "Pz" },
+      { "codice": "125-1",  "quantita": 1, "unita": "Pz" },
+      { "codice": "3843",   "quantita": 1, "unita": "Pz" },
+      { "codice": "3844",   "quantita": 1, "unita": "Pz" },
+      { "codice": "2028-1", "quantita": 1, "unita": "Pz" }
+    ]
+  },
+  {
+    "categoria": "FLANGE",
+    "pedana": "PED. 2",
+    "articoli": [
+      { "codice": "973-3",  "quantita": 1,  "unita": "Pz" },
+      { "codice": "1849-1", "quantita": 2,  "unita": "Pz" },
+      { "codice": "1783-1", "quantita": 2,  "unita": "Pz" },
+      { "codice": "1279-3", "quantita": 6,  "unita": "Pz" },
+      { "codice": "1507-1", "quantita": 2,  "unita": "Pz" },
+      { "codice": "1534-1", "quantita": 1,  "unita": "Pz" },
+      { "codice": "738-?",  "quantita": 2,  "unita": "Pz" },
+      { "codice": "4782-1", "quantita": 2,  "unita": "Pz" },
+      { "codice": "3842-?", "quantita": 4,  "unita": "Pz" },
+      { "codice": "282-1",  "quantita": 6,  "unita": "Pz" }
+    ]
+  },
+  {
+    "categoria": "FLANGE",
+    "pedana": "PED. 3",
+    "articoli": [
+      { "codice": "1731-1", "quantita": 1, "unita": "Pz" },
+      { "codice": "1398-1", "quantita": 1, "unita": "Pz" },
+      { "codice": "1197-1", "quantita": 2, "unita": "Pz" },
+      { "codice": "1638-1", "quantita": 1, "unita": "Pz" },
+      { "codice": "1796",   "quantita": 1, "unita": "Pz" },
+      { "codice": "2230-1", "quantita": 2, "unita": "Pz" },
+      { "codice": "1684-2", "quantita": 2, "unita": "Pz" }
+    ]
+  },
+  {
+    "categoria": "FLANGE",
+    "pedana": "PED. 4",
+    "articoli": [
+      { "codice": "2065-2", "quantita": 2,  "unita": "Pz" },
+      { "codice": "2065-1", "quantita": 2,  "unita": "Pz" },
+      { "codice": "1963-?", "quantita": 2,  "unita": "Pz" },
+      { "codice": "1962-?", "quantita": 2,  "unita": "Pz" },
+      { "codice": "1595-3", "quantita": 1,  "unita": "Pz" },
+      { "codice": "4792-9", "quantita": 12, "unita": "Pz" },
+      { "codice": "4792-?", "quantita": 8,  "unita": "Pz" },
+      { "codice": "2101-1", "quantita": 9,  "unita": "Pz" },
+      { "codice": "1537-1", "quantita": 1,  "unita": "Pz" },
+      { "codice": "Fe SABB. 10\"", "quantita": 2, "unita": "Pz" },
+      { "codice": "FLANGGETTE STILMAS", "quantita": 59, "unita": "Pz" }
+    ]
+  },
+  {
+    "categoria": "FASCE ATEX",
+    "pedana": "PED. 1",
+    "articoli": [
+      { "codice": "3843-?", "quantita": 1, "unita": "Pz" },
+      { "codice": "3844-?", "quantita": 1, "unita": "Pz" },
+      { "codice": "3842-2", "quantita": 4, "unita": "Pz" },
+      { "codice": "844-1",  "quantita": 4, "unita": "Pz" },
+      { "codice": "1534-1", "quantita": 1, "unita": "Pz" },
+      { "codice": "1849-5", "quantita": 1, "unita": "Pz" },
+      { "codice": "1849-1", "quantita": 1, "unita": "Pz" },
+      { "codice": "1849-3", "quantita": 1, "unita": "Pz" },
+      { "codice": "2332",   "quantita": 1, "unita": "Pz" },
+      { "codice": "1455-1", "quantita": 1, "unita": "Pz", "note": "LASER" }
+    ]
+  },
+  {
+    "categoria": "FASCE ATEX",
+    "pedana": "PED. 1",
+    "subcategoria": "FASCE ATEX (secondo foglio)",
+    "articoli": [
+      { "codice": "3881-?", "quantita": 4, "unita": "Pz" },
+      { "codice": "682-12", "quantita": 1, "unita": "Pz" },
+      { "codice": "1012-1", "quantita": 1, "unita": "Pz" },
+      { "codice": "26-6",   "quantita": 1, "unita": "Pz" },
+      { "codice": "1231-?", "quantita": 1, "unita": "Pz" },
+      { "codice": "1101-1", "quantita": 1, "unita": "Pz" },
+      { "codice": "1649-?", "quantita": 1, "unita": "Pz" }
+    ]
+  },
+  {
+    "categoria": "FASCE ATEX",
+    "pedana": "PED. 2",
+    "articoli": [
+      { "codice": "1524-3", "quantita": 6, "unita": "Pz" },
+      { "codice": "1738-?", "quantita": 1, "unita": "Pz" },
+      { "codice": "987-1",  "quantita": 1, "unita": "Pz" },
+      { "codice": "1850-1", "quantita": 1, "unita": "Pz" },
+      { "codice": "1964-?", "quantita": 1, "unita": "Pz" },
+      { "codice": "2582",   "quantita": 1, "unita": "Pz" },
+      { "codice": "GR100",  "quantita": 4, "unita": "Pz", "note": "NO COMM. C.O 3237" },
+      { "codice": "GR80",   "quantita": 5, "unita": "Pz", "note": "NO COMM." }
+    ]
+  },
+  {
+    "categoria": "FASCE ATEX",
+    "pedana": "PED. 3",
+    "articoli": [
+      { "codice": "2259",   "quantita": 8, "unita": "Pz" },
+      { "codice": "1776",   "quantita": 2, "unita": "Pz" },
+      { "codice": "987",    "quantita": 2, "unita": "Pz" },
+      { "codice": "1323-1", "quantita": 1, "unita": "Pz" },
+      { "codice": "1398-1", "quantita": 1, "unita": "Pz" },
+      { "codice": "3941",   "quantita": 2, "unita": "Pz" }
+    ]
+  },
+  {
+    "categoria": "FASCE ATEX",
+    "pedana": "PED. 4",
+    "articoli": [
+      { "codice": "1438-3", "quantita": 1, "unita": "Pz" },
+      { "codice": "1438-1", "quantita": 1, "unita": "Pz" },
+      { "codice": "1906-?", "quantita": 2, "unita": "Pz" },
+      { "codice": "2028-1", "quantita": 1, "unita": "Pz" },
+      { "codice": "3118-?", "quantita": 2, "unita": "Pz" },
+      { "codice": "1247-?", "quantita": 1, "unita": "Pz" }
+    ]
+  },
+  {
+    "categoria": "FASCE LASER",
+    "pedana": "PED. 1",
+    "articoli": [
+      { "codice": "1791",   "quantita": 2, "unita": "Pz" },
+      { "codice": "4526",   "quantita": 1, "unita": "Pz" },
+      { "codice": "1638-1", "quantita": 1, "unita": "Pz" },
+      { "codice": "1965-1", "quantita": 3, "unita": "Pz" },
+      { "codice": "1024-1", "quantita": 1, "unita": "Pz" },
+      { "codice": "1833-1", "quantita": 1, "unita": "Pz" }
+    ]
+  },
+  {
+    "categoria": "SCATOLE NEMA",
+    "pedana": "PED. 01",
+    "articoli": [
+      { "codice": "C.O 856", "quantita": 12, "unita": "Pz" },
+      { "codice": "3988",    "quantita": 1,  "unita": "Pz" },
+      { "codice": "1139",    "quantita": 2,  "unita": "Pz" },
+      { "codice": "4629",    "quantita": 2,  "unita": "Pz" },
+      { "codice": "1128",    "quantita": 2,  "unita": "Pz" },
+      { "codice": "1321",    "quantita": 2,  "unita": "Pz" },
+      { "codice": "1320",    "quantita": 2,  "unita": "Pz" },
+      { "codice": "1755",    "quantita": 6,  "unita": "Pz" },
+      { "codice": "924",     "quantita": 2,  "unita": "Pz" },
+      { "codice": "955",     "quantita": 1,  "unita": "Pz" },
+      { "codice": "1595",    "quantita": 8,  "unita": "Pz", "note": "sotto pedana" }
+    ]
+  },
+  {
+    "categoria": "TAPPI & ESAGONI INOX",
+    "pedana": "PED. 01",
+    "articoli": [
+      { "codice": "328",  "quantita": 4, "unita": "Pz" },
+      { "codice": "330",  "quantita": 4, "unita": "Pz" },
+      { "codice": "1888", "quantita": 2, "unita": "Pz" },
+      { "codice": "823",  "quantita": 3, "unita": "Pz" },
+      { "codice": "1774", "quantita": 6, "unita": "Pz" },
+      { "codice": "125",  "quantita": 2, "unita": "Pz" },
+      { "codice": "1550", "quantita": 1, "unita": "Pz" },
+      { "codice": "978",  "quantita": 2, "unita": "Pz" },
+      { "codice": "2138", "quantita": 6, "unita": "Pz" },
+      { "codice": "3552", "quantita": 1, "unita": "Pz" },
+      { "codice": "4726", "quantita": 1, "unita": "Pz" },
+      { "codice": "2175", "quantita": 1, "unita": "Pz" },
+      { "codice": "1550", "quantita": 1, "unita": "Pz" },
+      { "codice": "1519", "quantita": 1, "unita": "Pz" },
+      { "codice": "1902", "quantita": 4, "unita": "Pz" }
+    ]
+  }
+]

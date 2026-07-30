@@ -83,6 +83,11 @@ export const dashboardAPI = {
   charts: (p) => api.get("/dashboard/charts", { params: p }),
 };
 
+// ── Vision IA ─────────────────────────────────────────────────
+export const visionAPI = {
+  scan: (image, mediaType) => api.post("/vision/scan", { image, mediaType }),
+};
+
 export const checklistAPI = {
   get:           ()      => api.get("/checklist"),
   update:        (d)     => api.put("/checklist", d),

@@ -19,6 +19,7 @@ import { authAPI } from "@/lib/api";
 import toast from "react-hot-toast";
 import ThemePanel from "@/components/ui/ThemePanel";
 import NotificationBell from "@/components/ui/NotificationBell";
+import VisionScanner from "@/components/ui/VisionScanner";
 import clsx from "clsx";
 
 const NAV = [
@@ -184,6 +185,9 @@ export default function AppLayout() {
       <AnimatePresence>
         {themeOpen && <ThemePanel onClose={() => setThemeOpen(false)}/>}
       </AnimatePresence>
+
+      {/* IA Vision Scanner FAB */}
+      <VisionScanner />
     </div>
   );
 }
