@@ -226,6 +226,10 @@ router.post("/import-legacy", requireAdmin, async (req, res) => {
     if (!fs.existsSync(inventoryPath))
       return res.status(404).json({ message: "warehouse_inventory.json non trovato sul server." });
 
+    // Allinea gli indici Mongo allo schema corrente (rimuove il vecchio
+    // indice unico su "code" se ancora presente da prima della modifica).
+    await Product.syncIndexes();
+
     let removed = 0;
     if (req.body?.reset) removed = await resetLegacyImport();
 
