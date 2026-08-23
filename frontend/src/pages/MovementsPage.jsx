@@ -3,14 +3,14 @@
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Search } from "lucide-react";
 import { movementsAPI } from "@/lib/api";
+import { movementInfo, fmtDateTime } from "@/lib/format";
+import MovementTypeBadge from "@/components/ui/MovementTypeBadge";
 import clsx from "clsx";
 
 export default function MovementsPage() {
   const [type, setType]   = useState("");
   const [page, setPage]   = useState(1);
-  const [search, setSearch] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["movements", { type, page }],
@@ -41,25 +41,23 @@ export default function MovementsPage() {
             <table className="data-table">
               <thead><tr><th>Prodotto</th><th>Tipo</th><th>Qtà</th><th>Prima/Dopo</th><th>Motivazione</th><th>Operatore</th><th>Data</th></tr></thead>
               <tbody>
-                {(data?.movements||[]).map(m => (
-                  <tr key={m._id}>
-                    <td>
-                      <div className="font-medium text-gray-900 dark:text-white">{m.product?.name || m.productSnapshot?.name}</div>
-                      <code className="text-xs text-gray-400">{m.product?.code || m.productSnapshot?.code}</code>
-                    </td>
-                    <td>
-                      <span className={clsx("badge", m.type==="IN" ? "badge-green" : "badge-red")}>
-                        {m.type==="IN" ? <ArrowDown size={10}/> : <ArrowUp size={10}/>}
-                        {m.type==="IN" ? "Entrata" : "Uscita"}
-                      </span>
-                    </td>
-                    <td className="font-semibold tabular-nums">{m.quantity} {m.product?.unit || m.productSnapshot?.unit}</td>
-                    <td className="text-xs tabular-nums text-gray-500">{m.quantityBefore} → <strong className={m.type==="IN"?"text-green-600":"text-red-600"}>{m.quantityAfter}</strong></td>
-                    <td className="text-gray-500 text-sm">{m.reason || m.note || "—"}</td>
-                    <td className="text-gray-500 text-sm">{m.performedBy?.name || m.performedByName}</td>
-                    <td className="text-gray-400 text-xs">{new Date(m.createdAt).toLocaleString("it-IT",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</td>
-                  </tr>
-                ))}
+                {(data?.movements||[]).map(m => {
+                  const info = movementInfo(m);
+                  return (
+                    <tr key={m._id}>
+                      <td>
+                        <div className="font-medium text-gray-900 dark:text-white">{info.name}</div>
+                        <code className="text-xs text-gray-400">{info.code}</code>
+                      </td>
+                      <td><MovementTypeBadge type={m.type}/></td>
+                      <td className="font-semibold tabular-nums">{m.quantity} {info.unit}</td>
+                      <td className="text-xs tabular-nums text-gray-500">{m.quantityBefore} → <strong className={m.type==="IN"?"text-green-600":"text-red-600"}>{m.quantityAfter}</strong></td>
+                      <td className="text-gray-500 text-sm">{m.reason || m.note || "—"}</td>
+                      <td className="text-gray-500 text-sm">{info.performer}</td>
+                      <td className="text-gray-400 text-xs">{fmtDateTime(m.createdAt)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
             {!data?.movements?.length && <div className="py-12 text-center text-gray-400">Nessun movimento trovato</div>}

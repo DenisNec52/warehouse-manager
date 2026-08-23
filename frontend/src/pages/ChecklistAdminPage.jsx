@@ -2,11 +2,13 @@
  * pages/ChecklistAdminPage.jsx — Pannello admin 5S
  * Vista mensile tabellare + grafici andamento + configurazione
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend } from "recharts";
 import { CheckCircle, XCircle, Minus, ChevronDown, ChevronUp, Plus, Trash2, Save } from "lucide-react";
 import { checklistAPI } from "@/lib/api";
+import { scoreColor, fmtTime } from "@/lib/format";
+import ScoreCircle from "@/components/ui/ScoreCircle";
 import toast from "react-hot-toast";
 import clsx from "clsx";
 
@@ -117,7 +119,7 @@ function TabMonthly() {
                       })}
                       <td className="text-center px-3 py-2 font-bold tabular-nums text-gray-900 dark:text-white">{u.total}</td>
                       <td className="text-center px-3 py-2 font-bold tabular-nums"
-                        style={{ color: u.avgScore >= 80 ? "#22c55e" : u.avgScore >= 50 ? "#f59e0b" : "#ef4444" }}>
+                        style={{ color: scoreColor(u.avgScore) }}>
                         {u.avgScore}%
                       </td>
                     </tr>
@@ -215,11 +217,7 @@ function TabSubmissions() {
             <div className="px-5 py-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
               onClick={() => setExpanded(expanded === sub._id ? null : sub._id)}>
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-                  style={{ background: sub.score >= 80 ? "#dcfce7" : sub.score >= 50 ? "#fef9c3" : "#fee2e2",
-                    color: sub.score >= 80 ? "#16a34a" : sub.score >= 50 ? "#ca8a04" : "#dc2626" }}>
-                  {sub.score}%
-                </div>
+                <ScoreCircle score={sub.score} size={36}/>
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-gray-900 dark:text-white text-sm">
@@ -230,7 +228,7 @@ function TabSubmissions() {
                     </span>
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {sub.shift} · {sub.cleaningType} · {new Date(sub.createdAt).toLocaleTimeString("it-IT", { hour:"2-digit", minute:"2-digit" })}
+                    {sub.shift} · {sub.cleaningType} · {fmtTime(sub.createdAt)}
                   </p>
                 </div>
               </div>
@@ -271,7 +269,11 @@ function TabConfig() {
   const [shifts,    setShifts]    = useState(cl?.shifts    || []);
   const [ctypes,    setCtypes]    = useState(cl?.cleaningTypes || []);
 
-  if (cl && !title) { setTitle(cl.title); setDesc(cl.description); setArea(cl.workArea); setShifts(cl.shifts); setCtypes(cl.cleaningTypes); }
+  useEffect(() => {
+    if (!cl) return;
+    setTitle(cl.title); setDesc(cl.description); setArea(cl.workArea);
+    setShifts(cl.shifts); setCtypes(cl.cleaningTypes);
+  }, [cl]);
 
   const mut = useMutation({
     mutationFn: d => checklistAPI.update(d),

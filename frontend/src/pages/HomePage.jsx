@@ -7,6 +7,7 @@ import { Package, ClipboardCheck, AlertTriangle, ArrowDown, ArrowUp, ArrowRight 
 import { useQuery } from "@tanstack/react-query";
 import { dashboardAPI, checklistAPI } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
+import { movementInfo, fmtTime } from "@/lib/format";
 import clsx from "clsx";
 
 export default function HomePage() {
@@ -113,30 +114,29 @@ export default function HomePage() {
             <span className="text-sm font-semibold text-gray-900 dark:text-white">Ultimi movimenti</span>
             <button onClick={() => nav("/movements")} className="text-xs text-[var(--brand-500)] hover:underline">Vedi tutti →</button>
           </div>
-          {recent.map(m => (
-            <div key={m._id} className="flex items-center gap-3 px-4 py-2.5 border-b last:border-0 border-gray-100 dark:border-gray-700">
-              <div className={clsx("w-7 h-7 rounded-full flex items-center justify-center shrink-0",
-                m.type === "IN" ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30")}>
-                {m.type === "IN"
-                  ? <ArrowDown size={13} className="text-green-600"/>
-                  : <ArrowUp size={13} className="text-red-500"/>}
+          {recent.map(m => {
+            const info = movementInfo(m);
+            return (
+              <div key={m._id} className="flex items-center gap-3 px-4 py-2.5 border-b last:border-0 border-gray-100 dark:border-gray-700">
+                <div className={clsx("w-7 h-7 rounded-full flex items-center justify-center shrink-0",
+                  m.type === "IN" ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30")}>
+                  {m.type === "IN"
+                    ? <ArrowDown size={13} className="text-green-600"/>
+                    : <ArrowUp size={13} className="text-red-500"/>}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{info.name}</p>
+                  <p className="text-xs text-gray-400">{info.performer}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-bold tabular-nums text-gray-700 dark:text-gray-300">
+                    {m.type === "IN" ? "+" : "-"}{m.quantity} {info.unit}
+                  </p>
+                  <p className="text-xs text-gray-400">{fmtTime(m.createdAt)}</p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                  {m.product?.name || m.productSnapshot?.name}
-                </p>
-                <p className="text-xs text-gray-400">{m.performedBy?.name || m.performedByName}</p>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-sm font-bold tabular-nums text-gray-700 dark:text-gray-300">
-                  {m.type === "IN" ? "+" : "-"}{m.quantity} {m.product?.unit || m.productSnapshot?.unit}
-                </p>
-                <p className="text-xs text-gray-400">
-                  {new Date(m.createdAt).toLocaleTimeString("it-IT", { hour:"2-digit", minute:"2-digit" })}
-                </p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </motion.div>
       )}
     </div>

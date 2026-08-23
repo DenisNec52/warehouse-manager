@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { checklistAPI } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
+import { scoreColor, fmtTime } from "@/lib/format";
 import toast from "react-hot-toast";
 import clsx from "clsx";
 
@@ -76,7 +77,7 @@ function DoneScreen({ score, user, myToday, onNewShift }) {
               <p className="text-xs text-gray-400">{s.cleaningType}</p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-bold" style={{ color: s.score >= 80 ? "#22c55e" : s.score >= 50 ? "#f59e0b" : "#ef4444" }}>
+              <span className="text-sm font-bold" style={{ color: scoreColor(s.score) }}>
                 {s.score}%
               </span>
               <CheckCircle size={16} className="text-green-500"/>
@@ -396,11 +397,11 @@ export default function ChecklistPage() {
             <div key={s._id} className="flex items-center justify-between py-2.5 border-b last:border-0 border-gray-100 dark:border-gray-700">
               <div>
                 <p className="text-sm font-medium text-gray-900 dark:text-white">{s.shift}</p>
-                <p className="text-xs text-gray-400">{s.cleaningType} · {new Date(s.createdAt).toLocaleTimeString("it-IT", { hour:"2-digit", minute:"2-digit" })}</p>
+                <p className="text-xs text-gray-400">{s.cleaningType} · {fmtTime(s.createdAt)}</p>
               </div>
               <div className="flex items-center gap-2">
                 <div className="text-right">
-                  <span className="text-sm font-bold block" style={{ color: s.score >= 80 ? "#22c55e" : s.score >= 50 ? "#f59e0b" : "#ef4444" }}>{s.score}%</span>
+                  <span className="text-sm font-bold block" style={{ color: scoreColor(s.score) }}>{s.score}%</span>
                   <span className="text-xs text-gray-400">{s.checkedItems}/{s.totalItems} voci</span>
                 </div>
                 <CheckCircle size={15} className="text-green-500"/>

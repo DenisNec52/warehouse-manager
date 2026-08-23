@@ -8,6 +8,8 @@ import { ArrowDown, ArrowUp, Search, Package, ArrowLeftRight, Plus, X, Users, Ac
 import { dashboardAPI, productsAPI, movementsAPI, categoriesAPI, usersAPI } from "@/lib/api";
 import { ProductModal } from "@/pages/ProductsPage";
 import { useAuthStore } from "@/lib/store";
+import { movementInfo, fmtDateTime } from "@/lib/format";
+import MovementTypeBadge from "@/components/ui/MovementTypeBadge";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import clsx from "clsx";
@@ -309,25 +311,21 @@ export default function DashboardPage() {
               <tr><th>Prodotto</th><th>Tipo</th><th>Quantità</th><th>Operatore</th><th>Data</th></tr>
             </thead>
             <tbody>
-              {recent.map(m => (
-                <tr key={m._id}>
-                  <td>
-                    <div className="font-medium text-gray-900 dark:text-white">{m.product?.name || m.productSnapshot?.name}</div>
-                    <div className="text-xs text-gray-400 font-mono">{m.product?.code || m.productSnapshot?.code}</div>
-                  </td>
-                  <td>
-                    <span className={clsx("badge", m.type === "IN" ? "badge-green" : "badge-red")}>
-                      {m.type === "IN" ? <ArrowDown size={10}/> : <ArrowUp size={10}/>}
-                      {m.type === "IN" ? "Entrata" : "Uscita"}
-                    </span>
-                  </td>
-                  <td className="font-semibold tabular-nums">{m.quantity} {m.product?.unit || m.productSnapshot?.unit}</td>
-                  <td className="text-gray-500 text-sm">{m.performedBy?.name || m.performedByName}</td>
-                  <td className="text-gray-400 text-xs">
-                    {new Date(m.createdAt).toLocaleString("it-IT", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })}
-                  </td>
-                </tr>
-              ))}
+              {recent.map(m => {
+                const info = movementInfo(m);
+                return (
+                  <tr key={m._id}>
+                    <td>
+                      <div className="font-medium text-gray-900 dark:text-white">{info.name}</div>
+                      <div className="text-xs text-gray-400 font-mono">{info.code}</div>
+                    </td>
+                    <td><MovementTypeBadge type={m.type}/></td>
+                    <td className="font-semibold tabular-nums">{m.quantity} {info.unit}</td>
+                    <td className="text-gray-500 text-sm">{info.performer}</td>
+                    <td className="text-gray-400 text-xs">{fmtDateTime(m.createdAt)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {!recent.length && <div className="py-10 text-center text-sm text-gray-400">Nessun movimento ancora</div>}

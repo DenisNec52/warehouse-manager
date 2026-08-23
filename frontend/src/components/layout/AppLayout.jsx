@@ -6,8 +6,8 @@
  * - Topbar con utente, tema, notifiche
  * - Outlet per le pagine figlie
  */
-import { useState } from "react";
-import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { useState, lazy, Suspense } from "react";
+import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Package, ArrowLeftRight, Tag, Users, Bell,
@@ -16,10 +16,12 @@ import {
 } from "lucide-react";
 import { useAuthStore, useThemeStore } from "@/lib/store";
 import { authAPI } from "@/lib/api";
+import { pageVariants } from "@/lib/motion";
 import toast from "react-hot-toast";
 import ThemePanel from "@/components/ui/ThemePanel";
 import NotificationBell from "@/components/ui/NotificationBell";
-import VisionScanner from "@/components/ui/VisionScanner";
+// Caricato on-demand: contiene la logica fotocamera/analisi IA, non serve al primo render
+const VisionScanner = lazy(() => import("@/components/ui/VisionScanner"));
 import clsx from "clsx";
 
 const NAV = [
@@ -47,6 +49,7 @@ export default function AppLayout() {
   const { user, logout }  = useAuthStore();
   const { mode, setMode } = useThemeStore();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = async () => {
     await authAPI.logout().catch(() => {});
@@ -177,7 +180,12 @@ export default function AppLayout() {
 
         {/* Page content */}
         <main className="flex-1 p-4 lg:p-6 overflow-auto">
-          <Outlet/>
+          <AnimatePresence mode="wait">
+            <motion.div key={location.pathname}
+              variants={pageVariants} initial="initial" animate="enter" exit="exit">
+              <Outlet/>
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
 
@@ -187,7 +195,9 @@ export default function AppLayout() {
       </AnimatePresence>
 
       {/* IA Vision Scanner FAB */}
-      <VisionScanner />
+      <Suspense fallback={null}>
+        <VisionScanner />
+      </Suspense>
     </div>
   );
 }

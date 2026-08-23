@@ -6,9 +6,8 @@
  * - Page transitions Framer Motion
  * - Route protette (RequireAuth)
  */
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
 import { useAuthStore, useThemeStore } from "@/lib/store";
 import { authAPI } from "@/lib/api";
 
@@ -25,28 +24,17 @@ import SettingsPage    from "@/pages/SettingsPage";
 import NotFoundPage    from "@/pages/NotFoundPage";
 import HomePage           from "@/pages/HomePage";
 import ChecklistPage      from "@/pages/ChecklistPage";
-import ChecklistAdminPage from "@/pages/ChecklistAdminPage";
+// Caricata on-demand: usa recharts (libreria pesante) e serve solo agli admin
+const ChecklistAdminPage = lazy(() => import("@/pages/ChecklistAdminPage"));
 
 // Layout
 import AppLayout from "@/components/layout/AppLayout";
 
-// ── Page transition variants ──────────────────────────────────
-const pageVariants = {
-  initial: { opacity: 0, y: 8 },
-  enter:   { opacity: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
-  exit:    { opacity: 0, y: -8, transition: { duration: 0.15 } },
-};
-
-function PageWrapper({ children }) {
+function RouteLoader() {
   return (
-    <motion.div
-      variants={pageVariants}
-      initial="initial"
-      animate="enter"
-      exit="exit"
-    >
-      {children}
-    </motion.div>
+    <div className="flex items-center justify-center py-24">
+      <div className="w-6 h-6 border-2 border-[var(--brand-500)] border-t-transparent rounded-full animate-spin"/>
+    </div>
   );
 }
 
@@ -93,37 +81,37 @@ export default function App() {
   }, []);
 
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
+    <Routes location={location}>
 
-        {/* Login — redirect se già loggato */}
-        <Route path="/login" element={<LoginPage />} />
+      {/* Login — redirect se già loggato */}
+      <Route path="/login" element={<LoginPage />} />
 
-        {/* App protetta */}
-        <Route path="/" element={
-          <RequireAuth>
-            <AppLayout />
-          </RequireAuth>
-        }>
-        <Route index element={<PageWrapper><HomePage/></PageWrapper>}/>
-        <Route path="warehouse"        element={<PageWrapper><DashboardPage/></PageWrapper>}/>
-        <Route path="products"         element={<PageWrapper><ProductsPage/></PageWrapper>}/>
-        <Route path="products/:id"     element={<PageWrapper><ProductDetail/></PageWrapper>}/>
-        <Route path="movements"        element={<PageWrapper><MovementsPage/></PageWrapper>}/>
-        <Route path="categories"       element={<PageWrapper><CategoriesPage/></PageWrapper>}/>
-        <Route path="notifications"    element={<PageWrapper><NotificationsPage/></PageWrapper>}/>
-        <Route path="settings"         element={<PageWrapper><SettingsPage/></PageWrapper>}/>
-        <Route path="checklist"        element={<PageWrapper><ChecklistPage/></PageWrapper>}/>
-        <Route path="users" element={
-          <RequireAdmin><PageWrapper><UsersPage/></PageWrapper></RequireAdmin>
-        }/>
-        <Route path="admin/checklist" element={
-          <RequireAdmin><PageWrapper><ChecklistAdminPage/></PageWrapper></RequireAdmin>
-        }/>
-        </Route>
+      {/* App protetta */}
+      <Route path="/" element={
+        <RequireAuth>
+          <AppLayout />
+        </RequireAuth>
+      }>
+      <Route index element={<HomePage/>}/>
+      <Route path="warehouse"        element={<DashboardPage/>}/>
+      <Route path="products"         element={<ProductsPage/>}/>
+      <Route path="products/:id"     element={<ProductDetail/>}/>
+      <Route path="movements"        element={<MovementsPage/>}/>
+      <Route path="categories"       element={<CategoriesPage/>}/>
+      <Route path="notifications"    element={<NotificationsPage/>}/>
+      <Route path="settings"         element={<SettingsPage/>}/>
+      <Route path="checklist"        element={<ChecklistPage/>}/>
+      <Route path="users" element={
+        <RequireAdmin><UsersPage/></RequireAdmin>
+      }/>
+      <Route path="admin/checklist" element={
+        <RequireAdmin>
+          <Suspense fallback={<RouteLoader/>}><ChecklistAdminPage/></Suspense>
+        </RequireAdmin>
+      }/>
+      </Route>
 
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-    </AnimatePresence>
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
   );
 }
