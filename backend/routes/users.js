@@ -9,7 +9,7 @@
 const express  = require("express");
 const { body } = require("express-validator");
 const User     = require("../models/User");
-const { protect, requireSupervisor } = require("../middleware/auth");
+const { protect, requireSupervisor, requireAdmin } = require("../middleware/auth");
 const validate = require("../middleware/validate");
 const router   = express.Router();
 
@@ -63,13 +63,27 @@ router.put("/:id",
   }
 );
 
-// Elimina utente
-router.delete("/:id", blockIfTargetIsAdmin, async (req, res) => {
+// Elimina definitivamente l'utente (solo admin — azione irreversibile)
+router.delete("/:id", requireAdmin, blockIfTargetIsAdmin, async (req, res) => {
   if (req.params.id === req.user._id.toString())
     return res.status(400).json({ message: "Non puoi eliminare te stesso." });
-  await User.findByIdAndUpdate(req.params.id, { isActive: false });
-  res.json({ message: "Utente disabilitato." });
+  const user = await User.findByIdAndDelete(req.params.id);
+  if (!user) return res.status(404).json({ message: "Utente non trovato." });
+  res.json({ message: "Utente eliminato definitivamente." });
 });
+
+// Attiva/disattiva utente (reversibile — admin e supervisore)
+router.put("/:id/status", blockIfTargetIsAdmin,
+  [body("isActive").isBoolean().withMessage("Stato non valido")],
+  validate,
+  async (req, res) => {
+    if (req.params.id === req.user._id.toString())
+      return res.status(400).json({ message: "Non puoi disattivare te stesso." });
+    const user = await User.findByIdAndUpdate(req.params.id, { isActive: req.body.isActive }, { new: true });
+    if (!user) return res.status(404).json({ message: "Utente non trovato." });
+    res.json({ user: user.toPublic() });
+  }
+);
 
 // Reset password utente
 router.put("/:id/password",

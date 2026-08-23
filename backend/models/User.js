@@ -45,6 +45,8 @@ const userSchema = new mongoose.Schema({
   theme:      { type: themeSchema, default: () => ({}) },
   lastLogin:  Date,
   lastSeen:   Date,
+  lastLoginIP:       String,
+  lastLoginLocation: String,
 }, { timestamps: true });
 
 // ── Hash password prima del salvataggio ───────────────────────

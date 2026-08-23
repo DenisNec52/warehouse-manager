@@ -3,7 +3,7 @@
  */
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, X, ShieldCheck, User, Eye, EyeOff } from "lucide-react";
+import { Plus, Edit, Trash2, Ban, RotateCcw, X, ShieldCheck, User, Eye, EyeOff, MapPin } from "lucide-react";
 import { usersAPI } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
@@ -160,10 +160,19 @@ export default function UsersPage() {
     queryFn:  () => usersAPI.list().then(r => r.data.users),
   });
 
+  const statusMut = useMutation({
+    mutationFn: ({ id, isActive }) => usersAPI.setActive(id, isActive),
+    onSuccess:  (_r, { isActive }) => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      toast.success(isActive ? "Utente riattivato" : "Utente disabilitato");
+    },
+    onError: e => toast.error(e.response?.data?.message || "Errore"),
+  });
+
   const delMut = useMutation({
     mutationFn: id => usersAPI.delete(id),
-    onSuccess:  () => { qc.invalidateQueries({ queryKey: ["users"] }); toast.success("Utente disabilitato"); },
-    onError:    () => toast.error("Errore"),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ["users"] }); toast.success("Utente eliminato definitivamente"); },
+    onError:    e => toast.error(e.response?.data?.message || "Errore"),
   });
 
   return (
@@ -184,7 +193,7 @@ export default function UsersPage() {
             <thead>
               <tr>
                 <th>Utente</th><th>Username</th><th>Ruolo</th>
-                <th>Ultimo accesso</th><th>Stato</th><th></th>
+                <th>Ultimo accesso</th><th>Accesso da</th><th>Stato</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -215,6 +224,18 @@ export default function UsersPage() {
                       ? new Date(u.lastLogin).toLocaleString("it-IT", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })
                       : "Mai effettuato"}
                   </td>
+                  <td className="text-gray-400 text-xs">
+                    {u.lastLoginIP ? (
+                      <>
+                        <code className="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">{u.lastLoginIP}</code>
+                        {u.lastLoginLocation && (
+                          <span className="flex items-center gap-1 mt-0.5">
+                            <MapPin size={10}/> {u.lastLoginLocation}
+                          </span>
+                        )}
+                      </>
+                    ) : "—"}
+                  </td>
                   <td>
                     <span className={clsx("badge", u.isActive ? "badge-green" : "badge-red")}>
                       {u.isActive ? "Attivo" : "Disabilitato"}
@@ -229,8 +250,14 @@ export default function UsersPage() {
                         </button>
                       )}
                       {u._id !== me?._id && u.role !== "admin" && (
-                        <button className="btn btn-ghost btn-sm p-1.5 text-red-500" title="Disabilita"
-                          onClick={() => { if (confirm("Disabilitare " + u.name + "?")) delMut.mutate(u._id); }}>
+                        <button className="btn btn-ghost btn-sm p-1.5 text-amber-500" title={u.isActive ? "Disabilita" : "Riattiva"}
+                          onClick={() => statusMut.mutate({ id: u._id, isActive: !u.isActive })}>
+                          {u.isActive ? <Ban size={13}/> : <RotateCcw size={13}/>}
+                        </button>
+                      )}
+                      {me?.role === "admin" && u._id !== me?._id && u.role !== "admin" && (
+                        <button className="btn btn-ghost btn-sm p-1.5 text-red-500" title="Elimina definitivamente"
+                          onClick={() => { if (confirm(`Eliminare DEFINITIVAMENTE ${u.name}? L'azione non è reversibile.`)) delMut.mutate(u._id); }}>
                           <Trash2 size={13}/>
                         </button>
                       )}

@@ -17,6 +17,7 @@ const { protect }  = require("../middleware/auth");
 const { loginLimiter } = require("../middleware/rateLimiter");
 const validate = require("../middleware/validate");
 const email    = require("../utils/email");
+const { lookupLocation } = require("../utils/geoip");
 
 const router = express.Router();
 
@@ -54,8 +55,16 @@ router.post("/login",
         { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
       );
 
-      // Aggiorna lastLogin
-      await User.findByIdAndUpdate(user._id, { lastLogin: new Date() });
+      // Aggiorna lastLogin + IP
+      const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
+      await User.findByIdAndUpdate(user._id, { lastLogin: new Date(), lastLoginIP: ip });
+
+      // Geolocalizzazione IP best-effort — non blocca il login
+      lookupLocation(ip)
+        .then(location => {
+          if (location) return User.findByIdAndUpdate(user._id, { lastLoginLocation: location });
+        })
+        .catch(() => {});
 
       // Crea notifica login (per admin)
       await Notification.create({
@@ -66,7 +75,6 @@ router.post("/login",
       });
 
       // Notifica email opzionale
-      const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
       email.sendLoginNotification(user, ip).catch(() => {});
 
       res.cookie("wh_token", token, cookieOpts);

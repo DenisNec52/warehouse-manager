@@ -66,6 +66,7 @@ export const usersAPI = {
   create:        (d)    => api.post("/users",              d),
   update:        (id,d) => api.put(`/users/${id}`,         d),
   delete:        (id)   => api.delete(`/users/${id}`),
+  setActive:     (id,isActive) => api.put(`/users/${id}/status`, { isActive }),
   resetPassword: (id,d) => api.put(`/users/${id}/password`, d),
 };
 
