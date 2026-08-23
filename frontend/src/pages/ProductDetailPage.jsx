@@ -45,6 +45,7 @@ export default function ProductDetailPage() {
                 ["Posizione", product.location || "—"],
                 ["Piano", product.floor  ? `Piano ${product.floor}`   : "—"],
                 ["Pedana", product.pallet ? `Pedana ${product.pallet}` : "—"],
+                ["Data di arrivo", product.arrivalDate ? new Date(product.arrivalDate).toLocaleDateString("it-IT") : "—"],
                 ["Fornitore", product.supplier || "—"],
                 ["Prezzo unitario", product.unitPrice > 0 ? `€ ${product.unitPrice.toFixed(2)}` : "—"],
                 ["Soglia minima", `${product.minQuantity} ${product.unit}`],
@@ -86,6 +87,31 @@ export default function ProductDetailPage() {
                 </tbody>
               </table>
               {!md?.movements?.length && <div className="py-8 text-center text-sm text-gray-400">Nessun movimento per questo prodotto</div>}
+            </div>
+          </div>
+
+          {/* Storico posizionamento — chi ha messo il pezzo, dove e quando */}
+          <div className="card overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+              <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Storico posizionamento</h3>
+            </div>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead><tr><th>Piano</th><th>Pedana</th><th>Data arrivo</th><th>Chi</th><th>Registrato il</th><th>Nota</th></tr></thead>
+                <tbody>
+                  {[...(product.placementHistory || [])].reverse().map((h, i) => (
+                    <tr key={i}>
+                      <td className="text-sm">{h.floor ? `Piano ${h.floor}` : "—"}</td>
+                      <td className="text-sm">{h.pallet ? `Pedana ${h.pallet}` : "—"}</td>
+                      <td className="text-sm text-gray-500">{h.arrivalDate ? new Date(h.arrivalDate).toLocaleDateString("it-IT") : "—"}</td>
+                      <td className="text-sm text-gray-500">{h.placedByName || "—"}</td>
+                      <td className="text-xs text-gray-400">{new Date(h.at).toLocaleString("it-IT",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}</td>
+                      <td className="text-xs text-gray-400">{h.note || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!product.placementHistory?.length && <div className="py-8 text-center text-sm text-gray-400">Nessun posizionamento registrato</div>}
             </div>
           </div>
         </div>

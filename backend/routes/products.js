@@ -118,21 +118,39 @@ router.post("/",
   validate,
   async (req, res) => {
     try {
-      // Controlla codice duplicato
-      const existing = await Product.findOne({ code: req.body.code.toUpperCase() });
-      if (existing)
-        return res.status(409).json({ message: `Codice ${req.body.code.toUpperCase()} già esistente.` });
+      // Converti categoria vuota in null per evitare errore ObjectId
+      if (!req.body.category) req.body.category = null;
 
-        // Converti categoria vuota in null per evitare errore ObjectId
-        if (!req.body.category) req.body.category = null;
+      // Duplicato solo se stesso codice sulla STESSA pedana/categoria —
+      // lo stesso codice può legittimamente comparire su pedane diverse
+      const existing = await Product.findOne({
+        code: req.body.code.toUpperCase(),
+        pallet:   req.body.pallet   ?? null,
+        category: req.body.category ?? null,
+      });
+      if (existing)
+        return res.status(409).json({ message: `Codice ${req.body.code.toUpperCase()} già presente su questa pedana.` });
 
       const { commessa, posizione } = parseCode(req.body.code);
+
+      // Prima voce dello storico posizionamento, se pedana/piano/arrivo indicati
+      const placementHistory = (req.body.floor || req.body.pallet || req.body.arrivalDate)
+        ? [{
+            arrivalDate:  req.body.arrivalDate || null,
+            floor:        req.body.floor  || null,
+            pallet:       req.body.pallet || null,
+            note:         req.body.notes || "",
+            placedBy:     req.user._id,
+            placedByName: req.user.name,
+          }]
+        : [];
 
       const product = await Product.create({
         ...req.body,
         name:      req.body.name || req.body.code.toUpperCase(),
         code:      req.body.code.toUpperCase(),
         commessa, posizione,
+        placementHistory,
         createdBy: req.user._id,
       });
 
@@ -167,28 +185,57 @@ router.put("/:id",
     body("quantity").optional().isInt({ min: 0 }),
     body("minQuantity").optional().isInt({ min: 0 }),
     body("unitPrice").optional().isFloat({ min: 0 }),
+    body("floor").optional({ nullable: true }).isInt({ min: 1, max: 5 }),
+    body("pallet").optional({ nullable: true }).isInt({ min: 1, max: 30 }),
+    body("arrivalDate").optional({ nullable: true }).isISO8601(),
   ],
   validate,
   async (req, res) => {
     try {
+      const prev = await Product.findById(req.params.id);
+      if (!prev || !prev.isActive)
+        return res.status(404).json({ message: "Prodotto non trovato." });
+
       const { code, ...data } = req.body;
 
-      // Se cambia il codice, controlla duplicati e ricalcola commessa/posizione
+      // Se cambia il codice, duplicato solo se stesso codice sulla STESSA
+      // pedana/categoria di destinazione — mai bloccare per un codice
+      // uguale ma su un'altra pedana (è un articolo fisicamente diverso).
       if (code) {
-        const existing = await Product.findOne({ code: code.toUpperCase(), _id: { $ne: req.params.id } });
+        const effPallet   = data.pallet   !== undefined ? data.pallet   : prev.pallet;
+        const effCategory = data.category !== undefined ? data.category : prev.category;
+        const existing = await Product.findOne({
+          code: code.toUpperCase(), pallet: effPallet ?? null, category: effCategory ?? null,
+          _id: { $ne: req.params.id },
+        });
         if (existing)
-          return res.status(409).json({ message: `Codice ${code.toUpperCase()} già in uso.` });
+          return res.status(409).json({ message: `Codice ${code.toUpperCase()} già presente su questa pedana.` });
         data.code = code.toUpperCase();
         Object.assign(data, parseCode(code));
       }
 
-      const prev    = await Product.findById(req.params.id);
-      if (!prev || !prev.isActive)
-        return res.status(404).json({ message: "Prodotto non trovato." });
+      // Traccia una nuova voce di posizionamento se piano/pedana/data
+      // arrivo cambiano — non sovrascrive mai lo storico precedente
+      const floorChanged   = data.floor       !== undefined && data.floor       != prev.floor;
+      const palletChanged  = data.pallet      !== undefined && data.pallet      != prev.pallet;
+      const arrivalChanged = data.arrivalDate !== undefined && String(data.arrivalDate) !== String(prev.arrivalDate || "");
+      const update = { $set: { ...data, updatedBy: req.user._id } };
+      if (floorChanged || palletChanged || arrivalChanged) {
+        update.$push = {
+          placementHistory: {
+            arrivalDate:  data.arrivalDate !== undefined ? data.arrivalDate : prev.arrivalDate,
+            floor:        data.floor       !== undefined ? data.floor      : prev.floor,
+            pallet:       data.pallet      !== undefined ? data.pallet     : prev.pallet,
+            note:         data.placementNote || "",
+            placedBy:     req.user._id,
+            placedByName: req.user.name,
+          },
+        };
+      }
+      delete update.$set.placementNote;
 
       const product = await Product.findByIdAndUpdate(
-        req.params.id,
-        { ...data, updatedBy: req.user._id },
+        req.params.id, update,
         { new: true, runValidators: true }
       ).populate("category", "name color icon");
 

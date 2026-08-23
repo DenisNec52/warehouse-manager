@@ -17,6 +17,19 @@ const imageSchema = new mongoose.Schema({
   alt:      String,
 }, { _id: false });
 
+// Voce dello storico posizionamento: ogni volta che piano/pedana/data
+// arrivo cambiano viene aggiunta una nuova voce (mai sovrascritta) con
+// chi, dove e quando — così il tracciamento resta completo nel tempo.
+const placementEntrySchema = new mongoose.Schema({
+  at:          { type: Date, default: Date.now },  // quando è stata registrata (data + ora server)
+  arrivalDate: Date,                                // data di arrivo dichiarata
+  floor:       Number,
+  pallet:      Number,
+  note:        { type: String, trim: true, default: "" },
+  placedBy:     { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  placedByName: String,
+});
+
 const productSchema = new mongoose.Schema({
   name: {
     type:     String,
@@ -53,8 +66,14 @@ const productSchema = new mongoose.Schema({
 
   // Il magazzino ha 5 piani, con un numero variabile di pedane per piano
   // (indicativamente 7-20) — range non vincolante, editabile dall'admin.
-  floor:  { type: Number, min: 1, max: 5,  default: null },
-  pallet: { type: Number, min: 1, max: 30, default: null },
+  floor:       { type: Number, min: 1, max: 5,  default: null },
+  pallet:      { type: Number, min: 1, max: 30, default: null },
+  arrivalDate: { type: Date, default: null },
+
+  // Storico completo: chi ha posizionato il pezzo, dove e quando —
+  // ogni modifica a piano/pedana/data arrivo aggiunge una voce, non
+  // sostituisce mai le precedenti.
+  placementHistory: [placementEntrySchema],
 
   supplier:  { type: String, trim: true, default: "" },
   unitPrice: { type: Number, default: 0, min: 0 },

@@ -21,6 +21,8 @@ export function ProductModal({ product, categories, onClose }) {
     notes:       product?.notes       || "",
     floor:       product?.floor  ?? "",
     pallet:      product?.pallet ?? "",
+    arrivalDate: product?.arrivalDate ? product.arrivalDate.slice(0, 10) : "",
+    placementNote: "",
   });
   const [errors, setErrors] = useState({});
 
@@ -49,9 +51,10 @@ export function ProductModal({ product, categories, onClose }) {
     setErrors({});
     mutation.mutate({
       ...form,
-      category: form.category || null,
-      floor:    form.floor  === "" ? null : Number(form.floor),
-      pallet:   form.pallet === "" ? null : Number(form.pallet),
+      category:    form.category || null,
+      floor:       form.floor  === "" ? null : Number(form.floor),
+      pallet:      form.pallet === "" ? null : Number(form.pallet),
+      arrivalDate: form.arrivalDate || null,
     });
   };
 
@@ -109,6 +112,23 @@ export function ProductModal({ product, categories, onClose }) {
                   onChange={e => set("pallet", e.target.value.replace(/[^0-9]/g,""))}/>
               </div>
             </div>
+            {/* Data di arrivo */}
+            <div>
+              <label className="form-label">Data di arrivo</label>
+              <input className="form-input" type="date"
+                value={form.arrivalDate} onChange={e => set("arrivalDate", e.target.value)}/>
+            </div>
+            {/* Nota posizionamento — registrata nello storico con chi/quando, non nelle note generali */}
+            {(form.floor || form.pallet || form.arrivalDate) && (
+              <div>
+                <label className="form-label">
+                  Nota posizionamento <span className="text-gray-400 font-normal text-xs">(salvata nello storico, con te e l'orario)</span>
+                </label>
+                <input className="form-input" value={form.placementNote}
+                  onChange={e => set("placementNote", e.target.value)}
+                  placeholder="es. Arrivato con corriere X, scaricato manualmente..."/>
+              </div>
+            )}
             {/* Note */}
             <div>
               <label className="form-label">Note</label>
