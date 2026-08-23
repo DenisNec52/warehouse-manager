@@ -24,7 +24,7 @@ import SettingsPage    from "@/pages/SettingsPage";
 import NotFoundPage    from "@/pages/NotFoundPage";
 import HomePage           from "@/pages/HomePage";
 import ChecklistPage      from "@/pages/ChecklistPage";
-// Caricata on-demand: usa recharts (libreria pesante) e serve solo agli admin
+// Caricata on-demand: usa recharts (libreria pesante) e serve solo ad admin/supervisore
 const ChecklistAdminPage = lazy(() => import("@/pages/ChecklistAdminPage"));
 
 // Layout
@@ -57,6 +57,13 @@ function RequireAuth({ children }) {
 function RequireAdmin({ children }) {
   const { user } = useAuthStore();
   if (user?.role !== "admin") return <Navigate to="/" replace />;
+  return children;
+}
+
+// ── Route admin o supervisore ───────────────────────────────────
+function RequireSupervisor({ children }) {
+  const { user } = useAuthStore();
+  if (!["admin","supervisore"].includes(user?.role)) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -97,17 +104,19 @@ export default function App() {
       <Route path="products"         element={<ProductsPage/>}/>
       <Route path="products/:id"     element={<ProductDetail/>}/>
       <Route path="movements"        element={<MovementsPage/>}/>
-      <Route path="categories"       element={<CategoriesPage/>}/>
+      <Route path="categories" element={
+        <RequireAdmin><CategoriesPage/></RequireAdmin>
+      }/>
       <Route path="notifications"    element={<NotificationsPage/>}/>
       <Route path="settings"         element={<SettingsPage/>}/>
       <Route path="checklist"        element={<ChecklistPage/>}/>
       <Route path="users" element={
-        <RequireAdmin><UsersPage/></RequireAdmin>
+        <RequireSupervisor><UsersPage/></RequireSupervisor>
       }/>
       <Route path="admin/checklist" element={
-        <RequireAdmin>
+        <RequireSupervisor>
           <Suspense fallback={<RouteLoader/>}><ChecklistAdminPage/></Suspense>
-        </RequireAdmin>
+        </RequireSupervisor>
       }/>
       </Route>
 

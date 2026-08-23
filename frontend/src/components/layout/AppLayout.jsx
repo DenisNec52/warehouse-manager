@@ -32,10 +32,15 @@ const NAV = [
   { to:"/movements", label:"Movimenti",  icon:ArrowLeftRight                },
 ];
 
-const NAV_ADMIN = [
+// Visibili ad admin e supervisore
+const NAV_SUPERVISOR = [
   { to:"/users",           label:"Utenti",       icon:Users         },
-  { to:"/categories",      label:"Categorie",    icon:Tag           },
   { to:"/admin/checklist", label:"Gestione 5S",  icon:ClipboardList },
+];
+
+// Visibili solo ad admin
+const NAV_ADMIN = [
+  { to:"/categories",      label:"Categorie",    icon:Tag           },
 ];
 
 const NAV_BOTTOM = [
@@ -109,6 +114,21 @@ export default function AppLayout() {
               <span>{label}</span>
             </NavLink>
           ))}
+
+          {["admin","supervisore"].includes(user?.role) && (
+            <>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 px-3 mt-4 mb-2">Gestione</p>
+              {NAV_SUPERVISOR.map(({ to, label, icon:Icon }) => (
+                <NavLink key={to} to={to}
+                  className={({ isActive }) => clsx("nav-item", isActive && "active")}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <Icon size={16} className="shrink-0"/>
+                  <span>{label}</span>
+                </NavLink>
+              ))}
+            </>
+          )}
 
           {user?.role === "admin" && (
             <>

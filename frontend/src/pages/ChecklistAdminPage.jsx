@@ -9,6 +9,7 @@ import { CheckCircle, XCircle, Minus, ChevronDown, ChevronUp, Plus, Trash2, Save
 import { checklistAPI } from "@/lib/api";
 import { scoreColor, fmtTime } from "@/lib/format";
 import ScoreCircle from "@/components/ui/ScoreCircle";
+import { useAuthStore } from "@/lib/store";
 import toast from "react-hot-toast";
 import clsx from "clsx";
 
@@ -333,16 +334,24 @@ function TabConfig() {
 
 // ── Pagina admin ──────────────────────────────────────────────
 export default function ChecklistAdminPage() {
+  const { user } = useAuthStore();
+  const isAdmin  = user?.role === "admin";
   const [tab, setTab] = useState("monthly");
+
+  const tabs = [
+    ["monthly",     "📅 Vista Mensile"],
+    ["submissions", "📋 Compilazioni"],
+    ...(isAdmin ? [["config", "⚙️ Configurazione"]] : []),
+  ];
 
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900 dark:text-white">🧹 Gestione 5S</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Monitoraggio compilazioni e configurazione checklist</p>
+        <p className="text-sm text-gray-500 mt-0.5">Monitoraggio compilazioni{isAdmin ? " e configurazione checklist" : ""}</p>
       </div>
       <div className="flex gap-1 mb-6 bg-gray-100 dark:bg-gray-800 p-1 rounded-[var(--radius)] w-fit flex-wrap">
-        {[["monthly","📅 Vista Mensile"],["submissions","📋 Compilazioni"],["config","⚙️ Configurazione"]].map(([id,label]) => (
+        {tabs.map(([id,label]) => (
           <button key={id} onClick={()=>setTab(id)}
             className={clsx("px-4 py-2 text-sm font-medium rounded transition-all",
               tab===id ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300")}>
@@ -352,7 +361,7 @@ export default function ChecklistAdminPage() {
       </div>
       {tab === "monthly"     && <TabMonthly/>}
       {tab === "submissions" && <TabSubmissions/>}
-      {tab === "config"      && <TabConfig/>}
+      {tab === "config" && isAdmin && <TabConfig/>}
     </div>
   );
 }

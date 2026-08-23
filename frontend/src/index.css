@@ -65,6 +65,7 @@ body.radius-full { --radius:20px;--radius-sm:12px;--radius-lg:28px; }
   .badge-red    { @apply badge bg-red-50    text-red-700    dark:bg-red-900/30   dark:text-red-300; }
   .badge-yellow { @apply badge bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300; }
   .badge-gray   { @apply badge bg-gray-100  text-gray-600   dark:bg-gray-700     dark:text-gray-300; }
+  .badge-purple { @apply badge bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300; }
 
   .stat-card        { @apply card p-5 relative overflow-hidden; }
   .stat-card-accent { @apply absolute top-0 left-0 right-0 h-0.5; }

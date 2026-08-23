@@ -3,7 +3,7 @@
  *
  * Schema utente con:
  * - hashing automatico password via bcrypt (pre-save hook)
- * - ruoli: admin | operatore
+ * - ruoli: admin | supervisore | operatore
  * - tema personalizzato salvato nel profilo
  * - timestamp automatici
  */
@@ -38,7 +38,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type:    String,
-    enum:    ["admin", "operatore"],
+    enum:    ["admin", "supervisore", "operatore"],
     default: "operatore",
   },
   isActive:   { type: Boolean, default: true },

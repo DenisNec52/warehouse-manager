@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Search, Edit, Trash2, Eye, AlertTriangle, X, Package, ArrowDown, ArrowUp } from "lucide-react";
 import { productsAPI, categoriesAPI, movementsAPI } from "@/lib/api";
+import { useAuthStore } from "@/lib/store";
 import { Link, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import clsx from "clsx";
@@ -190,6 +191,8 @@ export function MovementModal({ product, onClose, defaultType = "IN" }) {
 }
 
 export default function ProductsPage() {
+  const { user } = useAuthStore();
+  const isAdmin  = user?.role === "admin";
   const [search,     setSearch]     = useState("");
   const [category,   setCategory]   = useState("");
   const [lowOnly,    setLowOnly]    = useState(false);
@@ -316,10 +319,12 @@ export default function ProductsPage() {
                           onClick={() => openModal(p)}>
                           <Edit size={14}/>
                         </button>
-                        <button className="btn btn-ghost btn-sm p-1.5 text-red-500" title="Elimina"
-                          onClick={() => handleDelete(p)}>
-                          <Trash2 size={14}/>
-                        </button>
+                        {isAdmin && (
+                          <button className="btn btn-ghost btn-sm p-1.5 text-red-500" title="Elimina"
+                            onClick={() => handleDelete(p)}>
+                            <Trash2 size={14}/>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

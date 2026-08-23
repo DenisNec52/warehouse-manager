@@ -1,5 +1,5 @@
 /**
- * pages/UsersPage.jsx — Gestione utenti (solo admin)
+ * pages/UsersPage.jsx — Gestione utenti (admin e supervisore)
  */
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -13,6 +13,7 @@ import clsx from "clsx";
 function UserModal({ user, onClose }) {
   const qc = useQueryClient();
   const isEdit = !!user;
+  const isTargetAdmin = user?.role === "admin";
   const [form, setForm] = useState({
     username: user?.username || "",
     name:     user?.name     || "",
@@ -25,7 +26,7 @@ function UserModal({ user, onClose }) {
   const mut = useMutation({
     mutationFn: async (d) => {
       if (!isEdit) return usersAPI.create(d);
-      await usersAPI.update(user._id, { name: d.name, role: d.role });
+      await usersAPI.update(user._id, isTargetAdmin ? { name: d.name } : { name: d.name, role: d.role });
       if (changePw && d.password) {
         await usersAPI.resetPassword(user._id, { newPassword: d.password });
       }
@@ -121,17 +122,21 @@ function UserModal({ user, onClose }) {
           )}
 
           {/* Ruolo */}
-          <div>
-            <label className="form-label">Ruolo</label>
-            <div className="grid grid-cols-2 gap-2">
-              {[["admin","Admin"],["operatore","Operatore"]].map(([v,l]) => (
-                <button key={v} type="button" onClick={() => s("role", v)}
-                  className={clsx("btn btn-md gap-2", form.role === v ? "btn-primary" : "btn-secondary")}>
-                  {v === "admin" ? <ShieldCheck size={14}/> : <User size={14}/>}{l}
-                </button>
-              ))}
+          {isTargetAdmin ? (
+            <p className="text-xs text-gray-400">Il ruolo admin non è modificabile da qui.</p>
+          ) : (
+            <div>
+              <label className="form-label">Ruolo</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[["supervisore","Supervisore"],["operatore","Operatore"]].map(([v,l]) => (
+                  <button key={v} type="button" onClick={() => s("role", v)}
+                    className={clsx("btn btn-md gap-2", form.role === v ? "btn-primary" : "btn-secondary")}>
+                    {v === "supervisore" ? <ShieldCheck size={14}/> : <User size={14}/>}{l}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex gap-3 pt-2">
             <button className="btn btn-md btn-secondary flex-1" onClick={onClose}>Annulla</button>
@@ -188,7 +193,7 @@ export default function UsersPage() {
                   <td>
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                        style={{ background: u.role === "admin" ? "#3b82f6" : "#6b7280" }}>
+                        style={{ background: u.role === "admin" ? "#3b82f6" : u.role === "supervisore" ? "#8b5cf6" : "#6b7280" }}>
                         {u.name?.charAt(0).toUpperCase()}
                       </div>
                       <span className="font-medium text-gray-900 dark:text-white">{u.name}</span>
@@ -200,8 +205,8 @@ export default function UsersPage() {
                     </code>
                   </td>
                   <td>
-                    <span className={clsx("badge", u.role === "admin" ? "badge-blue" : "badge-gray")}>
-                      {u.role === "admin" ? <ShieldCheck size={10}/> : <User size={10}/>}
+                    <span className={clsx("badge", u.role === "admin" ? "badge-blue" : u.role === "supervisore" ? "badge-purple" : "badge-gray")}>
+                      {u.role !== "operatore" ? <ShieldCheck size={10}/> : <User size={10}/>}
                       {u.role}
                     </span>
                   </td>
@@ -217,10 +222,12 @@ export default function UsersPage() {
                   </td>
                   <td>
                     <div className="flex gap-1">
-                      <button className="btn btn-ghost btn-sm p-1.5" title="Modifica"
-                        onClick={() => setModal(u)}>
-                        <Edit size={13}/>
-                      </button>
+                      {(u.role !== "admin" || me?.role === "admin") && (
+                        <button className="btn btn-ghost btn-sm p-1.5" title="Modifica"
+                          onClick={() => setModal(u)}>
+                          <Edit size={13}/>
+                        </button>
+                      )}
                       {u._id !== me?._id && u.role !== "admin" && (
                         <button className="btn btn-ghost btn-sm p-1.5 text-red-500" title="Disabilita"
                           onClick={() => { if (confirm("Disabilitare " + u.name + "?")) delMut.mutate(u._id); }}>

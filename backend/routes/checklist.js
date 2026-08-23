@@ -5,7 +5,7 @@ const express  = require("express");
 const { body } = require("express-validator");
 const Checklist           = require("../models/Checklist");
 const ChecklistSubmission = require("../models/ChecklistSubmission");
-const { protect, requireAdmin } = require("../middleware/auth");
+const { protect, requireAdmin, requireSupervisor } = require("../middleware/auth");
 const validate = require("../middleware/validate");
 
 const router = express.Router();
@@ -120,8 +120,8 @@ router.get("/my-today", async (req, res) => {
   } catch (err) { res.status(500).json({ message: "Errore." }); }
 });
 
-// ── GET /api/checklist/submissions/today (admin) ──────────────
-router.get("/submissions/today", requireAdmin, async (req, res) => {
+// ── GET /api/checklist/submissions/today (admin/supervisore) ──
+router.get("/submissions/today", requireSupervisor, async (req, res) => {
   try {
     const today = new Date().toISOString().slice(0, 10);
     const subs  = await ChecklistSubmission.find({ date: today })
@@ -130,8 +130,8 @@ router.get("/submissions/today", requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ message: "Errore." }); }
 });
 
-// ── GET /api/checklist/submissions (admin) ────────────────────
-router.get("/submissions", requireAdmin, async (req, res) => {
+// ── GET /api/checklist/submissions (admin/supervisore) ─────────
+router.get("/submissions", requireSupervisor, async (req, res) => {
   try {
     const { page = 1, limit = 50, date, shift, userId, month } = req.query;
     const filter = {};
@@ -150,8 +150,8 @@ router.get("/submissions", requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ message: "Errore." }); }
 });
 
-// ── GET /api/checklist/monthly-report (admin) ─────────────────
-router.get("/monthly-report", requireAdmin, async (req, res) => {
+// ── GET /api/checklist/monthly-report (admin/supervisore) ─────
+router.get("/monthly-report", requireSupervisor, async (req, res) => {
   try {
     const { month } = req.query;  // YYYY-MM
     if (!month) return res.status(400).json({ message: "Parametro month obbligatorio (YYYY-MM)" });
