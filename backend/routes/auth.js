@@ -80,7 +80,7 @@ router.post("/login",
 
 // ── POST /api/auth/logout ─────────────────────────────────────
 router.post("/logout", protect, (req, res) => {
-  res.clearCookie("wh_token", { httpOnly: true, sameSite: "lax" });
+  res.clearCookie("wh_token", { httpOnly: true, secure: cookieOpts.secure, sameSite: cookieOpts.sameSite });
   res.json({ message: "Logout effettuato." });
 });
 
