@@ -16,6 +16,7 @@ const Notification = require("../models/Notification");
 const { protect, requireAdmin } = require("../middleware/auth");
 const validate = require("../middleware/validate");
 const email    = require("../utils/email");
+const { parseCode } = require("../utils/codeParser");
 
 const router = express.Router();
 router.use(protect);  // tutte le route richiedono autenticazione
@@ -26,8 +27,18 @@ router.get("/", async (req, res) => {
     const { search, category, lowStock, page = 1, limit = 20, sort = "-createdAt" } = req.query;
     const filter = { isActive: true };
 
-    // Ricerca full-text su nome, codice, descrizione
-    if (search) filter.$text = { $search: search };
+    // Se la ricerca è nel formato "commessa-posizione" (es. "1684-2" o
+    // "1684/2"), match esatto: mai risultati di commesse diverse che
+    // condividono solo la posizione. Altrimenti ricerca full-text normale.
+    if (search) {
+      const posMatch = search.trim().match(/^(.+?)[-/](\d+)$/);
+      if (posMatch) {
+        filter.commessa  = posMatch[1].trim().toUpperCase();
+        filter.posizione = parseInt(posMatch[2], 10);
+      } else {
+        filter.$text = { $search: search };
+      }
+    }
     if (category) filter.category = category;
     if (lowStock === "true") filter.$expr = { $lte: ["$quantity", "$minQuantity"] };
 
@@ -115,10 +126,13 @@ router.post("/",
         // Converti categoria vuota in null per evitare errore ObjectId
         if (!req.body.category) req.body.category = null;
 
+      const { commessa, posizione } = parseCode(req.body.code);
+
       const product = await Product.create({
         ...req.body,
         name:      req.body.name || req.body.code.toUpperCase(),
         code:      req.body.code.toUpperCase(),
+        commessa, posizione,
         createdBy: req.user._id,
       });
 
@@ -159,12 +173,13 @@ router.put("/:id",
     try {
       const { code, ...data } = req.body;
 
-      // Se cambia il codice, controlla duplicati
+      // Se cambia il codice, controlla duplicati e ricalcola commessa/posizione
       if (code) {
         const existing = await Product.findOne({ code: code.toUpperCase(), _id: { $ne: req.params.id } });
         if (existing)
           return res.status(409).json({ message: `Codice ${code.toUpperCase()} già in uso.` });
         data.code = code.toUpperCase();
+        Object.assign(data, parseCode(code));
       }
 
       const prev    = await Product.findById(req.params.id);
@@ -220,7 +235,7 @@ router.post("/import-legacy", requireAdmin, async (req, res) => {
   try {
     const path = require("path");
     const fs   = require("fs");
-    const { importInventory, resetLegacyImport } = require("../utils/inventoryImporter");
+    const { importInventory, resetLegacyImport, backfillCommessaPosizione } = require("../utils/inventoryImporter");
 
     const inventoryPath = path.join(__dirname, "../utils/warehouse_inventory.json");
     if (!fs.existsSync(inventoryPath))
@@ -235,7 +250,8 @@ router.post("/import-legacy", requireAdmin, async (req, res) => {
 
     const inventory = JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
     const stats = await importInventory(inventory, { adminId: req.user._id });
-    res.json({ message: "Import completato.", removed, stats });
+    const backfilled = await backfillCommessaPosizione();
+    res.json({ message: "Import completato.", removed, backfilled, stats });
   } catch (err) {
     console.error("[products/import-legacy]", err.message);
     res.status(500).json({ message: "Errore durante l'import." });

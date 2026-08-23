@@ -13,6 +13,7 @@
  */
 const Category = require("../models/Category");
 const Product  = require("../models/Product");
+const { parseCode } = require("./codeParser");
 
 const CATEGORY_META = {
   "FLANGE":               { icon: "🔵", color: "#3b82f6", description: "Flange industriali" },
@@ -76,9 +77,11 @@ async function importInventory(inventory, { adminId = null } = {}) {
       }
 
       try {
+        const { commessa, posizione } = parseCode(code);
         await Product.create({
           name:        code,
           code,
+          commessa, posizione,
           description: subcategoria || "",
           quantity:    qty,
           minQuantity: 0,
@@ -107,4 +110,15 @@ async function resetLegacyImport() {
   return deletedCount;
 }
 
-module.exports = { importInventory, resetLegacyImport };
+// Valorizza commessa/posizione sui prodotti creati prima dell'introduzione
+// di questi campi (es. il primo import legacy).
+async function backfillCommessaPosizione() {
+  const missing = await Product.find({ commessa: { $exists: false } }).select("code");
+  for (const p of missing) {
+    const { commessa, posizione } = parseCode(p.code);
+    await Product.updateOne({ _id: p._id }, { $set: { commessa, posizione } });
+  }
+  return missing.length;
+}
+
+module.exports = { importInventory, resetLegacyImport, backfillCommessaPosizione };

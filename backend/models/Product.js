@@ -33,6 +33,12 @@ const productSchema = new mongoose.Schema({
     trim:     true,
     uppercase: true,
   },
+  // Derivati automaticamente da "code" (vedi utils/codeParser.js) per
+  // permettere la ricerca esatta commessa+posizione senza match su
+  // posizioni diverse della stessa commessa (es. "1684-2" ≠ "1684-1").
+  // Un codice senza posizione esplicita ha posizione implicita 1.
+  commessa:  { type: String, uppercase: true, trim: true },
+  posizione: { type: Number, default: 1 },
   description: { type: String, trim: true, default: "" },
   quantity:    { type: Number, required: true, min: 0, default: 0 },
   minQuantity: { type: Number, default: 10 },  // soglia scorta bassa
@@ -67,6 +73,7 @@ const productSchema = new mongoose.Schema({
 // ── Indici per ricerca veloce ─────────────────────────────────
 productSchema.index({ name: "text", code: "text", description: "text" });
 productSchema.index({ code: 1 });
+productSchema.index({ commessa: 1, posizione: 1 });
 productSchema.index({ floor: 1, pallet: 1 });
 productSchema.index({ category: 1 });
 productSchema.index({ quantity: 1 });
