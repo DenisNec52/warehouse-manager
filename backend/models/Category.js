@@ -15,6 +15,4 @@ const categorySchema = new mongoose.Schema({
   createdBy:   { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 }, { timestamps: true });
 
-categorySchema.index({ name: 1 });
-
 module.exports = mongoose.model("Category", categorySchema);
