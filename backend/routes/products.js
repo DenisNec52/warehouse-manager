@@ -213,20 +213,25 @@ router.delete("/:id", requireAdmin, async (req, res) => {
 });
 
 // ── POST /api/products/import-legacy — importa warehouse_inventory.json ──
-// Idempotente: salta i prodotti già presenti (stesso codice+location).
+// Idempotente: salta i prodotti già presenti (stesso codice+categoria+pedana).
+// Con { reset: true } nel body, rimuove prima i prodotti creati dal vecchio
+// formato di import (codice con suffisso interno) per un reimport pulito.
 router.post("/import-legacy", requireAdmin, async (req, res) => {
   try {
     const path = require("path");
     const fs   = require("fs");
-    const { importInventory } = require("../utils/inventoryImporter");
+    const { importInventory, resetLegacyImport } = require("../utils/inventoryImporter");
 
     const inventoryPath = path.join(__dirname, "../utils/warehouse_inventory.json");
     if (!fs.existsSync(inventoryPath))
       return res.status(404).json({ message: "warehouse_inventory.json non trovato sul server." });
 
+    let removed = 0;
+    if (req.body?.reset) removed = await resetLegacyImport();
+
     const inventory = JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
     const stats = await importInventory(inventory, { adminId: req.user._id });
-    res.json({ message: "Import completato.", stats });
+    res.json({ message: "Import completato.", removed, stats });
   } catch (err) {
     console.error("[products/import-legacy]", err.message);
     res.status(500).json({ message: "Errore durante l'import." });

@@ -4,6 +4,12 @@
  * Logica di import condivisa tra lo script CLI (import_inventory.js)
  * e la route admin POST /api/products/import-legacy — non gestisce
  * la connessione a MongoDB, usa quella già attiva del chiamante.
+ *
+ * Il codice prodotto viene salvato ESATTAMENTE come scritto sul foglio
+ * (es. "1849-1"): la cifra dopo il trattino è la posizione della
+ * commessa, non un dettaglio da normalizzare o nascondere. Codici
+ * identici possono comparire su più pedane (stock fisicamente
+ * separato) — per questo "code" non è univoco a livello DB.
  */
 const Category = require("../models/Category");
 const Product  = require("../models/Product");
@@ -16,13 +22,10 @@ const CATEGORY_META = {
   "TAPPI & ESAGONI INOX": { icon: "🔩", color: "#10b981", description: "Tappi ed esagoni in acciaio inox" },
 };
 
-function sanitizeCode(raw) {
-  return raw.trim().toUpperCase();
-}
-
-function buildLocation(categoria, pedana) {
-  const ped = pedana.replace(/\s+/g, "").toUpperCase();
-  return `${categoria} / ${ped}`;
+// "PED. 1" / "PED. 01" / "PED.4" → 1 / 1 / 4
+function parsePallet(pedana) {
+  const n = parseInt(pedana.replace(/[^0-9]/g, ""), 10);
+  return Number.isFinite(n) ? n : null;
 }
 
 async function importInventory(inventory, { adminId = null } = {}) {
@@ -54,20 +57,19 @@ async function importInventory(inventory, { adminId = null } = {}) {
 
   for (const gruppo of inventory) {
     const { categoria, pedana, articoli, subcategoria } = gruppo;
-    const location   = buildLocation(categoria, pedana);
     const categoryId = categoryMap[categoria];
+    const pallet      = parsePallet(pedana);
 
     for (const articolo of articoli) {
-      const code  = sanitizeCode(articolo.codice);
+      const code  = articolo.codice.trim();
       const qty   = Number(articolo.quantita) || 0;
       const unit  = (articolo.unita || "Pz").trim();
       const notes = articolo.note || "";
 
-      const pedNorm = pedana.replace(/[^0-9]/g, "").padStart(2, "0");
-      const catNorm = categoria.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(0, 8);
-      const uniqueCode = `${code}__${catNorm}P${pedNorm}`;
-
-      const existing = await Product.findOne({ code: uniqueCode.toUpperCase() });
+      // Idempotenza: stesso codice + stessa pedana + stessa categoria = stesso articolo
+      const existing = await Product.findOne({
+        code: code.toUpperCase(), category: categoryId || null, pallet,
+      });
       if (existing) {
         stats.prodottiSkippati++;
         continue;
@@ -75,21 +77,22 @@ async function importInventory(inventory, { adminId = null } = {}) {
 
       try {
         await Product.create({
-          name:        articolo.codice,
-          code:        uniqueCode,
+          name:        code,
+          code,
           description: subcategoria || "",
           quantity:    qty,
           minQuantity: 0,
           unit,
           category:    categoryId || null,
-          location,
+          pallet,
+          floor:       null,  // sconosciuto dal foglio — da compilare via UI
           notes,
           isActive:    true,
           createdBy:   adminId,
         });
         stats.prodottiCreati++;
       } catch (err) {
-        stats.errori.push({ code: uniqueCode, error: err.message });
+        stats.errori.push({ code, error: err.message });
       }
     }
   }
@@ -97,4 +100,11 @@ async function importInventory(inventory, { adminId = null } = {}) {
   return stats;
 }
 
-module.exports = { importInventory };
+// Rimuove i prodotti creati dal vecchio formato di import (codice con
+// suffisso "__CATEGORIAPNN"), per permettere un reimport pulito.
+async function resetLegacyImport() {
+  const { deletedCount } = await Product.deleteMany({ code: /__[A-Z0-9]+P\d+$/ });
+  return deletedCount;
+}
+
+module.exports = { importInventory, resetLegacyImport };

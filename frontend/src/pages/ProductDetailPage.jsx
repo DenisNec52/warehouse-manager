@@ -43,6 +43,8 @@ export default function ProductDetailPage() {
                 ["Unità", product.unit],
                 ["Categoria", product.category ? `${product.category.icon} ${product.category.name}` : "—"],
                 ["Posizione", product.location || "—"],
+                ["Piano", product.floor  ? `Piano ${product.floor}`   : "—"],
+                ["Pedana", product.pallet ? `Pedana ${product.pallet}` : "—"],
                 ["Fornitore", product.supplier || "—"],
                 ["Prezzo unitario", product.unitPrice > 0 ? `€ ${product.unitPrice.toFixed(2)}` : "—"],
                 ["Soglia minima", `${product.minQuantity} ${product.unit}`],

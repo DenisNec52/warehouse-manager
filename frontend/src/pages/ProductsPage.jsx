@@ -19,6 +19,8 @@ export function ProductModal({ product, categories, onClose }) {
     quantity:    product?.quantity    ?? 0,
     category:    product?.category?._id || product?.category || "",
     notes:       product?.notes       || "",
+    floor:       product?.floor  ?? "",
+    pallet:      product?.pallet ?? "",
   });
   const [errors, setErrors] = useState({});
 
@@ -45,7 +47,12 @@ export function ProductModal({ product, categories, onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     setErrors({});
-    mutation.mutate({ ...form, category: form.category || null });
+    mutation.mutate({
+      ...form,
+      category: form.category || null,
+      floor:    form.floor  === "" ? null : Number(form.floor),
+      pallet:   form.pallet === "" ? null : Number(form.pallet),
+    });
   };
 
   return (
@@ -86,6 +93,21 @@ export function ProductModal({ product, categories, onClose }) {
               <label className="form-label">Quantità <span className="text-red-400">*</span></label>
               <input className="form-input" type="number" inputMode="numeric" pattern="[0-9]*" min={0}
                 value={form.quantity} onChange={e => set("quantity", Number(e.target.value.replace(/[^0-9]/g,"")))}/>
+            </div>
+            {/* Piano / Pedana */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="form-label">Piano <span className="text-gray-400 font-normal text-xs">(1-5)</span></label>
+                <input className="form-input" type="number" inputMode="numeric" min={1} max={5}
+                  value={form.floor} placeholder="—"
+                  onChange={e => set("floor", e.target.value.replace(/[^0-9]/g,""))}/>
+              </div>
+              <div>
+                <label className="form-label">Pedana</label>
+                <input className="form-input" type="number" inputMode="numeric" min={1}
+                  value={form.pallet} placeholder="—"
+                  onChange={e => set("pallet", e.target.value.replace(/[^0-9]/g,""))}/>
+              </div>
             </div>
             {/* Note */}
             <div>
@@ -277,7 +299,7 @@ export default function ProductsPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Codice</th><th>Categoria</th><th>Quantità</th><th>Note</th><th></th>
+                  <th>Codice</th><th>Categoria</th><th>Piano/Pedana</th><th>Quantità</th><th>Note</th><th></th>
                 </tr>
               </thead>
               <tbody>
@@ -296,6 +318,11 @@ export default function ProductsPage() {
                     <td>
                       {p.category
                         ? <span className="badge badge-gray gap-1">{p.category.icon} {p.category.name}</span>
+                        : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="text-sm text-gray-500">
+                      {p.floor || p.pallet
+                        ? <>{p.floor ? `Piano ${p.floor}` : "Piano ?"} · {p.pallet ? `Pedana ${p.pallet}` : "Pedana ?"}</>
                         : <span className="text-gray-300">—</span>}
                     </td>
                     <td>

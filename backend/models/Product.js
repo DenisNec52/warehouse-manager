@@ -23,10 +23,13 @@ const productSchema = new mongoose.Schema({
     required: [true, "Nome prodotto obbligatorio"],
     trim:     true,
   },
+  // Non univoco a livello DB: lo stesso codice (commessa/posizione) può
+  // legittimamente comparire su più pedane per stock fisicamente separato.
+  // L'univocità per la creazione manuale da UI è comunque verificata a
+  // livello applicativo in routes/products.js.
   code: {
     type:     String,
     required: [true, "Codice prodotto obbligatorio"],
-    unique:   true,
     trim:     true,
     uppercase: true,
   },
@@ -41,6 +44,11 @@ const productSchema = new mongoose.Schema({
     default: null,
   },
   location: { type: String, trim: true, default: "" },  // es. "A3-S2" (scaffale A3, ripiano 2)
+
+  // Il magazzino ha 5 piani, con un numero variabile di pedane per piano
+  // (indicativamente 7-20) — range non vincolante, editabile dall'admin.
+  floor:  { type: Number, min: 1, max: 5,  default: null },
+  pallet: { type: Number, min: 1, max: 30, default: null },
 
   supplier:  { type: String, trim: true, default: "" },
   unitPrice: { type: Number, default: 0, min: 0 },
@@ -58,6 +66,8 @@ const productSchema = new mongoose.Schema({
 
 // ── Indici per ricerca veloce ─────────────────────────────────
 productSchema.index({ name: "text", code: "text", description: "text" });
+productSchema.index({ code: 1 });
+productSchema.index({ floor: 1, pallet: 1 });
 productSchema.index({ category: 1 });
 productSchema.index({ quantity: 1 });
 productSchema.index({ isActive: 1 });
