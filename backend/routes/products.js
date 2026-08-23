@@ -212,4 +212,25 @@ router.delete("/:id", requireAdmin, async (req, res) => {
   }
 });
 
+// ── POST /api/products/import-legacy — importa warehouse_inventory.json ──
+// Idempotente: salta i prodotti già presenti (stesso codice+location).
+router.post("/import-legacy", requireAdmin, async (req, res) => {
+  try {
+    const path = require("path");
+    const fs   = require("fs");
+    const { importInventory } = require("../utils/inventoryImporter");
+
+    const inventoryPath = path.join(__dirname, "../utils/warehouse_inventory.json");
+    if (!fs.existsSync(inventoryPath))
+      return res.status(404).json({ message: "warehouse_inventory.json non trovato sul server." });
+
+    const inventory = JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
+    const stats = await importInventory(inventory, { adminId: req.user._id });
+    res.json({ message: "Import completato.", stats });
+  } catch (err) {
+    console.error("[products/import-legacy]", err.message);
+    res.status(500).json({ message: "Errore durante l'import." });
+  }
+});
+
 module.exports = router;
