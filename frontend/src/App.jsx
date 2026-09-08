@@ -7,12 +7,15 @@
  * - Route protette (RequireAuth)
  */
 import { useEffect, lazy, Suspense } from "react";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore, useThemeStore } from "@/lib/store";
 import { authAPI } from "@/lib/api";
+import toast from "react-hot-toast";
 
 // Pages
-import LoginPage       from "@/pages/LoginPage";
+import LoginPage          from "@/pages/LoginPage";
+import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
+import ResetPasswordPage  from "@/pages/ResetPasswordPage";
 import DashboardPage   from "@/pages/DashboardPage";
 import ProductsPage    from "@/pages/ProductsPage";
 import ProductDetail   from "@/pages/ProductDetailPage";
@@ -71,6 +74,7 @@ export default function App() {
   const { setUser, setLoading, setUnread } = useAuthStore();
   const { loadFromProfile, applyTheme }    = useThemeStore();
   const location = useLocation();
+  const navigate = useNavigate();
 
   // Verifica sessione al mount
   useEffect(() => {
@@ -87,11 +91,21 @@ export default function App() {
     applyTheme();
   }, []);
 
+  // Conferma login automatico da QR/NFC (redirect dal backend con ?badge=ok)
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("badge") === "ok") {
+      toast.success("Accesso automatico effettuato");
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.search]);
+
   return (
     <Routes location={location}>
 
       {/* Login — redirect se già loggato */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password"  element={<ResetPasswordPage />} />
 
       {/* App protetta */}
       <Route path="/" element={

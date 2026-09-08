@@ -3,12 +3,38 @@
  */
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, Ban, RotateCcw, X, ShieldCheck, User, Eye, EyeOff, MapPin } from "lucide-react";
+import { Plus, Edit, Trash2, Ban, RotateCcw, X, ShieldCheck, User, Eye, EyeOff, MapPin, QrCode } from "lucide-react";
 import { usersAPI } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { useAuthStore } from "@/lib/store";
+import BadgeManager from "@/components/ui/BadgeManager";
 import clsx from "clsx";
+
+function BadgeModal({ user, onClose }) {
+  const qc = useQueryClient();
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+      <motion.div initial={{ opacity: 0, scale: .95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .95 }}
+        className="relative z-10 w-full max-w-md">
+        <div className="flex items-center justify-between px-1 pb-2">
+          <h2 className="font-semibold text-gray-900 dark:text-white">Badge di {user.name}</h2>
+          <button className="btn btn-ghost btn-sm p-1.5 bg-white dark:bg-gray-900 rounded-full" onClick={onClose}><X size={16}/></button>
+        </div>
+        <BadgeManager
+          badgeEnabled={user.badgeEnabled}
+          badgeIssuedAt={user.badgeIssuedAt}
+          onRegenerate={() => usersAPI.regenerateBadge(user._id)}
+          onToggle={(enabled) => usersAPI.badgeStatus(user._id, enabled)}
+          onRevoke={() => usersAPI.revokeBadge(user._id)}
+          onInvalidate={() => qc.invalidateQueries({ queryKey: ["users"] })}
+        />
+      </motion.div>
+    </div>
+  );
+}
 
 function UserModal({ user, onClose }) {
   const qc = useQueryClient();
@@ -17,6 +43,7 @@ function UserModal({ user, onClose }) {
   const [form, setForm] = useState({
     username: user?.username || "",
     name:     user?.name     || "",
+    email:    user?.email    || "",
     role:     user?.role     || "operatore",
     password: "",
   });
@@ -26,7 +53,7 @@ function UserModal({ user, onClose }) {
   const mut = useMutation({
     mutationFn: async (d) => {
       if (!isEdit) return usersAPI.create(d);
-      await usersAPI.update(user._id, isTargetAdmin ? { name: d.name } : { name: d.name, role: d.role });
+      await usersAPI.update(user._id, isTargetAdmin ? { name: d.name, email: d.email } : { name: d.name, role: d.role, email: d.email });
       if (changePw && d.password) {
         await usersAPI.resetPassword(user._id, { newPassword: d.password });
       }
@@ -69,6 +96,13 @@ function UserModal({ user, onClose }) {
             <label className="form-label">Nome completo *</label>
             <input className="form-input" value={form.name}
               onChange={e => s("name", e.target.value)} placeholder="es. Mario Rossi"/>
+          </div>
+
+          {/* Email — opzionale, serve solo per "password dimenticata" */}
+          <div>
+            <label className="form-label">Email <span className="text-gray-400 font-normal text-xs">(opzionale — per password dimenticata)</span></label>
+            <input className="form-input" type="email" value={form.email}
+              onChange={e => s("email", e.target.value)} placeholder="mario.rossi@azienda.it"/>
           </div>
 
           {/* Username */}
@@ -152,6 +186,7 @@ function UserModal({ user, onClose }) {
 
 export default function UsersPage() {
   const [modal, setModal] = useState(null);
+  const [badgeUser, setBadgeUser] = useState(null);
   const qc = useQueryClient();
   const { user: me } = useAuthStore();
 
@@ -249,6 +284,12 @@ export default function UsersPage() {
                           <Edit size={13}/>
                         </button>
                       )}
+                      {(u.role !== "admin" || me?.role === "admin") && (
+                        <button className="btn btn-ghost btn-sm p-1.5 text-blue-500" title="Badge QR/NFC"
+                          onClick={() => setBadgeUser(u)}>
+                          <QrCode size={13}/>
+                        </button>
+                      )}
                       {u._id !== me?._id && u.role !== "admin" && (
                         <button className="btn btn-ghost btn-sm p-1.5 text-amber-500" title={u.isActive ? "Disabilita" : "Riattiva"}
                           onClick={() => statusMut.mutate({ id: u._id, isActive: !u.isActive })}>
@@ -282,6 +323,12 @@ export default function UsersPage() {
             user={modal === "new" ? null : modal}
             onClose={() => setModal(null)}
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {badgeUser && (
+          <BadgeModal user={badgeUser} onClose={() => setBadgeUser(null)} />
         )}
       </AnimatePresence>
     </div>

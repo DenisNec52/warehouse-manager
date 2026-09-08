@@ -2,7 +2,7 @@
  * pages/LoginPage.jsx
  */
 import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Package, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { useAuthStore, useThemeStore } from "@/lib/store";
@@ -21,6 +21,14 @@ export default function LoginPage() {
   const from = location.state?.from?.pathname || "/";
 
   useEffect(() => { if (user) navigate(from, { replace: true }); }, [user]);
+
+  // Login automatico da QR/NFC non riuscito (badge disattivato, revocato o link non valido)
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("badge") === "error") {
+      setError("Accesso automatico non riuscito. Il badge potrebbe essere stato revocato o disattivato: accedi con le credenziali oppure chiedine uno nuovo all'amministratore.");
+      navigate("/login", { replace: true });
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -71,7 +79,12 @@ export default function LoginPage() {
                 onChange={e => setForm(f => ({ ...f, username: e.target.value }))}/>
             </div>
             <div>
-              <label className="form-label">Password</label>
+              <div className="flex items-center justify-between">
+                <label className="form-label mb-0">Password</label>
+                <Link to="/forgot-password" className="text-xs text-[var(--brand-500)] hover:underline mb-1.5">
+                  Password dimenticata?
+                </Link>
+              </div>
               <div className="relative">
                 <input className="form-input pr-10" type={showPw ? "text" : "password"} placeholder="Inserisci password"
                   value={form.password}
@@ -93,7 +106,9 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
-        
+        <p className="text-center text-xs text-gray-400 mt-4">
+          Hai un badge QR o un tag NFC? Inquadralo o avvicinalo al telefono: l'accesso avviene in automatico.
+        </p>
       </motion.div>
     </div>
   );

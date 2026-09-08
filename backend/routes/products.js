@@ -17,8 +17,10 @@ const { protect, requireAdmin } = require("../middleware/auth");
 const validate = require("../middleware/validate");
 const email    = require("../utils/email");
 const { parseCode } = require("../utils/codeParser");
+const { makeUploader, cloudinary, ENABLED: CLOUDINARY_ENABLED } = require("../config/cloudinary");
 
 const router = express.Router();
+const uploadCover = makeUploader();
 router.use(protect);  // tutte le route richiedono autenticazione
 
 // ── GET /api/products — lista con ricerca e filtri ────────────
@@ -258,6 +260,57 @@ router.put("/:id",
     }
   }
 );
+
+// ── POST /api/products/:id/cover — carica/sostituisce la copertina ──
+// multipart/form-data, campo file: "image". Vedi config/cloudinary.js.
+router.post("/:id/cover", uploadCover, async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: "Nessuna immagine ricevuta (campo 'image' mancante)." });
+
+    const product = await Product.findById(req.params.id);
+    if (!product || !product.isActive) return res.status(404).json({ message: "Prodotto non trovato." });
+
+    // Rimuove la vecchia copertina da Cloudinary per non accumulare file orfani
+    // (best-effort: se fallisce non blocca il salvataggio della nuova).
+    if (product.coverImage?.publicId) {
+      cloudinary.uploader.destroy(product.coverImage.publicId).catch(() => {});
+    }
+
+    const image = { url: req.file.path, publicId: req.file.filename, alt: product.name };
+    product.coverImage = image;
+    product.images.push(image);
+    product.updatedBy  = req.user._id;
+    await product.save();
+
+    res.json({ coverImage: product.coverImage });
+  } catch (err) {
+    console.error("[products/cover]", err.message);
+    res.status(500).json({ message: err.message || "Errore upload immagine." });
+  }
+});
+
+// ── DELETE /api/products/:id/cover — rimuove la copertina ─────
+router.delete("/:id/cover", async (req, res) => {
+  try {
+    if (!CLOUDINARY_ENABLED) return res.status(503).json({ message: "Upload immagini non configurato." });
+
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ message: "Prodotto non trovato." });
+
+    const publicId = product.coverImage?.publicId;
+    if (publicId) {
+      cloudinary.uploader.destroy(publicId).catch(() => {});
+      product.images = product.images.filter(img => img.publicId !== publicId);
+    }
+    product.coverImage  = undefined;
+    product.updatedBy   = req.user._id;
+    await product.save();
+
+    res.json({ message: "Immagine rimossa." });
+  } catch (err) {
+    res.status(500).json({ message: "Errore rimozione immagine." });
+  }
+});
 
 // ── DELETE /api/products/:id — soft delete ────────────────────
 router.delete("/:id", requireAdmin, async (req, res) => {
