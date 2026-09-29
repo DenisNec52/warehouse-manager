@@ -45,17 +45,17 @@ function verifySecret(secret, storedHash) {
   }
 }
 
-// URL pubblico del backend a cui deve puntare il QR/tag NFC.
-// Ordine: PUBLIC_API_URL (esplicito) -> RENDER_EXTERNAL_URL (impostata in automatico
-// da Render con l'URL pubblico del servizio) -> http://localhost:<PORT> in sviluppo.
+const frontendBase = () => (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+
+// Il QR/tag NFC punta alla pagina /badge del FRONTEND, che fa il login con una richiesta
+// dall'app (stessa strada del login con password). Aprire direttamente un URL del backend
+// imposterebbe il cookie in un contesto diverso dal sito, e Safari/app fotocamera lo isolano.
+// I dati stanno nel fragment (#): il browser non lo invia mai al server, quindi il segreto
+// non finisce nei log di Vercel/Render.
 function badgeUrl(userId, secret, source) {
-  const base = (
-    process.env.PUBLIC_API_URL ||
-    process.env.RENDER_EXTERNAL_URL ||
-    `http://localhost:${process.env.PORT || 5000}`
-  ).replace(/\/$/, "");
-  const qs = source ? `?src=${encodeURIComponent(source)}` : "";
-  return `${base}/api/auth/badge/${userId}/${secret}${qs}`;
+  const params = new URLSearchParams({ u: String(userId), s: secret });
+  if (source) params.set("src", source);
+  return `${frontendBase()}/badge#${params}`;
 }
 
 async function qrImageDataUrl(url) {

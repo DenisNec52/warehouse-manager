@@ -71,8 +71,8 @@ module.exports = function validateEnv() {
   const warnings = [];
   if (process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "true")
     warnings.push("NODE_ENV=production ma COOKIE_SECURE non è 'true': i cookie di sessione non saranno marcati Secure/SameSite=None (rischioso dietro HTTPS con frontend su dominio diverso).");
-  if (process.env.NODE_ENV === "production" && !process.env.PUBLIC_API_URL && !process.env.RENDER_EXTERNAL_URL)
-    warnings.push("NODE_ENV=production senza PUBLIC_API_URL né RENDER_EXTERNAL_URL: i QR/NFC dei badge punteranno a localhost e non funzioneranno.");
+  if (process.env.NODE_ENV === "production" && !process.env.FRONTEND_URL)
+    warnings.push("NODE_ENV=production senza FRONTEND_URL: QR/NFC dei badge e link di recupero password punteranno a localhost e non funzioneranno.");
   checkEmailConfig(warnings);
   checkCloudinaryConfig(warnings);
 

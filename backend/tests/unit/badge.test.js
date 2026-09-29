@@ -1,7 +1,5 @@
 process.env.JWT_SECRET = process.env.JWT_SECRET || "test_jwt_secret_non_usare_in_produzione";
 process.env.PORT = process.env.PORT || "5000";
-delete process.env.PUBLIC_API_URL;
-delete process.env.RENDER_EXTERNAL_URL;
 
 const badge = require("../../utils/badge");
 
@@ -47,25 +45,19 @@ describe("utils/badge", () => {
     expect(hashWithKey1).not.toEqual(hashWithKey2);
   });
 
-  test("badgeUrl costruisce l'URL con il segreto e la sorgente (qr/nfc)", () => {
+  test("badgeUrl punta alla pagina /badge del frontend con i dati nel fragment", () => {
+    const saved = process.env.FRONTEND_URL;
+    process.env.FRONTEND_URL = "https://warehouse.example.app/";
     const url = badge.badgeUrl("507f1f77bcf86cd799439011", "abc123", "nfc");
-    expect(url).toBe("http://localhost:5000/api/auth/badge/507f1f77bcf86cd799439011/abc123?src=nfc");
+    process.env.FRONTEND_URL = saved;
+    expect(url).toBe("https://warehouse.example.app/badge#u=507f1f77bcf86cd799439011&s=abc123&src=nfc");
   });
 
-  test("badgeUrl su Render usa RENDER_EXTERNAL_URL invece di localhost", () => {
-    process.env.RENDER_EXTERNAL_URL = "https://warehouse-api.onrender.com/";
-    const url = badge.badgeUrl("507f1f77bcf86cd799439011", "abc123", "qr");
-    delete process.env.RENDER_EXTERNAL_URL;
-    expect(url).toBe("https://warehouse-api.onrender.com/api/auth/badge/507f1f77bcf86cd799439011/abc123?src=qr");
-  });
-
-  test("badgeUrl: PUBLIC_API_URL ha la precedenza su RENDER_EXTERNAL_URL", () => {
-    process.env.PUBLIC_API_URL = "https://api.esempio.it";
-    process.env.RENDER_EXTERNAL_URL = "https://warehouse-api.onrender.com";
-    const url = badge.badgeUrl("507f1f77bcf86cd799439011", "abc123");
-    delete process.env.PUBLIC_API_URL;
-    delete process.env.RENDER_EXTERNAL_URL;
-    expect(url).toBe("https://api.esempio.it/api/auth/badge/507f1f77bcf86cd799439011/abc123");
+  test("badgeUrl: il segreto sta solo nel fragment, che il browser non invia al server", () => {
+    const url = new URL(badge.badgeUrl("507f1f77bcf86cd799439011", "segreto-xyz", "qr"));
+    expect(url.pathname).toBe("/badge");
+    expect(url.search).toBe("");
+    expect(new URLSearchParams(url.hash.slice(1)).get("s")).toBe("segreto-xyz");
   });
 
   test("qrImageDataUrl genera un data URL PNG valido", async () => {

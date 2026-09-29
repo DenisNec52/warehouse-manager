@@ -7,10 +7,9 @@
  * - Route protette (RequireAuth)
  */
 import { useEffect, lazy, Suspense } from "react";
-import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore, useThemeStore } from "@/lib/store";
 import { authAPI } from "@/lib/api";
-import toast from "react-hot-toast";
 
 // Pages — nel bundle iniziale solo quelle del primo accesso
 import LoginPage          from "@/pages/LoginPage";
@@ -20,6 +19,7 @@ import NotFoundPage       from "@/pages/NotFoundPage";
 // Tutte le altre on-demand: ognuna diventa un chunk separato scaricato alla prima visita
 const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage"));
 const ResetPasswordPage  = lazy(() => import("@/pages/ResetPasswordPage"));
+const BadgeLoginPage     = lazy(() => import("@/pages/BadgeLoginPage"));
 const DashboardPage      = lazy(() => import("@/pages/DashboardPage"));
 const ProductsPage       = lazy(() => import("@/pages/ProductsPage"));
 const ProductDetail      = lazy(() => import("@/pages/ProductDetailPage"));
@@ -83,7 +83,6 @@ export default function App() {
   const { setUser, setLoading, setUnread } = useAuthStore();
   const { loadFromProfile, applyTheme }    = useThemeStore();
   const location = useLocation();
-  const navigate = useNavigate();
 
   // Verifica sessione al mount
   useEffect(() => {
@@ -100,14 +99,6 @@ export default function App() {
     applyTheme();
   }, []);
 
-  // Conferma login automatico da QR/NFC (redirect dal backend con ?badge=ok)
-  useEffect(() => {
-    if (new URLSearchParams(location.search).get("badge") === "ok") {
-      toast.success("Accesso automatico effettuato");
-      navigate(location.pathname, { replace: true });
-    }
-  }, [location.search]);
-
   return (
     <Routes location={location}>
 
@@ -115,6 +106,7 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={page(<ForgotPasswordPage/>)} />
       <Route path="/reset-password"  element={page(<ResetPasswordPage/>)} />
+      <Route path="/badge"           element={page(<BadgeLoginPage/>)} />
 
       {/* App protetta */}
       <Route path="/" element={

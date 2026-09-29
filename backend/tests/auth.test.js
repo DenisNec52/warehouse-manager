@@ -45,63 +45,71 @@ describe("POST /api/auth/login", () => {
 });
 
 describe("Login automatico da badge QR/NFC", () => {
-  test("regenerate → scansione → login automatico → /me riconosce l'utente", async () => {
+  // Il badge punta a <frontend>/badge#u=<id>&s=<segreto>&src=qr|nfc: la pagina /badge
+  // manda questi dati a POST /api/auth/badge-login.
+  const badgeData = (url) => {
+    const p = new URLSearchParams(new URL(url).hash.slice(1));
+    return { userId: p.get("u"), secret: p.get("s"), src: p.get("src") };
+  };
+
+  async function loginAndRegenerate() {
     await createUser();
     const agent = request.agent(app);
     await agent.post("/api/auth/login").send({ username: "mario", password: "Password123!" });
-
     const regen = await agent.post("/api/auth/badge/regenerate");
+    return { agent, regen };
+  }
+
+  test("regenerate → scansione → login → /me riconosce l'utente", async () => {
+    const { regen } = await loginAndRegenerate();
     expect(regen.status).toBe(200);
-    expect(regen.body.url).toMatch(/\/api\/auth\/badge\/[a-f0-9]{24}\/.+/);
+    expect(regen.body.url).toMatch(/\/badge#u=[a-f0-9]{24}&s=.+&src=qr$/);
+    expect(regen.body.nfcUrl).toMatch(/&src=nfc$/);
     expect(regen.body.qrImage).toMatch(/^data:image\/png;base64,/);
 
-    const badgePath = new URL(regen.body.url).pathname + new URL(regen.body.url).search;
-
-    // Un browser "fresco" (nessun cookie) che apre il link del QR/NFC
+    // Un browser "fresco" (nessun cookie) che apre il badge
     const freshAgent = request.agent(app);
-    const scan = await freshAgent.get(badgePath);
-    expect(scan.status).toBe(302);
-    expect(scan.headers.location).toContain("/?badge=ok");
+    const scan = await freshAgent.post("/api/auth/badge-login").send(badgeData(regen.body.url));
+    expect(scan.status).toBe(200);
+    expect(scan.body.user.username).toBe("mario");
 
     const me = await freshAgent.get("/api/auth/me");
     expect(me.status).toBe(200);
     expect(me.body.user.username).toBe("mario");
   });
 
-  test("un segreto sbagliato non autentica e rimanda al login con errore", async () => {
+  test("un segreto sbagliato o dati malformati non autenticano", async () => {
     const user = await createUser();
-    const badPath = `/api/auth/badge/${user._id}/segreto-completamente-inventato-lungo-abbastanza`;
-    const res = await request(app).get(badPath);
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toContain("/login?badge=error");
+    const wrong = await request(app).post("/api/auth/badge-login")
+      .send({ userId: String(user._id), secret: "segreto-completamente-inventato-lungo-abbastanza" });
+    expect(wrong.status).toBe(401);
+    expect((await request(app).post("/api/auth/badge-login").send({ userId: { $ne: null }, secret: "x".repeat(30) })).status).toBe(401);
+    expect((await request(app).post("/api/auth/badge-login").send({})).status).toBe(401);
   });
 
   test("un badge disattivato smette di funzionare", async () => {
-    await createUser();
-    const agent = request.agent(app);
-    await agent.post("/api/auth/login").send({ username: "mario", password: "Password123!" });
-    const regen = await agent.post("/api/auth/badge/regenerate");
+    const { agent, regen } = await loginAndRegenerate();
     await agent.put("/api/auth/badge/status").send({ enabled: false });
-
-    const badgePath = new URL(regen.body.url).pathname + new URL(regen.body.url).search;
-    const res = await request(app).get(badgePath);
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toContain("/login?badge=error");
+    const res = await request(app).post("/api/auth/badge-login").send(badgeData(regen.body.url));
+    expect(res.status).toBe(401);
   });
 
   test("rigenerare il badge invalida immediatamente quello precedente", async () => {
-    await createUser();
-    const agent = request.agent(app);
-    await agent.post("/api/auth/login").send({ username: "mario", password: "Password123!" });
+    const { agent, regen: first } = await loginAndRegenerate();
+    await agent.post("/api/auth/badge/regenerate");
+    const res = await request(app).post("/api/auth/badge-login").send(badgeData(first.body.url));
+    expect(res.status).toBe(401);
+  });
 
-    const first  = await agent.post("/api/auth/badge/regenerate");
-    const oldPath = new URL(first.body.url).pathname + new URL(first.body.url).search;
-
-    await agent.post("/api/auth/badge/regenerate"); // rigenera → invalida il primo
-
-    const res = await request(app).get(oldPath);
+  test("i link dei badge generati prima di /badge rimandano alla nuova pagina con gli stessi dati", async () => {
+    const { regen } = await loginAndRegenerate();
+    const { userId, secret } = badgeData(regen.body.url);
+    const res = await request(app).get(`/api/auth/badge/${userId}/${secret}?src=nfc`);
     expect(res.status).toBe(302);
-    expect(res.headers.location).toContain("/login?badge=error");
+    expect(badgeData(res.headers.location)).toEqual({ userId, secret, src: "nfc" });
+
+    const login = await request.agent(app).post("/api/auth/badge-login").send(badgeData(res.headers.location));
+    expect(login.status).toBe(200);
   });
 });
 

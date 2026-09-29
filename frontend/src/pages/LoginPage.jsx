@@ -1,10 +1,13 @@
 /**
  * pages/LoginPage.jsx
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import { Package, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Package, Eye, EyeOff, AlertCircle, QrCode } from "lucide-react";
+import { parseBadgeUrl, useBadgeLogin } from "@/lib/badge";
+// Scanner e libreria QR scaricati solo quando si preme "Scansiona badge"
+const QrScannerModal = lazy(() => import("@/components/ui/QrScannerModal"));
 import { useAuthStore, useThemeStore } from "@/lib/store";
 import { authAPI } from "@/lib/api";
 import toast from "react-hot-toast";
@@ -19,6 +22,27 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/";
+  const badgeLogin = useBadgeLogin();
+  const [scanning,     setScanning]     = useState(false);
+  const [badgeLoading, setBadgeLoading] = useState(false);
+
+  // Chiamata dallo scanner a ogni QR letto: true se era un badge (accettato o rifiutato dal server)
+  const handleScan = async (text) => {
+    const badge = parseBadgeUrl(text);
+    if (!badge) return false;
+    setBadgeLoading(true);
+    try {
+      await badgeLogin(badge, from);
+    } catch (err) {
+      setScanning(false);
+      setError(err.response?.status === 429
+        ? "Troppe scansioni ravvicinate. Attendi qualche minuto."
+        : "Badge non valido, revocato o disattivato: accedi con le credenziali oppure chiedine uno nuovo all'amministratore.");
+    } finally {
+      setBadgeLoading(false);
+    }
+    return true;
+  };
 
   useEffect(() => { if (user) navigate(from, { replace: true }); }, [user]);
 
@@ -105,11 +129,27 @@ export default function LoginPage() {
               ) : "Accedi"}
             </button>
           </form>
+
+          <div className="flex items-center gap-3 my-4 text-xs text-gray-400">
+            <span className="flex-1 h-px bg-gray-200 dark:bg-gray-700"/> oppure <span className="flex-1 h-px bg-gray-200 dark:bg-gray-700"/>
+          </div>
+          <button type="button" onClick={() => { setError(""); setScanning(true); }}
+            className="btn btn-lg btn-secondary w-full gap-2">
+            <QrCode size={18}/> Scansiona badge QR
+          </button>
         </div>
         <p className="text-center text-xs text-gray-400 mt-4">
-          Hai un badge QR o un tag NFC? Inquadralo o avvicinalo al telefono: l'accesso avviene in automatico.
+          Con un tag NFC basta avvicinarlo al telefono: si apre l'app e l'accesso è automatico.
         </p>
       </motion.div>
+
+      <AnimatePresence>
+        {scanning && (
+          <Suspense fallback={null}>
+            <QrScannerModal onDetected={handleScan} busy={badgeLoading} onClose={() => setScanning(false)}/>
+          </Suspense>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -96,30 +96,40 @@ router.post("/login",
   }
 );
 
-// ── GET /api/auth/badge/:userId/:secret — login automatico da QR/NFC ──
-// Pensata per essere aperta direttamente dal browser (scansione QR o tap
-// NFC): non risponde MAI con JSON, solo con un redirect al frontend, per
-// non mostrare una pagina "rotta" a chi scansiona il codice.
-router.get("/badge/:userId/:secret", badgeLoginLimiter, async (req, res) => {
-  const frontendUrl = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
-  const fail = () => res.redirect(`${frontendUrl}/login?badge=error`);
+/** Utente del badge se id e segreto sono validi e il badge è attivo, altrimenti null. */
+async function findBadgeUser(userId, secret) {
+  if (typeof userId !== "string" || !/^[a-f0-9]{24}$/i.test(userId)) return null;
+  if (typeof secret !== "string" || secret.length < 20 || secret.length > 128) return null;
+  const user = await User.findById(userId).select("+badgeSecretHash");
+  if (!user || !user.isActive || !user.badgeEnabled || !user.badgeSecretHash) return null;
+  return badge.verifySecret(secret, user.badgeSecretHash) ? user : null;
+}
 
+// ── POST /api/auth/badge-login — login da badge QR/NFC ─────────
+// Chiamata dalla pagina /badge del frontend e dallo scanner nella pagina di login:
+// il cookie di sessione arriva nella risposta a una richiesta dell'app, esattamente
+// come nel login con password, quindi funziona negli stessi browser.
+router.post("/badge-login", badgeLoginLimiter, async (req, res) => {
   try {
-    const { userId, secret } = req.params;
-    if (!/^[a-f0-9]{24}$/i.test(userId) || !secret || secret.length < 20 || secret.length > 128)
-      return fail();
+    const { userId, secret, src } = req.body || {};
+    const user = await findBadgeUser(userId, secret);
+    if (!user)
+      return res.status(401).json({ message: "Badge non valido, revocato o disattivato." });
 
-    const user = await User.findById(userId).select("+badgeSecretHash");
-    if (!user || !user.isActive || !user.badgeEnabled || !user.badgeSecretHash) return fail();
-    if (!badge.verifySecret(secret, user.badgeSecretHash)) return fail();
-
-    const source = req.query.src === "nfc" ? "nfc" : "qr";
-    await startSession(req, res, user, source);
-    res.redirect(`${frontendUrl}/?badge=ok`);
+    await startSession(req, res, user, src === "nfc" ? "nfc" : "qr");
+    res.json({ user: user.toPublic() });
   } catch (err) {
-    console.error("[auth/badge]", err);
-    fail();
+    console.error("[auth/badge-login]", err);
+    res.status(500).json({ message: "Errore del server." });
   }
+});
+
+// ── GET /api/auth/badge/:userId/:secret — link dei badge generati prima di /badge ──
+// Non apre più la sessione qui (il cookie resterebbe isolato dal sito): rimanda alla
+// pagina /badge del frontend con gli stessi dati, che fa il login con POST /badge-login.
+router.get("/badge/:userId/:secret", badgeLoginLimiter, (req, res) => {
+  const source = req.query.src === "nfc" ? "nfc" : "qr";
+  res.redirect(badge.badgeUrl(req.params.userId, req.params.secret, source));
 });
 
 // ── POST /api/auth/badge/regenerate — genera/rigenera il PROPRIO badge ──

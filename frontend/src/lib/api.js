@@ -17,7 +17,7 @@ const api = axios.create({
 
 // Pagine raggiungibili da non loggati (anche dal link nell'email di recupero password):
 // il 401 di /auth/me al caricamento non deve rimandarle al login.
-const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password"];
+const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password", "/badge"];
 
 api.interceptors.response.use(
   (r) => r,
@@ -32,6 +32,7 @@ api.interceptors.response.use(
 // ── Auth ──────────────────────────────────────────────────────
 export const authAPI = {
   login:    (d)    => api.post("/auth/login",    d),
+  badgeLogin: (d)  => api.post("/auth/badge-login", d),   // { userId, secret, src } dal QR/NFC
   logout:   ()     => api.post("/auth/logout"),
   me:       ()     => api.get("/auth/me"),
   theme:    (d)    => api.put("/auth/theme",     d),
