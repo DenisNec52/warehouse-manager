@@ -52,6 +52,7 @@ app.use("/api/notifications",require("./routes/notifications"));
 app.use("/api/dashboard",    require("./routes/dashboard"));
 app.use("/api/checklist",    require("./routes/checklist"));
 app.use("/api/vision",       require("./routes/vision"));
+app.use("/api/production",   require("./routes/production"));
 
 // ── Health check ──────────────────────────────────────────────
 app.get("/api/health", (_req, res) => res.json({

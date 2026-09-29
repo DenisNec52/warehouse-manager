@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Package, ArrowLeftRight, Tag, Users, Bell,
   Settings, LogOut, Menu, X, Sun, Moon, Palette,
-  Home, ClipboardCheck, ClipboardList
+  Home, ClipboardCheck, ClipboardList, Timer, Clock
 } from "lucide-react";
 import { useAuthStore, useThemeStore } from "@/lib/store";
 import { authAPI } from "@/lib/api";
@@ -30,6 +30,8 @@ const NAV = [
   { to:"/checklist", label:"Pulizia 5S", icon:ClipboardCheck               },
   { to:"/products",  label:"Prodotti",   icon:Package                      },
   { to:"/movements", label:"Movimenti",  icon:ArrowLeftRight                },
+  { to:"/production", label:"Andon Board", icon:Timer, exact:true },
+  { to:"/production/standard-times", label:"Tempi standard", icon:Clock },
 ];
 
 // Visibili ad admin e supervisore

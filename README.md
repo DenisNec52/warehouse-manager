@@ -87,6 +87,22 @@ npm run dev       # avvia su http://localhost:5173
 | `movements` | Storico entrate/uscite con snapshot |
 | `categories` | Categorie con colore ed emoji |
 | `notifications` | Notifiche sistema (TTL 90 giorni) |
+| `standardtimes` | Tempi standard di saldatura per tipologia/dimensione custodia |
+| `productionentries` | Righe Andon Board con snapshot del tempo standard |
+
+---
+
+## ⏱️ Produzione saldatura (Andon Board)
+
+Digitalizza due fogli di reparto: la tabella plastificata dei **tempi standard** e il tracciato **Andon Board** compilato a mano.
+
+- **Tempi standard** (`/production/standard-times`): tempo per singola custodia per tipologia e dimensione (IP65, ATEX, NEMA, quadra…). Al primo accesso la tabella si popola con i valori del foglio di reparto; supervisore e admin possono modificarla.
+- **Andon Board** (`/production`): ogni riga registra operatore, commessa, posizione, pezzi, tipologia custodia, tempo impiegato, data fine, sospesa/bindello. Il tempo standard si compila da solo dalla tipologia scelta.
+- **Confronto**: tempo atteso (STD × pezzi) vs tempo impiegato, con efficienza per riga, per operatore e sul periodo (oggi / settimana / mese / date libere). Efficienza > 100% = più veloce dello standard.
+- **Storico stabile**: il tempo standard viene salvato nella riga al momento della registrazione, quindi modificare la tabella non riscrive i dati passati.
+- **Permessi**: l'operatore registra e modifica solo le proprie righe; supervisore e admin gestiscono tutto e possono registrare per altri operatori.
+
+API: `GET/POST/PUT/DELETE /api/production/standard-times`, `GET/POST/PUT/DELETE /api/production/entries`, `GET /api/production/stats?from&to`.
 
 ---
 

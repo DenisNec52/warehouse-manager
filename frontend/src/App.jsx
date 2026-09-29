@@ -26,6 +26,9 @@ import HomePage           from "@/pages/HomePage";
 import ChecklistPage      from "@/pages/ChecklistPage";
 // Caricata on-demand: usa recharts (libreria pesante) e serve solo ad admin/supervisore
 const ChecklistAdminPage = lazy(() => import("@/pages/ChecklistAdminPage"));
+// Modulo produzione saldatura (Andon Board / Tempi standard)
+const AndonBoardPage     = lazy(() => import("@/pages/AndonBoardPage"));
+const StandardTimesPage  = lazy(() => import("@/pages/StandardTimesPage"));
 
 // Layout
 import AppLayout from "@/components/layout/AppLayout";
@@ -110,6 +113,8 @@ export default function App() {
       <Route path="notifications"    element={<NotificationsPage/>}/>
       <Route path="settings"         element={<SettingsPage/>}/>
       <Route path="checklist"        element={<ChecklistPage/>}/>
+      <Route path="production"       element={<Suspense fallback={<RouteLoader/>}><AndonBoardPage/></Suspense>}/>
+      <Route path="production/standard-times" element={<Suspense fallback={<RouteLoader/>}><StandardTimesPage/></Suspense>}/>
       <Route path="users" element={
         <RequireSupervisor><UsersPage/></RequireSupervisor>
       }/>

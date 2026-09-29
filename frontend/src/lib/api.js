@@ -98,4 +98,16 @@ export const checklistAPI = {
   submissions:   (p)     => api.get("/checklist/submissions", { params: p }),
   monthlyReport: (month) => api.get("/checklist/monthly-report", { params: { month } }),
 };
+
+export const productionAPI = {
+  standardTimes:      ()     => api.get("/production/standard-times"),
+  createStandardTime: (d)    => api.post("/production/standard-times", d),
+  updateStandardTime: (id,d) => api.put(`/production/standard-times/${id}`, d),
+  deleteStandardTime: (id)   => api.delete(`/production/standard-times/${id}`),
+  entries:            (p)    => api.get("/production/entries", { params: p }),
+  createEntry:        (d)    => api.post("/production/entries", d),
+  updateEntry:        (id,d) => api.put(`/production/entries/${id}`, d),
+  deleteEntry:        (id)   => api.delete(`/production/entries/${id}`),
+  stats:              (p)    => api.get("/production/stats", { params: p }),
+};
 export default api;
