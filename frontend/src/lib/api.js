@@ -15,10 +15,14 @@ const api = axios.create({
   headers:         { "Content-Type": "application/json" },
 });
 
+// Pagine raggiungibili da non loggati (anche dal link nell'email di recupero password):
+// il 401 di /auth/me al caricamento non deve rimandarle al login.
+const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password"];
+
 api.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response?.status === 401 && !window.location.pathname.startsWith("/login")) {
+    if (err.response?.status === 401 && !PUBLIC_PATHS.some(p => window.location.pathname.startsWith(p))) {
       window.location.href = "/login";
     }
     return Promise.reject(err);
@@ -32,6 +36,14 @@ export const authAPI = {
   me:       ()     => api.get("/auth/me"),
   theme:    (d)    => api.put("/auth/theme",     d),
   password: (d)    => api.put("/auth/password",  d),
+  // Badge QR/NFC — proprio account
+  regenerateBadge: ()        => api.post("/auth/badge/regenerate"),
+  badgeStatus:     (enabled) => api.put("/auth/badge/status", { enabled }),
+  revokeBadge:     ()        => api.delete("/auth/badge"),
+  // Email e recupero password
+  updateEmail:    (email)                    => api.put("/auth/email", { email }),
+  forgotPassword: (username)                 => api.post("/auth/forgot-password", { username }),
+  resetPassword:  (userId, token, newPassword) => api.post("/auth/reset-password", { userId, token, newPassword }),
 };
 
 // ── Products ──────────────────────────────────────────────────
@@ -42,6 +54,12 @@ export const productsAPI = {
   create:   (d)    => api.post("/products",      d),
   update:   (id,d) => api.put(`/products/${id}`, d),
   delete:   (id)   => api.delete(`/products/${id}`),
+  uploadCover: (id, file) => {
+    const form = new FormData();
+    form.append("image", file);
+    return api.post(`/products/${id}/cover`, form, { headers: { "Content-Type": "multipart/form-data" } });
+  },
+  removeCover: (id) => api.delete(`/products/${id}/cover`),
 };
 
 // ── Categories ────────────────────────────────────────────────
@@ -68,6 +86,10 @@ export const usersAPI = {
   delete:        (id)   => api.delete(`/users/${id}`),
   setActive:     (id,isActive) => api.put(`/users/${id}/status`, { isActive }),
   resetPassword: (id,d) => api.put(`/users/${id}/password`, d),
+  // Badge QR/NFC — account di un altro utente (admin/supervisore)
+  regenerateBadge: (id)         => api.post(`/users/${id}/badge/regenerate`),
+  badgeStatus:     (id,enabled) => api.put(`/users/${id}/badge/status`, { enabled }),
+  revokeBadge:     (id)         => api.delete(`/users/${id}/badge`),
 };
 
 // ── Notifications ─────────────────────────────────────────────

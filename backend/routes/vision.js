@@ -46,6 +46,7 @@
 
 const express = require("express");
 const { protect } = require("../middleware/auth");
+const { visionLimiter } = require("../middleware/rateLimiter");
 
 const router = express.Router();
 router.use(protect);
@@ -229,7 +230,7 @@ async function scanWithMock() {
 // ─────────────────────────────────────────────────────────────
 // ROUTER — seleziona il provider dal .env e normalizza l'output
 // ─────────────────────────────────────────────────────────────
-router.post("/scan", async (req, res) => {
+router.post("/scan", visionLimiter, async (req, res) => {
   const { image, mediaType = "image/jpeg" } = req.body;
   if (!image) return res.status(400).json({ message: "Immagine obbligatoria (base64)." });
 

@@ -1,7 +1,7 @@
 /**
  * pages/DashboardPage.jsx
  */
-import { useState, useRef } from "react";
+import { useState, useRef, lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowDown, ArrowUp, Search, Package, ArrowLeftRight, Plus, X, Users, Activity } from "lucide-react";
@@ -13,6 +13,9 @@ import MovementTypeBadge from "@/components/ui/MovementTypeBadge";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import clsx from "clsx";
+
+// Solo supervisore/admin: carica recharts on-demand, fuori dal bundle degli operatori
+const ManagerInsights = lazy(() => import("@/components/dashboard/ManagerInsights"));
 
 // ── Form unico IN/OUT ─────────────────────────────────────────
 function FormMovimento() {
@@ -244,6 +247,7 @@ export default function DashboardPage() {
   const { user }  = useAuthStore();
   const qc        = useQueryClient();
   const isAdmin   = user?.role === "admin";
+  const isManager = ["admin", "supervisore"].includes(user?.role);
   const [productModal, setProductModal] = useState(false);
   const [frozenCats,   setFrozenCats]   = useState([]);
 
@@ -298,6 +302,13 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Andamento e scorte critiche — solo supervisore/admin */}
+      {isManager && (
+        <Suspense fallback={<div className="skeleton h-[260px] w-full mt-6"/>}>
+          <ManagerInsights criticalProducts={data?.criticalProducts}/>
+        </Suspense>
+      )}
 
       {/* Ultimi movimenti */}
       <div className="card mt-6">

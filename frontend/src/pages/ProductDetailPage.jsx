@@ -1,14 +1,68 @@
 /**
  * pages/ProductDetailPage.jsx
  */
-import { useState } from "react";
+import { useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Edit, ArrowDown, ArrowUp, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Edit, ArrowDown, ArrowUp, AlertTriangle, Camera, Trash2, ImageOff } from "lucide-react";
 import { productsAPI, movementsAPI } from "@/lib/api";
 import { AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import toast from "react-hot-toast";
+
+function CoverImageCard({ product }) {
+  const qc = useQueryClient();
+  const fileRef = useRef(null);
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["product", product._id] });
+
+  const uploadMut = useMutation({
+    mutationFn: (file) => productsAPI.uploadCover(product._id, file),
+    onSuccess: () => { invalidate(); toast.success("Foto aggiornata"); },
+    onError: e => toast.error(e.response?.data?.message || "Errore upload immagine"),
+  });
+
+  const removeMut = useMutation({
+    mutationFn: () => productsAPI.removeCover(product._id),
+    onSuccess: () => { invalidate(); toast.success("Foto rimossa"); },
+    onError: e => toast.error(e.response?.data?.message || "Errore"),
+  });
+
+  const handlePick = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { toast.error("Immagine troppo grande (max 8MB)"); return; }
+    uploadMut.mutate(file);
+    e.target.value = ""; // permette di riselezionare lo stesso file
+  };
+
+  return (
+    <div className="card p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-3">Foto prodotto</p>
+      {product.coverImage?.url ? (
+        <div className="relative group">
+          <img src={product.coverImage.url} alt={product.coverImage.alt || product.name}
+            className="w-full aspect-square object-cover rounded-[var(--radius)] border border-gray-100 dark:border-gray-800"/>
+          <button type="button" title="Rimuovi foto" disabled={removeMut.isPending}
+            onClick={() => { if (confirm("Rimuovere la foto di questo prodotto?")) removeMut.mutate(); }}
+            className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-red-500 transition-colors">
+            <Trash2 size={13}/>
+          </button>
+        </div>
+      ) : (
+        <div className="w-full aspect-square rounded-[var(--radius)] border-2 border-dashed border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center gap-1.5 text-gray-400">
+          <ImageOff size={22}/>
+          <span className="text-xs">Nessuna foto</span>
+        </div>
+      )}
+      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handlePick}/>
+      <button type="button" className="btn btn-sm btn-secondary w-full gap-1.5 mt-3" disabled={uploadMut.isPending}
+        onClick={() => fileRef.current?.click()}>
+        <Camera size={13}/> {uploadMut.isPending ? "Caricamento..." : product.coverImage?.url ? "Sostituisci foto" : "Carica foto"}
+      </button>
+    </div>
+  );
+}
 
 export default function ProductDetailPage() {
   const { id } = useParams();
@@ -118,6 +172,7 @@ export default function ProductDetailPage() {
 
         {/* Sidebar sticky */}
         <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+          <CoverImageCard product={product}/>
           <div className={clsx("card p-5", product.isLowStock && "border-yellow-300 dark:border-yellow-700")}>
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Giacenza attuale</p>
             <p className={clsx("text-5xl font-bold tabular-nums", product.isLowStock ? "text-yellow-600" : "text-gray-900 dark:text-white")}>
