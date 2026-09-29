@@ -16,7 +16,7 @@ const mongoose = require("mongoose");
 const Movement = require("../models/Movement");
 const Product  = require("../models/Product");
 const Notification = require("../models/Notification");
-const { protect } = require("../middleware/auth");
+const { protect, requireAdmin } = require("../middleware/auth");
 const validate    = require("../middleware/validate");
 const email       = require("../utils/email");
 
@@ -194,5 +194,136 @@ router.post("/",
     }
   }
 );
+
+// ── Correzione / annullamento movimenti (solo admin) ─────────────
+// La giacenza del prodotto viene riallineata nella stessa transazione:
+// effetto di un movimento sulla scorta = +quantità (IN) / -quantità (OUT).
+const stockEffect = (type, quantity) => (type === "IN" ? quantity : -quantity);
+const typeLabel   = (type) => (type === "IN" ? "Entrata" : "Uscita");
+
+async function loadMovementAndProduct(id, session) {
+  if (!mongoose.isValidObjectId(id)) return { status: 404, message: "Movimento non trovato." };
+  const movement = await Movement.findById(id).session(session);
+  if (!movement) return { status: 404, message: "Movimento non trovato." };
+  // Anche un prodotto disattivato va riallineato: la sua giacenza resta nello storico.
+  const product = await Product.findById(movement.product).session(session);
+  if (!product) return { status: 404, message: "Prodotto del movimento non trovato." };
+  return { movement, product };
+}
+
+router.put("/:id", requireAdmin,
+  [
+    body("type").isIn(["IN", "OUT"]).withMessage("Tipo deve essere IN o OUT"),
+    body("quantity").isInt({ min: 1 }).withMessage("Quantità deve essere almeno 1").toInt(),
+    body("reason").optional().trim(),
+    body("note").optional().trim(),
+    body("reference").optional().trim(),
+  ],
+  validate,
+  async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const found = await loadMovementAndProduct(req.params.id, session);
+      if (found.status) {
+        await session.abortTransaction();
+        return res.status(found.status).json({ message: found.message });
+      }
+      const { movement, product } = found;
+      const { type, quantity } = req.body;
+
+      const newEffect = stockEffect(type, quantity);
+      const newStock  = product.quantity + newEffect - stockEffect(movement.type, movement.quantity);
+      if (newStock < 0) {
+        await session.abortTransaction();
+        return res.status(400).json({ message: `La correzione porterebbe la giacenza sotto zero (attuale: ${product.quantity} ${product.unit}).` });
+      }
+
+      // updateOne come nella creazione: niente validazione completa del prodotto
+      // (i prodotti importati dall'inventario legacy possono avere campi incompleti).
+      await Product.updateOne({ _id: product._id }, { quantity: newStock, updatedBy: req.user._id }, { session });
+
+      const before = `${typeLabel(movement.type)} ${movement.quantity} ${product.unit}`;
+      movement.set({
+        type,
+        quantity,
+        reason:    req.body.reason ?? movement.reason ?? "",
+        note:      req.body.note ?? movement.note ?? "",
+        reference: req.body.reference ?? movement.reference ?? "",
+        quantityAfter:   movement.quantityBefore + newEffect,
+        correctedBy:     req.user._id,
+        correctedByName: req.user.name,
+        correctedAt:     new Date(),
+      });
+      await movement.save({ session });
+      await session.commitTransaction();
+
+      try {
+        await Notification.create({
+          type:    "movement",
+          title:   `Movimento corretto — ${movement.productSnapshot?.name || product.name}`,
+          message: `${before} → ${typeLabel(type)} ${quantity} ${product.unit}, corretto da ${req.user.name}. Giacenza: ${product.quantity} → ${newStock}.`,
+          link:    "/movements",
+          meta:    { movementId: movement._id },
+        });
+      } catch (err) {
+        console.error("[movements/put] notifica", err.message);
+      }
+
+      await movement.populate("performedBy", "name username");
+      res.json({ movement, quantity: newStock });
+    } catch (err) {
+      if (session.inTransaction()) await session.abortTransaction();
+      console.error("[movements/put]", err);
+      res.status(500).json({ message: "Errore correzione movimento." });
+    } finally {
+      session.endSession();
+    }
+  }
+);
+
+router.delete("/:id", requireAdmin, async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const found = await loadMovementAndProduct(req.params.id, session);
+    if (found.status) {
+      await session.abortTransaction();
+      return res.status(found.status).json({ message: found.message });
+    }
+    const { movement, product } = found;
+
+    const newStock = product.quantity - stockEffect(movement.type, movement.quantity);
+    if (newStock < 0) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: `Impossibile annullare: la giacenza andrebbe sotto zero (attuale: ${product.quantity} ${product.unit}).` });
+    }
+
+    await Product.updateOne({ _id: product._id }, { quantity: newStock, updatedBy: req.user._id }, { session });
+    await Movement.deleteOne({ _id: movement._id }).session(session);
+    await session.commitTransaction();
+
+    // Il movimento sparisce dallo storico: la notifica resta come traccia dell'operazione.
+    try {
+      const unit = movement.productSnapshot?.unit || product.unit;
+      await Notification.create({
+        type:    "movement",
+        title:   `Movimento annullato — ${movement.productSnapshot?.name || product.name}`,
+        message: `${typeLabel(movement.type)} di ${movement.quantity} ${unit} del ${new Date(movement.createdAt).toLocaleDateString("it-IT")} annullata da ${req.user.name}. Giacenza: ${product.quantity} → ${newStock}.`,
+        link:    "/movements",
+      });
+    } catch (err) {
+      console.error("[movements/delete] notifica", err.message);
+    }
+
+    res.json({ message: "Movimento annullato.", quantity: newStock });
+  } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
+    console.error("[movements/delete]", err);
+    res.status(500).json({ message: "Errore annullamento movimento." });
+  } finally {
+    session.endSession();
+  }
+});
 
 module.exports = router;

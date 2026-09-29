@@ -3,12 +3,36 @@
  */
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Package, ClipboardCheck, AlertTriangle, ArrowDown, ArrowUp, ArrowRight } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { dashboardAPI, checklistAPI } from "@/lib/api";
+import { dashboardAPI, checklistAPI, productionAPI } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
 import { movementInfo, fmtTime } from "@/lib/format";
+import { toIsoDay, efficiencyBadge } from "@/lib/duration";
 import clsx from "clsx";
+
+function QuickTiles({ tiles }) {
+  const nav = useNavigate();
+  return (
+    <div className="grid sm:grid-cols-2 gap-4 mb-6">
+      {tiles.map((tile, i) => (
+        <motion.button key={tile.to} initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay: .05 * (i + 1) }}
+          onClick={() => nav(tile.to)}
+          className="card p-5 text-left hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 group cursor-pointer">
+          <div className="flex items-start justify-between mb-3">
+            <div className={`w-11 h-11 rounded-[var(--radius)] ${tile.iconBg} flex items-center justify-center text-2xl group-hover:scale-110 transition-transform`}>
+              {tile.emoji}
+            </div>
+            <ArrowRight size={16} className={`text-gray-300 ${tile.hoverText} group-hover:translate-x-0.5 transition-all mt-1`}/>
+          </div>
+          <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">{tile.title}</h2>
+          <p className="text-xs text-gray-500 leading-relaxed">{tile.desc}</p>
+          {tile.info && <p className={`text-xs font-semibold mt-2 ${tile.infoClass}`}>{tile.info}</p>}
+        </motion.button>
+      ))}
+    </div>
+  );
+}
 
 export default function HomePage() {
   const { user } = useAuthStore();
@@ -25,10 +49,60 @@ export default function HomePage() {
     queryFn:  () => checklistAPI.myToday().then(r => r.data.submissions),
   });
 
+  const today = toIsoDay(new Date());
+  const { data: andonToday } = useQuery({
+    queryKey: ["production", "stats", { from: today, to: today }],
+    queryFn:  () => productionAPI.stats({ from: today, to: today }).then(r => r.data.totale),
+  });
+
+  const { data: standardTimes } = useQuery({
+    queryKey: ["standard-times"],
+    queryFn:  () => productionAPI.standardTimes().then(r => r.data.standardTimes),
+  });
+
   const stats        = dash?.stats || {};
   const recent       = dash?.recentMovements?.slice(0, 3) || [];
   const critical     = dash?.criticalProducts?.slice(0, 3) || [];
   const todayShifts  = (myToday || []).length;
+
+  const tiles = [
+    {
+      to: "/movements", emoji: "🔄", title: "Movimenti",
+      desc: "Storico di entrate e uscite di magazzino",
+      iconBg: "bg-blue-50 dark:bg-blue-900/20", hoverText: "group-hover:text-[var(--brand-500)]",
+      info: stats.todayMovements != null ? `${stats.todayMovements} movimenti oggi` : null,
+      infoClass: "text-blue-500",
+    },
+    {
+      to: "/production", emoji: "⏱️", title: "Andon Board",
+      desc: "Registra la produzione di saldatura",
+      iconBg: "bg-orange-50 dark:bg-orange-900/20", hoverText: "group-hover:text-orange-500",
+      info: andonToday
+        ? (andonToday.righe
+            ? `${andonToday.righe} righe oggi · efficienza ${efficiencyBadge(andonToday.efficienza).text}`
+            : "Nessuna riga registrata oggi")
+        : null,
+      infoClass: andonToday?.righe ? "text-orange-500" : "text-gray-400",
+    },
+    {
+      to: "/production/standard-times", emoji: "📋", title: "Tempi standard",
+      desc: "Tempi di saldatura per tipologia di custodia",
+      iconBg: "bg-purple-50 dark:bg-purple-900/20", hoverText: "group-hover:text-purple-500",
+      info: standardTimes ? `${standardTimes.length} tipologie` : null,
+      infoClass: "text-purple-500",
+    },
+    {
+      to: "/checklist", emoji: "🧹", title: "Pulizia 5S",
+      desc: "Autovalutazione a fine turno",
+      iconBg: "bg-green-50 dark:bg-green-900/20", hoverText: "group-hover:text-green-500",
+      info: myToday
+        ? (todayShifts > 0
+            ? `✅ ${todayShifts} ${todayShifts === 1 ? "turno compilato" : "turni compilati"} oggi`
+            : "⚠ Nessuna compilazione oggi")
+        : null,
+      infoClass: todayShifts > 0 ? "text-green-500" : "text-amber-500",
+    },
+  ];
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Buongiorno" : hour < 18 ? "Buon pomeriggio" : "Buonasera";
@@ -46,40 +120,7 @@ export default function HomePage() {
       </motion.div>
 
       {/* Accesso rapido */}
-      <div className="grid sm:grid-cols-2 gap-4 mb-6">
-        <motion.button initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay:.05 }}
-          onClick={() => nav("/warehouse")}
-          className="card p-5 text-left hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 group cursor-pointer">
-          <div className="flex items-start justify-between mb-3">
-            <div className="w-11 h-11 rounded-[var(--radius)] bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-              📦
-            </div>
-            <ArrowRight size={16} className="text-gray-300 group-hover:text-[var(--brand-500)] group-hover:translate-x-0.5 transition-all mt-1"/>
-          </div>
-          <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Magazzino</h2>
-          <p className="text-xs text-gray-500 leading-relaxed">Registra entrate/uscite, cerca prodotti</p>
-          {stats.totalProducts != null && (
-            <p className="text-xs font-semibold text-blue-500 mt-2">{stats.totalProducts} prodotti · {stats.todayMovements ?? 0} movimenti oggi</p>
-          )}
-        </motion.button>
-
-        <motion.button initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay:.1 }}
-          onClick={() => nav("/checklist")}
-          className="card p-5 text-left hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 group cursor-pointer">
-          <div className="flex items-start justify-between mb-3">
-            <div className="w-11 h-11 rounded-[var(--radius)] bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-              🧹
-            </div>
-            <ArrowRight size={16} className="text-gray-300 group-hover:text-green-500 group-hover:translate-x-0.5 transition-all mt-1"/>
-          </div>
-          <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Pulizia 5S</h2>
-          <p className="text-xs text-gray-500 leading-relaxed">Autovalutazione a fine turno</p>
-          {todayShifts > 0
-            ? <p className="text-xs font-semibold text-green-500 mt-2">✅ {todayShifts} {todayShifts === 1 ? "turno compilato" : "turni compilati"} oggi</p>
-            : <p className="text-xs font-semibold text-amber-500 mt-2">⚠ Nessuna compilazione oggi</p>
-          }
-        </motion.button>
-      </div>
+      <QuickTiles tiles={tiles}/>
 
       {/* Scorte basse — visibile a tutti */}
       {critical.length > 0 && (

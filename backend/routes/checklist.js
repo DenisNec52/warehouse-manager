@@ -3,6 +3,7 @@
  */
 const express  = require("express");
 const { body } = require("express-validator");
+const mongoose = require("mongoose");
 const Checklist           = require("../models/Checklist");
 const ChecklistSubmission = require("../models/ChecklistSubmission");
 const { protect, requireAdmin, requireSupervisor } = require("../middleware/auth");
@@ -234,6 +235,18 @@ router.get("/monthly-report", requireSupervisor, async (req, res) => {
 });
 
 // ── POST /api/checklist/submit ────────────────────────────────
+/** Punteggio di una compilazione: usato sia all'invio sia nella correzione admin. */
+function scoreOf(responses) {
+  const totalItems   = responses.length;
+  const checkedItems = responses.filter(r => r.checked).length;
+  return {
+    totalItems,
+    checkedItems,
+    allChecked: totalItems > 0 && checkedItems === totalItems,
+    score:      totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0,
+  };
+}
+
 router.post("/submit",
   [
     body("shift").trim().notEmpty().withMessage("Seleziona il turno"),
@@ -253,10 +266,7 @@ router.post("/submit",
       const cl = await Checklist.findOne({ active: true });
       if (!cl) return res.status(404).json({ message: "Checklist non trovata." });
 
-      const totalItems   = responses.length;
-      const checkedItems = responses.filter(r => r.checked).length;
-      const allChecked   = checkedItems === totalItems;
-      const score        = totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0;
+      const { totalItems, checkedItems, allChecked, score } = scoreOf(responses);
 
       const sub = await ChecklistSubmission.create({
         checklist:       cl._id,
@@ -276,5 +286,67 @@ router.post("/submit",
     }
   }
 );
+
+// ── Correzione / eliminazione compilazioni (solo admin) ──────────
+router.put("/submissions/:id", requireAdmin,
+  [
+    body("shift").optional().trim().notEmpty().withMessage("Turno non valido"),
+    body("cleaningType").optional().trim().notEmpty().withMessage("Tipologia non valida"),
+    body("date").optional().matches(/^\d{4}-\d{2}-\d{2}$/).withMessage("Data non valida (YYYY-MM-DD)"),
+    body("generalNote").optional().trim(),
+    body("responses").optional().isArray().withMessage("Risposte non valide"),
+  ],
+  validate,
+  async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ message: "Compilazione non trovata." });
+    try {
+      const sub = await ChecklistSubmission.findById(req.params.id);
+      if (!sub) return res.status(404).json({ message: "Compilazione non trovata." });
+      const { shift, cleaningType, date, generalNote, responses } = req.body;
+
+      // Le etichette restano quelle compilate: si correggono solo esito e nota di ogni voce.
+      if (responses) {
+        if (responses.length !== sub.responses.length)
+          return res.status(400).json({ message: "Il numero di voci non corrisponde alla checklist compilata." });
+        sub.responses = sub.responses.map((r, i) => ({
+          itemId: r.itemId, sectionId: r.sectionId, label: r.label,
+          checked: Boolean(responses[i]?.checked),
+          note:    String(responses[i]?.note ?? r.note ?? ""),
+        }));
+      }
+
+      const slotChanged = (shift !== undefined && shift !== sub.shift) || (date !== undefined && date !== sub.date);
+      if (shift !== undefined)        sub.shift = shift;
+      if (cleaningType !== undefined) sub.cleaningType = cleaningType;
+      if (date !== undefined)         sub.date = date;
+      if (generalNote !== undefined)  sub.generalNote = generalNote;
+
+      // Stessa regola dell'invio: una compilazione per utente, giorno e turno.
+      if (slotChanged) {
+        const clash = await ChecklistSubmission.exists({ submittedBy: sub.submittedBy, date: sub.date, shift: sub.shift, _id: { $ne: sub._id } });
+        if (clash) return res.status(409).json({ message: `Esiste già una compilazione di ${sub.submittedByName} per "${sub.shift}" il ${sub.date}.` });
+      }
+
+      sub.set(scoreOf(sub.responses));
+      await sub.save();
+      res.json({ submission: sub });
+    } catch (err) {
+      console.error("[checklist/submissions/put]", err.message);
+      res.status(500).json({ message: "Errore modifica compilazione." });
+    }
+  }
+);
+
+router.delete("/submissions/:id", requireAdmin, async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ message: "Compilazione non trovata." });
+  try {
+    const { deletedCount } = await ChecklistSubmission.deleteOne({ _id: req.params.id });
+    if (!deletedCount) return res.status(404).json({ message: "Compilazione non trovata." });
+    res.json({ message: "Compilazione eliminata." });
+  } catch (err) {
+    console.error("[checklist/submissions/delete]", err.message);
+    res.status(500).json({ message: "Errore eliminazione compilazione." });
+  }
+});
 
 module.exports = router;

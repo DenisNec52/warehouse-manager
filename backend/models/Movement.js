@@ -38,6 +38,10 @@ const movementSchema = new mongoose.Schema({
     required: true,
   },
   performedByName: String,  // snapshot nome utente
+  // Correzione da parte di un admin (vedi PUT /api/movements/:id): chi e quando
+  correctedBy:     { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  correctedByName: { type: String, default: "" },
+  correctedAt:     { type: Date, default: null },
 }, { timestamps: true });
 
 // ── Indici per query frequenti ────────────────────────────────

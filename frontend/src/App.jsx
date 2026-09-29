@@ -34,6 +34,7 @@ const ChecklistAdminPage = lazy(() => import("@/pages/ChecklistAdminPage"));
 // Modulo produzione saldatura (Andon Board / Tempi standard)
 const AndonBoardPage     = lazy(() => import("@/pages/AndonBoardPage"));
 const StandardTimesPage  = lazy(() => import("@/pages/StandardTimesPage"));
+const AdminPage          = lazy(() => import("@/pages/AdminPage"));
 
 // Un solo punto per il fallback di caricamento delle pagine lazy
 const page = (el) => <Suspense fallback={<RouteLoader/>}>{el}</Suspense>;
@@ -126,6 +127,9 @@ export default function App() {
       <Route path="products"         element={page(<ProductsPage/>)}/>
       <Route path="products/:id"     element={page(<ProductDetail/>)}/>
       <Route path="movements"        element={page(<MovementsPage/>)}/>
+      <Route path="admin" element={
+        <RequireAdmin>{page(<AdminPage/>)}</RequireAdmin>
+      }/>
       <Route path="categories" element={
         <RequireAdmin>{page(<CategoriesPage/>)}</RequireAdmin>
       }/>

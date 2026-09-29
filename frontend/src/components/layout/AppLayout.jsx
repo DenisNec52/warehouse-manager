@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Package, ArrowLeftRight, Tag, Users, Bell,
   Settings, LogOut, Menu, X, Sun, Moon, Palette,
-  Home, ClipboardCheck, ClipboardList, Timer, Clock
+  Home, ClipboardCheck, ClipboardList, Timer, Clock, ShieldCheck
 } from "lucide-react";
 import { useAuthStore, useThemeStore } from "@/lib/store";
 import { authAPI } from "@/lib/api";
@@ -42,6 +42,7 @@ const NAV_SUPERVISOR = [
 
 // Visibili solo ad admin
 const NAV_ADMIN = [
+  { to:"/admin",           label:"Amministrazione", icon:ShieldCheck, exact:true },
   { to:"/categories",      label:"Categorie",    icon:Tag           },
 ];
 
@@ -135,8 +136,8 @@ export default function AppLayout() {
           {user?.role === "admin" && (
             <>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 px-3 mt-4 mb-2">Admin</p>
-              {NAV_ADMIN.map(({ to, label, icon:Icon }) => (
-                <NavLink key={to} to={to}
+              {NAV_ADMIN.map(({ to, label, icon:Icon, exact }) => (
+                <NavLink key={to} to={to} end={exact}
                   className={({ isActive }) => clsx("nav-item", isActive && "active")}
                   onClick={() => setSidebarOpen(false)}
                 >

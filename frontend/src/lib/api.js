@@ -76,6 +76,8 @@ export const movementsAPI = {
   get:        (id) => api.get(`/movements/${id}`),
   byProduct:  (id) => api.get(`/movements/product/${id}`),
   create:     (d)  => api.post("/movements", d),
+  update:     (id,d) => api.put(`/movements/${id}`, d),      // solo admin: corregge e riallinea la giacenza
+  remove:     (id) => api.delete(`/movements/${id}`),        // solo admin: annulla e storna la giacenza
 };
 
 // ── Users ─────────────────────────────────────────────────────
@@ -119,6 +121,8 @@ export const checklistAPI = {
   today:         ()      => api.get("/checklist/submissions/today"),
   submissions:   (p)     => api.get("/checklist/submissions", { params: p }),
   monthlyReport: (month) => api.get("/checklist/monthly-report", { params: { month } }),
+  updateSubmission: (id,d) => api.put(`/checklist/submissions/${id}`, d),   // solo admin
+  deleteSubmission: (id)   => api.delete(`/checklist/submissions/${id}`),  // solo admin
 };
 
 export const productionAPI = {

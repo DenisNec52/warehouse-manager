@@ -5,7 +5,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend } from "recharts";
-import { CheckCircle, XCircle, Minus, ChevronDown, ChevronUp, Plus, Trash2, Save } from "lucide-react";
+import { CheckCircle, XCircle, Minus, ChevronDown, ChevronUp, Plus, Trash2, Save, Pencil } from "lucide-react";
 import { checklistAPI } from "@/lib/api";
 import { scoreColor, fmtTime } from "@/lib/format";
 import ScoreCircle from "@/components/ui/ScoreCircle";
@@ -186,13 +186,108 @@ function TabMonthly() {
 }
 
 // ── Tab Compilazioni ──────────────────────────────────────────
+// ── Correzione di una compilazione (solo admin) ───────────────
+function SubmissionEditor({ sub, config, onDone }) {
+  const qc = useQueryClient();
+  const [shift,        setShift]        = useState(sub.shift);
+  const [cleaningType, setCleaningType] = useState(sub.cleaningType);
+  const [date,         setDate]         = useState(sub.date);
+  const [generalNote,  setGeneralNote]  = useState(sub.generalNote || "");
+  const [responses,    setResponses]    = useState(sub.responses.map(r => ({ checked: r.checked, note: r.note || "" })));
+
+  const mut = useMutation({
+    mutationFn: () => checklistAPI.updateSubmission(sub._id, { shift, cleaningType, date, generalNote, responses }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["checklist-submissions"] });
+      qc.invalidateQueries({ queryKey: ["checklist-monthly"] });
+      toast.success("Compilazione aggiornata");
+      onDone();
+    },
+    onError: e => toast.error(e.response?.data?.errors?.[0]?.message || e.response?.data?.message || "Errore"),
+  });
+
+  const checked = responses.filter(r => r.checked).length;
+  const percent = responses.length ? Math.round((checked / responses.length) * 100) : 0;
+  // Se un turno/tipologia è stato rimosso dalla configurazione, resta selezionabile il valore compilato.
+  const shiftNames = [...new Set([...(config?.shifts || []).map(s => s.name), sub.shift])];
+  const typeLabels = [...new Set([...(config?.cleaningTypes || []).map(t => t.label), sub.cleaningType])];
+  const toggle = (i) => setResponses(rs => rs.map((r, j) => (j === i ? { ...r, checked: !r.checked } : r)));
+
+  return (
+    <div className="mt-3 space-y-3">
+      <div className="grid sm:grid-cols-3 gap-3">
+        <div>
+          <label className="form-label">Turno</label>
+          <select className="form-input" value={shift} onChange={e => setShift(e.target.value)}>
+            {shiftNames.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="form-label">Tipologia</label>
+          <select className="form-input" value={cleaningType} onChange={e => setCleaningType(e.target.value)}>
+            {typeLabels.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="form-label">Data</label>
+          <input type="date" className="form-input" value={date} onChange={e => setDate(e.target.value)}/>
+        </div>
+      </div>
+      <p className="text-xs text-gray-400">Tocca una voce per invertirne l'esito.</p>
+      <div className="grid sm:grid-cols-2 gap-1.5">
+        {responses.map((r, i) => (
+          <button key={i} type="button" onClick={() => toggle(i)}
+            className={clsx("flex items-start gap-2 p-2 rounded text-xs text-left border transition-colors",
+              r.checked
+                ? "text-green-700 dark:text-green-400 border-green-200 dark:border-green-900 bg-green-50/50 dark:bg-green-900/10"
+                : "text-red-500 dark:text-red-400 border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-900/10")}>
+            {r.checked ? <CheckCircle size={13} className="shrink-0 mt-0.5"/> : <XCircle size={13} className="shrink-0 mt-0.5"/>}
+            <span>{sub.responses[i].label}</span>
+          </button>
+        ))}
+      </div>
+      <div>
+        <label className="form-label">Note generali</label>
+        <textarea className="form-input" rows={2} value={generalNote} onChange={e => setGeneralNote(e.target.value)}/>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm text-gray-500">Punteggio: {checked}/{responses.length} ({percent}%)</span>
+        <div className="flex gap-2">
+          <button type="button" className="btn btn-sm btn-secondary" onClick={onDone}>Annulla</button>
+          <button type="button" className="btn btn-sm btn-primary gap-1.5" disabled={mut.isPending} onClick={() => mut.mutate()}>
+            <Save size={13}/> {mut.isPending ? "..." : "Salva"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TabSubmissions() {
   const [date, setDate] = useState(today.toISOString().slice(0,10));
   const [expanded, setExpanded] = useState(null);
+  const [editing,  setEditing]  = useState(null);
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === "admin";
+  const qc = useQueryClient();
 
   const { data } = useQuery({
     queryKey: ["checklist-submissions", date],
     queryFn:  () => checklistAPI.submissions({ date, limit: 50 }).then(r => r.data),
+  });
+  const { data: config } = useQuery({
+    queryKey: ["checklist"],
+    queryFn:  () => checklistAPI.get().then(r => r.data.checklist),
+    enabled:  isAdmin,
+  });
+  const delMut = useMutation({
+    mutationFn: id => checklistAPI.deleteSubmission(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["checklist-submissions"] });
+      qc.invalidateQueries({ queryKey: ["checklist-monthly"] });
+      toast.success("Compilazione eliminata");
+    },
+    onError: e => toast.error(e.response?.data?.message || "Errore"),
   });
 
   const subs = data?.submissions || [];
@@ -235,8 +330,24 @@ function TabSubmissions() {
               </div>
               {expanded === sub._id ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>}
             </div>
-            {expanded === sub._id && (
+            {expanded === sub._id && editing === sub._id && (
               <div className="px-5 pb-4 border-t border-gray-100 dark:border-gray-800">
+                <SubmissionEditor sub={sub} config={config} onDone={() => setEditing(null)}/>
+              </div>
+            )}
+            {expanded === sub._id && editing !== sub._id && (
+              <div className="px-5 pb-4 border-t border-gray-100 dark:border-gray-800">
+                {isAdmin && (
+                  <div className="flex justify-end gap-2 mt-3">
+                    <button type="button" className="btn btn-sm btn-secondary gap-1.5" onClick={() => setEditing(sub._id)}>
+                      <Pencil size={13}/> Modifica
+                    </button>
+                    <button type="button" className="btn btn-sm btn-ghost gap-1.5 text-red-500"
+                      onClick={() => { if (confirm(`Eliminare la compilazione di ${sub.submittedBy?.name || sub.submittedByName} (${sub.shift})?`)) delMut.mutate(sub._id); }}>
+                      <Trash2 size={13}/> Elimina
+                    </button>
+                  </div>
+                )}
                 <div className="grid sm:grid-cols-2 gap-1.5 mt-3">
                   {sub.responses.map((r, i) => (
                     <div key={i} className={clsx("flex items-start gap-2 p-2 rounded text-xs",
