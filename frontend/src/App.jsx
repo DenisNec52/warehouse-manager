@@ -6,7 +6,7 @@
  * - Page transitions Framer Motion
  * - Route protette (RequireAuth)
  */
-import { useEffect, lazy, Suspense } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore, useThemeStore } from "@/lib/store";
 import { authAPI } from "@/lib/api";
@@ -51,6 +51,29 @@ function RouteLoader() {
   );
 }
 
+// Circa 2 minuti in tutto (6 tentativi con timeout di 15s + attese crescenti):
+// abbastanza per l'avvio a freddo di un servizio Render free.
+const BOOT_MAX_ATTEMPTS = 6;
+
+function ServerStatus({ state }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen gap-4 px-6 text-center">
+      {state === "waking" ? (
+        <>
+          <div className="w-8 h-8 border-2 border-[var(--brand-500)] border-t-transparent rounded-full animate-spin"/>
+          <p className="text-sm text-gray-500">Il server si sta avviando, attendi qualche secondo…</p>
+        </>
+      ) : (
+        <>
+          <p className="font-semibold text-gray-900 dark:text-white">Server non raggiungibile</p>
+          <p className="text-sm text-gray-500">La tua sessione non è stata chiusa. Controlla la connessione e riprova.</p>
+          <button className="btn btn-md btn-primary" onClick={() => window.location.reload()}>Riprova</button>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Route protetta ────────────────────────────────────────────
 function RequireAuth({ children }) {
   const { user, loading } = useAuthStore();
@@ -85,20 +108,42 @@ export default function App() {
   const { loadFromProfile, applyTheme }    = useThemeStore();
   const location = useLocation();
 
-  // Verifica sessione al mount
+  // "ok" | "waking" (server in avvio, si ritenta) | "offline" (non raggiungibile)
+  const [serverState, setServerState] = useState("ok");
+
+  // Verifica sessione al mount. Solo un 401 vuol dire "non loggato": timeout ed errori
+  // di rete/5xx (es. backend Render che si risveglia dopo l'inattività) si ritentano,
+  // altrimenti l'utente verrebbe mandato al login con un cookie ancora valido.
   useEffect(() => {
-    authAPI.me()
-      .then(res => {
-        setUser(res.data.user);
-        setUnread(res.data.unreadNotifications || 0);
-        loadFromProfile(res.data.user?.theme);
-      })
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+    (async () => {
+      for (let attempt = 1; !cancelled; attempt++) {
+        try {
+          const res = await authAPI.me();
+          if (cancelled) return;
+          setUser(res.data.user);
+          setUnread(res.data.unreadNotifications || 0);
+          loadFromProfile(res.data.user?.theme);
+          break;
+        } catch (err) {
+          if (cancelled) return;
+          if (err.response?.status === 401) { setUser(null); break; }
+          if (attempt >= BOOT_MAX_ATTEMPTS) { setServerState("offline"); return; }
+          setServerState("waking");
+          await wait(Math.min(2000 * attempt, 10000));
+        }
+      }
+      if (!cancelled) { setServerState("ok"); setLoading(false); }
+    })();
 
     // Applica tema salvato in localStorage
     applyTheme();
+    return () => { cancelled = true; };
   }, []);
+
+  if (serverState !== "ok") return <ServerStatus state={serverState}/>;
 
   return (
     <Routes location={location}>

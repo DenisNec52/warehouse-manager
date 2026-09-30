@@ -9,7 +9,10 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL:         import.meta.env.VITE_API_URL || "http://localhost:5000/api",
+  // In produzione l'API passa dalla rewrite /api di vercel.json: stesso dominio del sito,
+  // quindi il cookie di sessione è di prima parte e nessun browser lo blocca.
+  // In sviluppo VITE_API_URL (o il proxy /api di vite.config.js) punta al backend locale.
+  baseURL:         import.meta.env.PROD ? "/api" : (import.meta.env.VITE_API_URL || "/api"),
   withCredentials: true,
   timeout:         15_000,
   headers:         { "Content-Type": "application/json" },
