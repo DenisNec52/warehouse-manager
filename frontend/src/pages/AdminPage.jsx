@@ -13,7 +13,7 @@ import { useDepartmentList } from "@/hooks/useDepartments";
 import { toIsoDay } from "@/lib/duration";
 
 const AREAS = [
-  { to: "/products",                   icon: Package,        title: "Prodotti",       desc: "Crea, modifica, elimina prodotti, soglie e foto", countKey: "products" },
+  { to: "/products",                   icon: Package,        title: "Magazzino",      desc: "Crea, modifica, elimina prodotti, soglie e foto", countKey: "products" },
   { to: "/movements",                  icon: ArrowLeftRight, title: "Movimenti",      desc: "Correggi o annulla entrate e uscite: la giacenza si riallinea da sola", countKey: "movements" },
   { to: "/categories",                 icon: Tag,            title: "Categorie",      desc: "Nomi, colori e icone delle categorie", countKey: "categories" },
   { to: "/admin/departments",          icon: Factory,        title: "Reparti",        desc: "Postazioni per 5S, Tempi standard e Andon Board: aggiungi, rinomina, ordina, disattiva", countKey: "departments" },

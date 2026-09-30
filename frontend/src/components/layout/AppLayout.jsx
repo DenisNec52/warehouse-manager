@@ -10,7 +10,7 @@ import { useState, lazy, Suspense } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  LayoutDashboard, Package, ArrowLeftRight, Tag, Users, Bell,
+  Package, ArrowLeftRight, Tag, Users, Bell,
   Settings, LogOut, Menu, X, Sun, Moon, Palette,
   Home, ClipboardCheck, ClipboardList, Timer, Clock, ShieldCheck, Factory
 } from "lucide-react";
@@ -26,9 +26,8 @@ import clsx from "clsx";
 
 const NAV = [
   { to:"/",          label:"Home",       icon:Home,            exact:true },
-  { to:"/warehouse", label:"Magazzino",  icon:LayoutDashboard              },
   { to:"/checklist", label:"Pulizia 5S", icon:ClipboardCheck               },
-  { to:"/products",  label:"Prodotti",   icon:Package                      },
+  { to:"/products",  label:"Magazzino",  icon:Package                      },
   { to:"/movements", label:"Movimenti",  icon:ArrowLeftRight                },
   { to:"/production", label:"Andon Board", icon:Timer, exact:true },
   { to:"/production/standard-times", label:"Tempi standard", icon:Clock },

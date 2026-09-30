@@ -283,7 +283,7 @@ export default function ProductsPage() {
     <div>
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Prodotti</h1>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Magazzino</h1>
           <p className="text-sm text-gray-500 mt-0.5">{data?.pagination?.total ?? "—"} articoli in magazzino</p>
         </div>
         <button className="btn btn-md btn-primary gap-2" onClick={() => openModal("create")}>
