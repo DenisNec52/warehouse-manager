@@ -10,6 +10,10 @@ const User            = require("../models/User");
 const { protect, requireSupervisor } = require("../middleware/auth");
 const validate = require("../middleware/validate");
 const { checkDepartment, visibleScope } = require("../utils/departmentAccess");
+const Department = require("../models/Department");
+const { PERIODS, resolvePeriod } = require("../utils/reportPeriod");
+const { buildReport } = require("../utils/andonReport");
+const { buildAndonWorkbook } = require("../utils/andonExcel");
 const router   = express.Router();
 
 // Express 4 does not forward rejected promises: without this, a DB error in an async
@@ -289,6 +293,38 @@ router.get("/stats", periodRules, validate, async (req, res) => {
     perCommessa:  result.perCommessa.map(withEfficiency),
     perGiorno:    result.perGiorno.map(withEfficiency),
   });
+});
+
+// ── Report per periodo (grafici della dashboard) ed export Excel ──
+// Stesso filtro nei due casi: periodo (giorno/settimana/mese che contiene "date") + reparti visibili.
+
+const reportRules = [
+  query("period").isIn(PERIODS).withMessage("Periodo non valido (giorno, settimana, mese)"),
+  query("date").custom(isoDate).withMessage("Data non valida (YYYY-MM-DD)"),
+  query("department").optional().isMongoId().withMessage("Reparto non valido"),
+];
+
+router.get("/report", reportRules, validate, async (req, res) => {
+  const scope = await departmentFilter(req, res);
+  if (!scope) return;
+  res.json(await buildReport(scope, resolvePeriod(req.query.period, req.query.date)));
+});
+
+router.get("/export", [...reportRules, query("charts").optional().isIn(["0", "1"])], validate, async (req, res) => {
+  const scope = await departmentFilter(req, res);
+  if (!scope) return;
+  const range = resolvePeriod(req.query.period, req.query.date);
+  const report = await buildReport(scope, range, { withRows: true });
+  const dept = scope.department ? await Department.findById(scope.department).select("name").lean() : null;
+  const buffer = await buildAndonWorkbook(report, dept?.name || "Tutti i reparti visibili", req.query.charts === "1");
+
+  const slug = (dept?.name || "reparti").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  res.set({
+    "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "Content-Disposition": `attachment; filename="andon_${slug}_${range.period}_${range.from}.xlsx"`,
+    "Cache-Control": "no-store",
+  });
+  res.send(buffer);
 });
 
 module.exports = router;

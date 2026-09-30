@@ -4,7 +4,7 @@
  * Andon Board per reparto: righe di produzione con tempo standard atteso vs tempo impiegato.
  * Il tempo standard si compila da solo dalla tipologia custodia (tabella Tempi standard).
  */
-import { useMemo, useState } from "react";
+import { useMemo, useState, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Edit, Trash2, X, Timer, PauseCircle, Flag, CheckCircle2 } from "lucide-react";
@@ -14,6 +14,9 @@ import clsx from "clsx";
 import { productionAPI, usersAPI } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
 import { fmtMinutes, parseDuration, efficiencyBadge, toIsoDay } from "@/lib/duration";
+
+// Report con grafici ed export Excel: recharts si scarica solo quando si apre questa pagina
+const AndonReport = lazy(() => import("@/components/andon/AndonReport"));
 import { useSelectedDepartment } from "@/hooks/useDepartments";
 import DepartmentSelector from "@/components/ui/DepartmentSelector";
 
@@ -258,6 +261,12 @@ export default function AndonBoardPage() {
         <p className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-[var(--radius)] px-4 py-3 mb-4">
           {department.name} non ha ancora tempi standard: aggiungili in <Link to="/production/standard-times" className="underline font-medium">Tempi standard</Link> per poter registrare righe.
         </p>
+      )}
+
+      {departmentId && (
+        <Suspense fallback={<div className="card p-4 mb-4 text-sm text-gray-400">Caricamento report…</div>}>
+          <AndonReport departmentId={departmentId} departmentName={department?.name}/>
+        </Suspense>
       )}
 
       <div className="card p-3 mb-4 flex gap-3 flex-wrap items-center">
