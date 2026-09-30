@@ -24,6 +24,7 @@ const validate = require("../middleware/validate");
 const email    = require("../utils/email");
 const { lookupLocation } = require("../utils/geoip");
 const badge    = require("../utils/badge");
+const { clientIp } = require("../utils/clientIp");
 
 const router = express.Router();
 
@@ -49,7 +50,7 @@ async function startSession(req, res, user, method = "password") {
   );
   res.cookie("wh_token", token, cookieOpts);
 
-  const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
+  const ip = clientIp(req);
   await User.findByIdAndUpdate(user._id, { lastLogin: new Date(), lastLoginIP: ip });
 
   lookupLocation(ip)

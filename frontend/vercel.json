@@ -4,8 +4,13 @@
   "installCommand": "npm install",
   "framework": "vite",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://warehouse-manager-gwuc.onrender.com/api/:path*" },
-    { "source": "/__echo/:path*", "destination": "https://httpbin.org/anything/:path*" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "https://warehouse-manager-gwuc.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }

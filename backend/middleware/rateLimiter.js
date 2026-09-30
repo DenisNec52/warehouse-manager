@@ -4,6 +4,7 @@
  * Rate limiting per prevenire abusi e brute-force.
  */
 const rateLimit = require("express-rate-limit");
+const { clientIp } = require("../utils/clientIp");
 
 const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
 
@@ -16,8 +17,17 @@ exports.apiLimiter = rateLimit({
   legacyHeaders:   false,
 });
 
-/** Limiter più stretto per il login — anti-brute-force */
+/**
+ * Limiter più stretto per il login — anti-brute-force.
+ * Chiave = username: i tentativi sbagliati di una persona non bloccano i colleghi
+ * (dietro Vercel molti utenti possono arrivare con lo stesso IP), e un IP falsificato
+ * non permette comunque più di N tentativi sullo stesso account.
+ */
 exports.loginLimiter = rateLimit({
+  keyGenerator: (req) => {
+    const username = typeof req.body?.username === "string" ? req.body.username.trim().toLowerCase() : "";
+    return username ? `user:${username}` : `ip:${clientIp(req)}`;
+  },
   windowMs,
   max:     parseInt(process.env.RATE_LIMIT_LOGIN_MAX) || 10,
   message: { message: "Troppi tentativi di accesso. Riprova tra 15 minuti." },
@@ -35,6 +45,7 @@ exports.loginLimiter = rateLimit({
  * più volte di seguito in modo legittimo (es. tablet condiviso in magazzino).
  */
 exports.badgeLoginLimiter = rateLimit({
+  keyGenerator: clientIp,
   windowMs,
   max:     parseInt(process.env.RATE_LIMIT_BADGE_MAX) || 30,
   message: { message: "Troppi tentativi. Riprova tra qualche minuto." },
@@ -58,11 +69,12 @@ exports.visionLimiter = rateLimit({
   message: { message: "Troppe scansioni ravvicinate. Attendi qualche minuto prima di riprovare." },
   standardHeaders: true,
   legacyHeaders:   false,
-  keyGenerator: (req) => req.user?._id?.toString() || req.ip,
+  keyGenerator: (req) => req.user?._id?.toString() || clientIp(req),
 });
 
 /** Limiter per "password dimenticata" — anti spam/email-bombing */
 exports.forgotPasswordLimiter = rateLimit({
+  keyGenerator: clientIp,
   windowMs,
   max:     parseInt(process.env.RATE_LIMIT_FORGOT_MAX) || 5,
   message: { message: "Troppe richieste. Riprova tra qualche minuto." },
