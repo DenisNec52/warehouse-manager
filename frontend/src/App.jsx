@@ -35,6 +35,7 @@ const ChecklistAdminPage = lazy(() => import("@/pages/ChecklistAdminPage"));
 const AndonBoardPage     = lazy(() => import("@/pages/AndonBoardPage"));
 const StandardTimesPage  = lazy(() => import("@/pages/StandardTimesPage"));
 const AdminPage          = lazy(() => import("@/pages/AdminPage"));
+const DepartmentsPage    = lazy(() => import("@/pages/DepartmentsPage"));
 
 // Un solo punto per il fallback di caricamento delle pagine lazy
 const page = (el) => <Suspense fallback={<RouteLoader/>}>{el}</Suspense>;
@@ -119,6 +120,9 @@ export default function App() {
       <Route path="products"         element={page(<ProductsPage/>)}/>
       <Route path="products/:id"     element={page(<ProductDetail/>)}/>
       <Route path="movements"        element={page(<MovementsPage/>)}/>
+      <Route path="admin/departments" element={
+        <RequireAdmin>{page(<DepartmentsPage/>)}</RequireAdmin>
+      }/>
       <Route path="admin" element={
         <RequireAdmin>{page(<AdminPage/>)}</RequireAdmin>
       }/>

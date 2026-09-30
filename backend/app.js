@@ -56,6 +56,7 @@ app.use("/api/dashboard",    require("./routes/dashboard"));
 app.use("/api/checklist",    require("./routes/checklist"));
 app.use("/api/vision",       require("./routes/vision"));
 app.use("/api/production",   require("./routes/production"));
+app.use("/api/departments",  require("./routes/departments"));
 
 // ── Health check ──────────────────────────────────────────────
 app.get("/api/health", (_req, res) => res.json({

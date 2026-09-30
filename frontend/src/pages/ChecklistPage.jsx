@@ -16,6 +16,7 @@ import {
   Clock, AlertTriangle, ClipboardList, Star, RotateCcw,
 } from "lucide-react";
 import { checklistAPI } from "@/lib/api";
+import { useSelectedDepartment } from "@/hooks/useDepartments";
 import { useAuthStore } from "@/lib/store";
 import { scoreColor, fmtTime } from "@/lib/format";
 import toast from "react-hot-toast";
@@ -74,7 +75,7 @@ function DoneScreen({ score, user, myToday, onNewShift }) {
           <div key={s._id} className="card p-3 flex items-center justify-between text-left">
             <div>
               <p className="text-sm font-semibold text-gray-900 dark:text-white">{s.shift}</p>
-              <p className="text-xs text-gray-400">{s.cleaningType}</p>
+              <p className="text-xs text-gray-400">{s.cleaningType}{s.departmentName && ` · ${s.departmentName}`}</p>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold" style={{ color: scoreColor(s.score) }}>
@@ -98,6 +99,7 @@ export default function ChecklistPage() {
   const { user } = useAuthStore();
   const qc = useQueryClient();
 
+  const { departments, department, departmentId, select: selectDepartment } = useSelectedDepartment("checklist");
   const [selectedShift,   setSelectedShift]   = useState("");
   const [cleaningType,    setCleaningType]     = useState("");
   const [responses,       setResponses]        = useState({});
@@ -133,7 +135,13 @@ export default function ChecklistPage() {
 
   const myToday        = myTodayData || [];
   const activeShifts   = cl?.shifts?.filter(s => s.active) || [];
-  const compiledShifts = new Set(myToday.map(s => s.shift));
+  // Un turno è "fatto" solo nel reparto selezionato: la stessa persona può pulire più postazioni nello stesso turno.
+  const compiledShifts = new Set(myToday.filter(s => String(s.department) === departmentId).map(s => s.shift));
+
+  // Cambiando reparto, un turno già compilato lì non resta selezionato
+  useEffect(() => {
+    if (selectedShift && compiledShifts.has(selectedShift)) setSelectedShift("");
+  }, [departmentId]);
 
   // Progresso globale
   const allItems     = cl?.sections?.flatMap(s => s.items) || [];
@@ -159,6 +167,7 @@ export default function ChecklistPage() {
   });
 
   const handleSubmit = () => {
+    if (!departmentId)   return toast.error("Seleziona il reparto/postazione");
     if (!selectedShift)  return toast.error("Seleziona il turno");
     if (!cleaningType)   return toast.error("Seleziona la tipologia di pulizia");
     if (missingRequired > 0 && !generalNote.trim()) {
@@ -171,7 +180,7 @@ export default function ChecklistPage() {
       checked:   responses[item._id]?.checked || false,
       note:      responses[item._id]?.note || "",
     }));
-    mutation.mutate({ shift: selectedShift, cleaningType, responses: responseArray, generalNote });
+    mutation.mutate({ department: departmentId, shift: selectedShift, cleaningType, responses: responseArray, generalNote });
   };
 
   const handleNewShift = () => {
@@ -203,7 +212,7 @@ export default function ChecklistPage() {
           <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <ClipboardList size={20} className="text-[var(--brand-500)]"/> Autovalutazione 5S
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">{cl?.workArea} · {cl?.description}</p>
+          <p className="text-sm text-gray-500 mt-0.5">{department?.name || cl?.workArea} · {cl?.description}</p>
         </div>
         <div className="flex items-center gap-2 mt-1">
           <Clock size={13} className="text-gray-400"/>
@@ -227,6 +236,18 @@ export default function ChecklistPage() {
           <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
             <AlertTriangle size={12}/> {missingRequired} {missingRequired === 1 ? "voce obbligatoria" : "voci obbligatorie"} non compilate — aggiungi una nota prima di inviare
           </p>
+        )}
+      </div>
+
+      {/* Reparto / postazione pulita */}
+      <div className="card p-4 mb-4">
+        <label className="form-label" htmlFor="checklist-department">Reparto / postazione *</label>
+        {departments.length ? (
+          <select id="checklist-department" className="form-input" value={departmentId || ""} onChange={e => selectDepartment(e.target.value)}>
+            {departments.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
+          </select>
+        ) : (
+          <p className="text-sm text-gray-500">Nessun reparto disponibile per il tuo account: chiedi a un amministratore di assegnartene uno.</p>
         )}
       </div>
 
@@ -373,18 +394,18 @@ export default function ChecklistPage() {
         <button
           className={clsx("btn btn-lg w-full gap-2 text-white transition-all",
             progress === 100 ? "bg-green-500 hover:bg-green-600" : "bg-[var(--brand-500)] hover:bg-[var(--brand-600)]",
-            (mutation.isPending || !selectedShift || !cleaningType) && "opacity-50 cursor-not-allowed"
+            (mutation.isPending || !departmentId || !selectedShift || !cleaningType) && "opacity-50 cursor-not-allowed"
           )}
-          disabled={mutation.isPending || !selectedShift || !cleaningType}
+          disabled={mutation.isPending || !departmentId || !selectedShift || !cleaningType}
           onClick={handleSubmit}>
           {mutation.isPending
             ? "Invio in corso..."
             : <><Send size={15}/> {progress === 100 ? "Invia checklist completa ✅" : `Invia (${checkedCount}/${totalItems})`}</>}
         </button>
 
-        {(!selectedShift || !cleaningType) && (
+        {(!departmentId || !selectedShift || !cleaningType) && (
           <p className="text-xs text-center text-gray-400 mt-2">
-            {!selectedShift ? "⬆ Seleziona il turno" : "⬆ Seleziona la tipologia di pulizia"}
+            {!departmentId ? "⬆ Seleziona il reparto" : !selectedShift ? "⬆ Seleziona il turno" : "⬆ Seleziona la tipologia di pulizia"}
           </p>
         )}
       </div>
@@ -396,7 +417,7 @@ export default function ChecklistPage() {
           {myToday.map(s => (
             <div key={s._id} className="flex items-center justify-between py-2.5 border-b last:border-0 border-gray-100 dark:border-gray-700">
               <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{s.shift}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{s.shift}{s.departmentName && <span className="text-gray-400 font-normal"> · {s.departmentName}</span>}</p>
                 <p className="text-xs text-gray-400">{s.cleaningType} · {fmtTime(s.createdAt)}</p>
               </div>
               <div className="flex items-center gap-2">

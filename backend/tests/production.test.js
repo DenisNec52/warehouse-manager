@@ -2,6 +2,8 @@ const request = require("supertest");
 const app  = require("../app");
 const db   = require("./db");
 const User = require("../models/User");
+const Department = require("../models/Department");
+const { runMigrations } = require("../utils/migrations");
 
 jest.setTimeout(60000);
 
@@ -23,7 +25,9 @@ async function stdId(agent, label) {
 
 const userId = async (username) => (await User.findOne({ username }))._id.toString();
 
+let seconda;   // reparto dei 9 tempi del foglio (assegnati dalla migrazione)
 const entryBody = (overrides) => ({
+  department: String(seconda._id),
   data: "2026-09-25",
   commessa: "2631",
   posizione: "1",
@@ -36,12 +40,14 @@ let capo, op1, op2;
 
 describe("Produzione saldatura (Andon Board)", () => {
   beforeEach(async () => {
+    await runMigrations({ log: () => {} });
+    seconda = await Department.findOne({ name: "Seconda Saldatura" });
     capo = await agentFor("capo", "supervisore", "Capo Reparto");
     op1  = await agentFor("alessandro", "operatore", "Alessandro");
     op2  = await agentFor("denis", "operatore", "Denis");
   });
 
-  test("al primo accesso la tabella si popola con i 9 tempi del foglio, senza duplicarli", async () => {
+  test("la migrazione assegna i 9 tempi del foglio a Seconda Saldatura, senza duplicarli", async () => {
     const res1 = await op1.get("/api/production/standard-times");
     expect(res1.body.standardTimes).toHaveLength(9);
     expect(res1.body.standardTimes.find(t => t.label === "IP65 Piccola").minuti).toBe(90);
@@ -51,7 +57,7 @@ describe("Produzione saldatura (Andon Board)", () => {
   });
 
   test("solo supervisore/admin gestiscono i tempi standard", async () => {
-    const body = { tipologia: "Custodia prova", dimensione: "", label: "Prova", minuti: 40 };
+    const body = { department: String(seconda._id), tipologia: "Custodia prova", dimensione: "", label: "Prova", minuti: 40 };
     expect((await op1.post("/api/production/standard-times").send(body)).status).toBe(403);
     expect((await capo.post("/api/production/standard-times").send(body)).status).toBe(201);
     expect((await capo.post("/api/production/standard-times").send(body)).status).toBe(409);
@@ -72,6 +78,7 @@ describe("Produzione saldatura (Andon Board)", () => {
     await op1.post("/api/production/entries").send(entryBody({ standardTime: id }));
 
     await capo.put(`/api/production/standard-times/${id}`).send({
+      department: String(seconda._id),
       tipologia: "Custodia IP65 (calandrata)", dimensione: "Piccola (DN80-DN150)", label: "IP65 Piccola", minuti: 120,
     });
 

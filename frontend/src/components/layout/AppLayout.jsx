@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Package, ArrowLeftRight, Tag, Users, Bell,
   Settings, LogOut, Menu, X, Sun, Moon, Palette,
-  Home, ClipboardCheck, ClipboardList, Timer, Clock, ShieldCheck
+  Home, ClipboardCheck, ClipboardList, Timer, Clock, ShieldCheck, Factory
 } from "lucide-react";
 import { useAuthStore, useThemeStore } from "@/lib/store";
 import { authAPI } from "@/lib/api";
@@ -43,6 +43,7 @@ const NAV_SUPERVISOR = [
 // Visibili solo ad admin
 const NAV_ADMIN = [
   { to:"/admin",           label:"Amministrazione", icon:ShieldCheck, exact:true },
+  { to:"/admin/departments", label:"Reparti",    icon:Factory       },
   { to:"/categories",      label:"Categorie",    icon:Tag           },
 ];
 

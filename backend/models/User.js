@@ -85,7 +85,32 @@ const userSchema = new mongoose.Schema({
   // mai il valore in chiaro, e scade dopo 1 ora.
   resetPasswordTokenHash: { type: String, select: false, default: null },
   resetPasswordExpires:   { type: Date, select: false, default: null },
+
+  // ── Reparti ───────────────────────────────────────────────────
+  // departments: gruppi a cui appartiene l'utente.
+  // visibleDepartments: eccezione individuale sui reparti visibili; null = uguale ai gruppi.
+  // Admin e supervisori vedono comunque tutti i reparti (vedi visibleDepartmentIds).
+  departments:        [{ type: mongoose.Schema.Types.ObjectId, ref: "Department" }],
+  visibleDepartments: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Department" }], default: null },
+
+  // Un solo super-admin (indice sotto): nessun altro può eliminarlo, disattivarlo,
+  // declassarlo o cambiargli password/badge. Non assegnabile via API.
+  isSuperAdmin: { type: Boolean, default: false },
 }, { timestamps: true });
+
+userSchema.index({ isSuperAdmin: 1 }, { unique: true, partialFilterExpression: { isSuperAdmin: true } });
+
+/**
+ * null = tutti i reparti; altrimenti gli id dei reparti visibili.
+ * Tutti: admin, supervisori e operatori non ancora assegnati a nessun reparto
+ * (così all'introduzione dei reparti nessuno resta bloccato finché un admin non li configura).
+ */
+userSchema.methods.visibleDepartmentIds = function() {
+  if (this.role === "admin" || this.role === "supervisore") return null;
+  if (Array.isArray(this.visibleDepartments)) return this.visibleDepartments.map(String);
+  const groups = this.departments || [];
+  return groups.length ? groups.map(String) : null;
+};
 
 // ── Hash password prima del salvataggio ───────────────────────
 userSchema.pre("save", async function(next) {
@@ -111,6 +136,11 @@ userSchema.methods.toPublic = function() {
     lastLogin:this.lastLogin,
     badgeEnabled:  this.badgeEnabled,
     badgeIssuedAt: this.badgeIssuedAt,
+    isSuperAdmin:       this.isSuperAdmin,
+    departments:        this.departments,
+    visibleDepartments: this.visibleDepartments,
+    // Per l'interfaccia: reparti effettivamente visibili (null = tutti)
+    visibleDepartmentIds: this.visibleDepartmentIds(),
   };
 };
 

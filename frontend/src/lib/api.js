@@ -127,7 +127,7 @@ export const checklistAPI = {
 };
 
 export const productionAPI = {
-  standardTimes:      ()     => api.get("/production/standard-times"),
+  standardTimes:      (p)    => api.get("/production/standard-times", { params: p }),
   createStandardTime: (d)    => api.post("/production/standard-times", d),
   updateStandardTime: (id,d) => api.put(`/production/standard-times/${id}`, d),
   deleteStandardTime: (id)   => api.delete(`/production/standard-times/${id}`),
@@ -136,5 +136,10 @@ export const productionAPI = {
   updateEntry:        (id,d) => api.put(`/production/entries/${id}`, d),
   deleteEntry:        (id)   => api.delete(`/production/entries/${id}`),
   stats:              (p)    => api.get("/production/stats", { params: p }),
+};
+export const departmentsAPI = {
+  list:   ()     => api.get("/departments"),
+  create: (d)    => api.post("/departments", d),
+  update: (id,d) => api.put(`/departments/${id}`, d),   // disattivazione: { isActive: false }
 };
 export default api;

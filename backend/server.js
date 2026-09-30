@@ -11,13 +11,16 @@ require("dotenv").config();
 require("./utils/validateEnv")();
 const mongoose = require("mongoose");
 const app      = require("./app");
+const { runMigrations } = require("./utils/migrations");
 
 const PORT = process.env.PORT || 5000;
 
 // ── Connect MongoDB + Start server ───────────────────────────
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => {
+  .then(async () => {
     console.log("✅  MongoDB connesso");
+    // Migrazioni dati prima di accettare richieste (una sola volta ciascuna, vedi utils/migrations.js)
+    await runMigrations();
     const server = app.listen(PORT, () =>
       console.log(`🚀  Server avviato sulla porta ${PORT} [${process.env.NODE_ENV}]`)
     );

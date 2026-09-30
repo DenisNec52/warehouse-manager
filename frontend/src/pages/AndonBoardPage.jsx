@@ -1,10 +1,11 @@
 /**
  * pages/AndonBoardPage.jsx
  *
- * Andon Board saldatura: righe di produzione con tempo standard atteso vs tempo impiegato.
+ * Andon Board per reparto: righe di produzione con tempo standard atteso vs tempo impiegato.
  * Il tempo standard si compila da solo dalla tipologia custodia (tabella Tempi standard).
  */
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Edit, Trash2, X, Timer, PauseCircle, Flag, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -13,6 +14,8 @@ import clsx from "clsx";
 import { productionAPI, usersAPI } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
 import { fmtMinutes, parseDuration, efficiencyBadge, toIsoDay } from "@/lib/duration";
+import { useSelectedDepartment } from "@/hooks/useDepartments";
+import DepartmentSelector from "@/components/ui/DepartmentSelector";
 
 const fmtDay = (iso) => (iso ? new Date(iso).toLocaleDateString("it-IT", { timeZone: "UTC", day: "2-digit", month: "2-digit", year: "2-digit" }) : "—");
 const isoFromDate = (iso) => (iso ? iso.slice(0, 10) : "");
@@ -26,7 +29,7 @@ function presetRange(preset) {
 }
 
 // ── Modale riga ───────────────────────────────────────────────
-function EntryModal({ entry, standardTimes, operators, onClose }) {
+function EntryModal({ entry, department, standardTimes, operators, onClose }) {
   const qc = useQueryClient();
   const { user } = useAuthStore();
   const [form, setForm] = useState({
@@ -64,6 +67,7 @@ function EntryModal({ entry, standardTimes, operators, onClose }) {
 
   const valid = form.data && form.commessa.trim() && quantita >= 1 && form.standardTime && impiegato > 0;
   const submit = () => mut.mutate({
+    department: department._id,
     data: form.data,
     operatore: form.operatore || undefined,
     commessa: form.commessa,
@@ -83,7 +87,10 @@ function EntryModal({ entry, standardTimes, operators, onClose }) {
       <motion.div initial={{opacity:0,scale:.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.95}}
         className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-900 rounded-[var(--radius-lg)] shadow-modal">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-          <h2 className="font-semibold text-gray-900 dark:text-white">{entry ? "Modifica riga" : "Nuova riga produzione"}</h2>
+          <div>
+            <h2 className="font-semibold text-gray-900 dark:text-white">{entry ? "Modifica riga" : "Nuova riga produzione"}</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Reparto: {department.name}</p>
+          </div>
           <button className="btn btn-ghost btn-sm p-1.5" onClick={onClose}><X size={16}/></button>
         </div>
         <div className="p-5 space-y-4">
@@ -189,6 +196,7 @@ function StatCard({ label, value, hint }) {
 export default function AndonBoardPage() {
   const { user } = useAuthStore();
   const isSupervisor = ["admin", "supervisore"].includes(user?.role);
+  const { departments, department, departmentId, select } = useSelectedDepartment("production");
   const [preset, setPreset] = useState("week");
   const [range, setRange] = useState(() => presetRange("week"));
   const [modal, setModal] = useState(null);
@@ -198,8 +206,9 @@ export default function AndonBoardPage() {
   const setDate = (k) => (e) => { setPreset("custom"); setRange(r => ({ ...r, [k]: e.target.value })); };
 
   const { data: standardTimes = [] } = useQuery({
-    queryKey: ["standard-times"],
-    queryFn: () => productionAPI.standardTimes().then(r => r.data.standardTimes),
+    queryKey: ["standard-times", departmentId],
+    queryFn: () => productionAPI.standardTimes({ department: departmentId }).then(r => r.data.standardTimes),
+    enabled: !!departmentId,
   });
   const { data: operators } = useQuery({
     queryKey: ["users"],
@@ -207,12 +216,14 @@ export default function AndonBoardPage() {
     enabled: isSupervisor,
   });
   const { data: entries, isLoading } = useQuery({
-    queryKey: ["production", "entries", range],
-    queryFn: () => productionAPI.entries(range).then(r => r.data.entries),
+    queryKey: ["production", "entries", range, departmentId],
+    queryFn: () => productionAPI.entries({ ...range, department: departmentId }).then(r => r.data.entries),
+    enabled: !!departmentId,
   });
   const { data: stats } = useQuery({
-    queryKey: ["production", "stats", range],
-    queryFn: () => productionAPI.stats(range).then(r => r.data),
+    queryKey: ["production", "stats", range, departmentId],
+    queryFn: () => productionAPI.stats({ ...range, department: departmentId }).then(r => r.data),
+    enabled: !!departmentId,
   });
 
   const delMut = useMutation({
@@ -232,13 +243,20 @@ export default function AndonBoardPage() {
     <div>
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Andon Board saldatura</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Tempo standard atteso vs tempo impiegato</p>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Andon Board</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Tempo standard atteso vs tempo impiegato{department ? ` — ${department.name}` : ""}</p>
         </div>
-        <button className="btn btn-md btn-primary gap-2" onClick={() => setModal("new")} disabled={!standardTimes.length}>
+        <button className="btn btn-md btn-primary gap-2" onClick={() => setModal("new")} disabled={!department || !standardTimes.length}>
           <Plus size={16}/> Nuova riga
         </button>
       </div>
+
+      <DepartmentSelector departments={departments} value={departmentId} onChange={select} className="mb-4"/>
+      {department && !standardTimes.length && (
+        <p className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-[var(--radius)] px-4 py-3 mb-4">
+          {department.name} non ha ancora tempi standard: aggiungili in <Link to="/production/standard-times" className="underline font-medium">Tempi standard</Link> per poter registrare righe.
+        </p>
+      )}
 
       <div className="card p-3 mb-4 flex gap-3 flex-wrap items-center">
         <div className="flex gap-2">
@@ -349,9 +367,10 @@ export default function AndonBoardPage() {
       </div>
 
       <AnimatePresence>
-        {modal && (
+        {modal && department && (
           <EntryModal
             entry={modal === "new" ? null : modal}
+            department={department}
             standardTimes={standardTimes}
             operators={isSupervisor ? operators : null}
             onClose={() => setModal(null)}

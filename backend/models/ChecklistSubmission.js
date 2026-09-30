@@ -15,6 +15,10 @@ const responseSchema = new mongoose.Schema({
 const submissionSchema = new mongoose.Schema({
   checklist:    { type: mongoose.Schema.Types.ObjectId, ref: "Checklist", required: true },
   shift:        { type: String, required: true },
+  // Reparto/postazione pulita: obbligatorio per le compilazioni nuove (validato nella route),
+  // assente in quelle precedenti all'introduzione dei reparti ("non specificato").
+  department:     { type: mongoose.Schema.Types.ObjectId, ref: "Department", default: null },
+  departmentName: { type: String, default: "" },
   cleaningType: { type: String, required: true },
   date:         { type: String, required: true },  // YYYY-MM-DD
   responses:    [responseSchema],

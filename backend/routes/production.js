@@ -9,6 +9,7 @@ const ProductionEntry = require("../models/ProductionEntry");
 const User            = require("../models/User");
 const { protect, requireSupervisor } = require("../middleware/auth");
 const validate = require("../middleware/validate");
+const { checkDepartment, visibleScope } = require("../utils/departmentAccess");
 const router   = express.Router();
 
 // Express 4 does not forward rejected promises: without this, a DB error in an async
@@ -25,41 +26,32 @@ router.use(protect);
 
 const isSupervisor = (user) => ["admin", "supervisore"].includes(user?.role);
 
-// Valori del foglio "TEMPI STANDARD" di reparto, usati solo se la collezione è vuota.
-const DEFAULT_STANDARD_TIMES = [
-  { tipologia: "Custodia quadra saldata al flangiato",  dimensione: "",                    label: "Quadra saldata",   minuti: 210 },
-  { tipologia: "Custodia quadra avvitata al flangiato", dimensione: "",                    label: "Quadra avvitata",  minuti: 60 },
-  { tipologia: "Custodia ATEX (sp.>10mm)",              dimensione: "Piccola (DN80-DN150)", label: "ATEX Piccola",     minuti: 30 },
-  { tipologia: "Custodia ATEX (sp.>10mm)",              dimensione: "Media (DN200-DN300)",  label: "ATEX Media",       minuti: 45 },
-  { tipologia: "Custodia ATEX (sp.>10mm)",              dimensione: "Grande (>DN400)",      label: "ATEX Grande",      minuti: 90 },
-  { tipologia: "Custodia IP65 (calandrata)",            dimensione: "Piccola (DN80-DN150)", label: "IP65 Piccola",     minuti: 90 },
-  { tipologia: "Custodia IP65 (calandrata)",            dimensione: "Media (DN200-DN300)",  label: "IP65 Media",       minuti: 120 },
-  { tipologia: "Custodia IP65 (calandrata)",            dimensione: "Grande (>DN400)",      label: "IP65 Grande",      minuti: 150 },
-  { tipologia: "Custodia NEMA",                         dimensione: "",                    label: "NEMA",             minuti: 30 },
-];
-
-async function ensureDefaultStandardTimes() {
-  if (await StandardTime.estimatedDocumentCount() > 0) return;
-  try {
-    await StandardTime.insertMany(DEFAULT_STANDARD_TIMES, { ordered: false });
-  } catch (err) {
-    if (err.code !== 11000) throw err;  // richieste concorrenti: l'altra ha già inserito
-  }
-}
-
 /** "YYYY-MM-DD" -> Date a mezzanotte UTC, così il giorno non slitta col fuso. */
 const dayStart = (iso) => new Date(`${iso}T00:00:00.000Z`);
 const isoDate  = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(dayStart(v).getTime());
 
 // ── Tempi standard ────────────────────────────────────────────
 
-router.get("/standard-times", async (_req, res) => {
-  await ensureDefaultStandardTimes();
-  const items = await StandardTime.find({ isActive: true }).sort({ tipologia: 1, minuti: 1 }).lean();
+/**
+ * Filtro reparto per le letture: ?department=<id> (verificato) oppure, se assente,
+ * tutti i reparti visibili all'utente. Risponde lui con l'errore e restituisce null.
+ */
+async function departmentFilter(req, res) {
+  if (!req.query.department) return visibleScope(req.user);
+  const check = await checkDepartment(req.user, req.query.department);
+  if (check.status) { res.status(check.status).json({ message: check.message }); return null; }
+  return { department: check.department._id };
+}
+
+router.get("/standard-times", async (req, res) => {
+  const scope = await departmentFilter(req, res);
+  if (!scope) return;
+  const items = await StandardTime.find({ ...scope, isActive: true }).sort({ tipologia: 1, minuti: 1 }).lean();
   res.json({ standardTimes: items });
 });
 
 const standardTimeRules = [
+  body("department").optional().isMongoId().withMessage("Reparto non valido"),
   body("tipologia").trim().notEmpty().withMessage("Tipologia obbligatoria"),
   body("dimensione").optional().trim(),
   body("label").trim().notEmpty().withMessage("Nome breve obbligatorio"),
@@ -67,12 +59,16 @@ const standardTimeRules = [
 ];
 
 router.post("/standard-times", requireSupervisor, standardTimeRules, validate, async (req, res) => {
+  const check = await checkDepartment(req.user, req.body.department, { forWrite: true });
+  if (check.status) return res.status(check.status).json({ message: check.message });
   const { tipologia, dimensione = "", label, minuti } = req.body;
   try {
-    const item = await StandardTime.create({ tipologia, dimensione, label, minuti, updatedBy: req.user._id });
+    const item = await StandardTime.create({
+      department: check.department._id, tipologia, dimensione, label, minuti, updatedBy: req.user._id,
+    });
     res.status(201).json({ standardTime: item });
   } catch (err) {
-    if (err.code === 11000) return res.status(409).json({ message: "Esiste già un tempo per questa tipologia e dimensione." });
+    if (err.code === 11000) return res.status(409).json({ message: "In questo reparto esiste già un tempo per questa tipologia e dimensione." });
     res.status(500).json({ message: "Errore." });
   }
 });
@@ -89,7 +85,7 @@ router.put("/standard-times/:id", requireSupervisor, standardTimeRules, validate
     if (!item) return res.status(404).json({ message: "Tempo standard non trovato." });
     res.json({ standardTime: item });
   } catch (err) {
-    if (err.code === 11000) return res.status(409).json({ message: "Esiste già un tempo per questa tipologia e dimensione." });
+    if (err.code === 11000) return res.status(409).json({ message: "In questo reparto esiste già un tempo per questa tipologia e dimensione." });
     res.status(500).json({ message: "Errore." });
   }
 });
@@ -125,13 +121,16 @@ function periodFilter(q) {
 }
 
 router.get("/entries", periodRules, validate, async (req, res) => {
-  const entries = await ProductionEntry.find(periodFilter(req.query))
+  const scope = await departmentFilter(req, res);
+  if (!scope) return;
+  const entries = await ProductionEntry.find({ ...periodFilter(req.query), ...scope })
     .sort({ data: -1, createdAt: -1 })
     .limit(500);
   res.json({ entries });
 });
 
 const entryRules = [
+  body("department").optional().isMongoId().withMessage("Reparto non valido"),
   body("data").custom(isoDate).withMessage("Data non valida (YYYY-MM-DD)"),
   body("commessa").trim().notEmpty().withMessage("Numero commessa obbligatorio"),
   body("posizione").optional().trim(),
@@ -150,18 +149,23 @@ const entryRules = [
  * In modifica, se la tipologia non cambia, la riga tiene il suo snapshot originale:
  * correggere i pezzi di una riga vecchia non deve applicarle il tempo attuale della tabella.
  */
-async function buildEntryFields(req, existing = null) {
+async function buildEntryFields(req, department, existing = null) {
   let snapshot;
-  if (existing && String(existing.standardTime) === String(req.body.standardTime)) {
+  const sameStd = existing && String(existing.standardTime) === String(req.body.standardTime)
+    && String(existing.department) === String(department._id);
+  if (sameStd) {
     snapshot = { standardTime: existing.standardTime, custodiaLabel: existing.custodiaLabel, tempoStdMinuti: existing.tempoStdMinuti };
   } else {
-    const std = await StandardTime.findOne({ _id: req.body.standardTime, isActive: true });
-    if (!std) return { error: "Tipologia custodia non trovata." };
+    // La tipologia deve essere un tempo standard attivo dello stesso reparto della riga.
+    const std = await StandardTime.findOne({ _id: req.body.standardTime, isActive: true, department: department._id });
+    if (!std) return { error: "Tipologia custodia non trovata in questo reparto." };
     snapshot = { standardTime: std._id, custodiaLabel: std.label, tempoStdMinuti: std.minuti };
   }
   const b = req.body;
   return {
     fields: {
+      department: department._id,
+      departmentName: department.name,
       data: dayStart(b.data),
       commessa: b.commessa,
       posizione: b.posizione || "",
@@ -187,7 +191,9 @@ async function resolveOperatore(req, fallbackUser) {
 }
 
 router.post("/entries", entryRules, validate, async (req, res) => {
-  const { fields, error } = await buildEntryFields(req);
+  const check = await checkDepartment(req.user, req.body.department, { forWrite: true });
+  if (check.status) return res.status(check.status).json({ message: check.message });
+  const { fields, error } = await buildEntryFields(req, check.department);
   if (error) return res.status(400).json({ message: error });
   const op = await resolveOperatore(req, req.user);
   if (op.error) return res.status(op.status).json({ message: op.error });
@@ -205,6 +211,11 @@ async function loadEditableEntry(req, res) {
   if (!mongoose.isValidObjectId(req.params.id)) { res.status(404).json({ message: "Riga non trovata." }); return null; }
   const entry = await ProductionEntry.findById(req.params.id);
   if (!entry) { res.status(404).json({ message: "Riga non trovata." }); return null; }
+  const visible = req.user.visibleDepartmentIds();
+  if (visible && !visible.includes(String(entry.department))) {
+    res.status(403).json({ message: "Non hai accesso a questo reparto." });
+    return null;
+  }
   if (!isSupervisor(req.user) && String(entry.operatore) !== String(req.user._id)) {
     res.status(403).json({ message: "Puoi modificare solo le tue righe." });
     return null;
@@ -215,7 +226,13 @@ async function loadEditableEntry(req, res) {
 router.put("/entries/:id", entryRules, validate, async (req, res) => {
   const entry = await loadEditableEntry(req, res);
   if (!entry) return;
-  const { fields, error } = await buildEntryFields(req, entry);
+  // La riga resta nel suo reparto (anche se nel frattempo disattivato); spostarla richiede
+  // accesso al nuovo reparto, che deve essere attivo.
+  const target = req.body.department || String(entry.department);
+  const moving = target !== String(entry.department);
+  const check = await checkDepartment(req.user, target, { forWrite: moving });
+  if (check.status) return res.status(check.status).json({ message: check.message });
+  const { fields, error } = await buildEntryFields(req, check.department, entry);
   if (error) return res.status(400).json({ message: error });
 
   // L'operatore della riga cambia solo se un supervisore lo chiede esplicitamente.
@@ -240,7 +257,9 @@ router.delete("/entries/:id", async (req, res) => {
 // ── Confronto tempo standard vs impiegato ─────────────────────
 
 router.get("/stats", periodRules, validate, async (req, res) => {
-  const match = periodFilter(req.query);
+  const scope = await departmentFilter(req, res);
+  if (!scope) return;
+  const match = { ...periodFilter(req.query), ...scope };
   const sums = {
     righe:          { $sum: 1 },
     pezzi:          { $sum: "$quantita" },

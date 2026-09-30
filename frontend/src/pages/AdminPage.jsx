@@ -7,15 +7,17 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { Package, ArrowLeftRight, Tag, Users, ClipboardList, Timer, Clock, Settings, Bell } from "lucide-react";
+import { Package, ArrowLeftRight, Tag, Users, ClipboardList, Timer, Clock, Settings, Bell, Factory } from "lucide-react";
 import { dashboardAPI, categoriesAPI, productionAPI } from "@/lib/api";
+import { useDepartmentList } from "@/hooks/useDepartments";
 import { toIsoDay } from "@/lib/duration";
 
 const AREAS = [
   { to: "/products",                   icon: Package,        title: "Prodotti",       desc: "Crea, modifica, elimina prodotti, soglie e foto", countKey: "products" },
   { to: "/movements",                  icon: ArrowLeftRight, title: "Movimenti",      desc: "Correggi o annulla entrate e uscite: la giacenza si riallinea da sola", countKey: "movements" },
   { to: "/categories",                 icon: Tag,            title: "Categorie",      desc: "Nomi, colori e icone delle categorie", countKey: "categories" },
-  { to: "/users",                      icon: Users,          title: "Utenti",         desc: "Ruoli, password, attivazione e badge QR/NFC", countKey: "users" },
+  { to: "/admin/departments",          icon: Factory,        title: "Reparti",        desc: "Postazioni per 5S, Tempi standard e Andon Board: aggiungi, rinomina, ordina, disattiva", countKey: "departments" },
+  { to: "/users",                      icon: Users,          title: "Utenti",         desc: "Ruoli, reparti e visibilità, password, attivazione e badge QR/NFC", countKey: "users" },
   { to: "/admin/checklist",            icon: ClipboardList,  title: "Pulizia 5S",     desc: "Configurazione checklist e turni, correzione delle compilazioni", countKey: null },
   { to: "/production",                 icon: Timer,          title: "Andon Board",    desc: "Modifica ed elimina qualsiasi riga di produzione", countKey: "production" },
   { to: "/production/standard-times",  icon: Clock,          title: "Tempi standard", desc: "Tempi di saldatura per tipologia di custodia", countKey: "standardTimes" },
@@ -32,12 +34,14 @@ function useCounts() {
     queryKey: ["production", "stats", { from: today, to: today }],
     queryFn:  () => productionAPI.stats({ from: today, to: today }).then(r => r.data.totale),
   });
+  const { data: depts } = useDepartmentList();
   const s = dash?.stats;
   return {
     products:      s ? `${s.totalProducts}` : null,
     movements:     s ? `${s.todayMovements} oggi` : null,
     users:         s ? `${s.totalUsers} attivi` : null,
     categories:    cats ? `${cats.length}` : null,
+    departments:   depts ? `${depts.filter(d => d.isActive).length} attivi` : null,
     standardTimes: std ? `${std.length}` : null,
     production:    andon ? `${andon.righe} oggi` : null,
   };

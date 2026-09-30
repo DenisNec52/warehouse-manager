@@ -11,6 +11,8 @@ const mongoose = require("mongoose");
 
 const productionEntrySchema = new mongoose.Schema({
   data:           { type: Date, required: true, index: true },            // giorno di lavoro
+  department:     { type: mongoose.Schema.Types.ObjectId, ref: "Department", required: true, index: true },
+  departmentName: { type: String, trim: true, default: "" },              // snapshot per report e storico
   operatore:      { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
   operatoreNome:  { type: String, required: true, trim: true },           // snapshot per report e storico
   commessa:       { type: String, required: true, trim: true, index: true },

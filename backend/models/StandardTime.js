@@ -7,6 +7,7 @@
 const mongoose = require("mongoose");
 
 const standardTimeSchema = new mongoose.Schema({
+  department: { type: mongoose.Schema.Types.ObjectId, ref: "Department", required: true, index: true },
   tipologia:  { type: String, required: true, trim: true },            // es. "Custodia IP65 (calandrata)"
   dimensione: { type: String, trim: true, default: "" },               // es. "Piccola (DN80-DN150)", "" se unica
   label:      { type: String, required: true, trim: true },            // nome breve per il reparto, es. "IP65 Piccola"
@@ -15,6 +16,8 @@ const standardTimeSchema = new mongoose.Schema({
   updatedBy:  { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 }, { timestamps: true });
 
-standardTimeSchema.index({ tipologia: 1, dimensione: 1 }, { unique: true });
+// Stessa tipologia ammessa in reparti diversi (il vecchio indice tipologia+dimensione
+// viene rimosso dalla migrazione "departments", vedi utils/migrations.js).
+standardTimeSchema.index({ department: 1, tipologia: 1, dimensione: 1 }, { unique: true });
 
 module.exports = mongoose.model("StandardTime", standardTimeSchema);

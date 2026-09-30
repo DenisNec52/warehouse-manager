@@ -1,8 +1,8 @@
 /**
  * pages/StandardTimesPage.jsx
  *
- * Tabella "Tempi standard" di saldatura per tipologia/dimensione custodia.
- * Consultabile da tutti, modificabile da supervisore e admin.
+ * Tabella "Tempi standard" per reparto e tipologia/dimensione custodia.
+ * Consultabile da tutti (nei propri reparti), modificabile da supervisore e admin.
  */
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -12,8 +12,10 @@ import toast from "react-hot-toast";
 import { productionAPI } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
 import { fmtMinutes, parseDuration } from "@/lib/duration";
+import { useSelectedDepartment } from "@/hooks/useDepartments";
+import DepartmentSelector from "@/components/ui/DepartmentSelector";
 
-function StandardTimeModal({ item, onClose }) {
+function StandardTimeModal({ item, department, onClose }) {
   const qc = useQueryClient();
   const [form, setForm] = useState({
     tipologia:  item?.tipologia  || "",
@@ -36,7 +38,10 @@ function StandardTimeModal({ item, onClose }) {
       <motion.div initial={{opacity:0,scale:.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.95}}
         className="relative z-10 w-full max-w-md bg-white dark:bg-gray-900 rounded-[var(--radius-lg)] shadow-modal">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-          <h2 className="font-semibold text-gray-900 dark:text-white">{item ? "Modifica tempo standard" : "Nuovo tempo standard"}</h2>
+          <div>
+            <h2 className="font-semibold text-gray-900 dark:text-white">{item ? "Modifica tempo standard" : "Nuovo tempo standard"}</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Reparto: {department.name}</p>
+          </div>
           <button className="btn btn-ghost btn-sm p-1.5" onClick={onClose}><X size={16}/></button>
         </div>
         <div className="p-5 space-y-4">
@@ -62,7 +67,7 @@ function StandardTimeModal({ item, onClose }) {
           <div className="flex gap-3">
             <button className="btn btn-md btn-secondary flex-1" onClick={onClose}>Annulla</button>
             <button className="btn btn-md btn-primary flex-1" disabled={mut.isPending || !valid}
-              onClick={() => mut.mutate({ tipologia: form.tipologia, dimensione: form.dimensione, label: form.label, minuti })}>
+              onClick={() => mut.mutate({ department: department._id, tipologia: form.tipologia, dimensione: form.dimensione, label: form.label, minuti })}>
               {mut.isPending ? "..." : "Salva"}
             </button>
           </div>
@@ -77,9 +82,11 @@ export default function StandardTimesPage() {
   const canEdit = ["admin", "supervisore"].includes(user?.role);
   const [modal, setModal] = useState(null);
   const qc = useQueryClient();
+  const { departments, department, departmentId, select } = useSelectedDepartment("production");
   const { data, isLoading } = useQuery({
-    queryKey: ["standard-times"],
-    queryFn: () => productionAPI.standardTimes().then(r => r.data.standardTimes),
+    queryKey: ["standard-times", departmentId],
+    queryFn: () => productionAPI.standardTimes({ department: departmentId }).then(r => r.data.standardTimes),
+    enabled: !!departmentId,
   });
   const delMut = useMutation({
     mutationFn: id => productionAPI.deleteStandardTime(id),
@@ -92,10 +99,12 @@ export default function StandardTimesPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Tempi standard</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Tempo di saldatura per singola custodia</p>
+          <p className="text-sm text-gray-500 mt-0.5">Tempo per singola custodia{department ? ` — ${department.name}` : ""}</p>
         </div>
-        {canEdit && <button className="btn btn-md btn-primary gap-2" onClick={() => setModal("new")}><Plus size={16}/> Nuovo</button>}
+        {canEdit && department && <button className="btn btn-md btn-primary gap-2" onClick={() => setModal("new")}><Plus size={16}/> Nuovo</button>}
       </div>
+
+      <DepartmentSelector departments={departments} value={departmentId} onChange={select} className="mb-4"/>
 
       <div className="card overflow-hidden">
         {isLoading ? (
@@ -122,13 +131,18 @@ export default function StandardTimesPage() {
                 ))}
               </tbody>
             </table>
-            {!data?.length && <div className="py-12 text-center text-gray-400">Nessun tempo standard</div>}
+            {!data?.length && (
+              <div className="py-12 text-center text-gray-400">
+                Nessun tempo standard{department ? ` in ${department.name}` : ""}
+                {canEdit && department && <p className="text-xs mt-1">Aggiungili con "Nuovo".</p>}
+              </div>
+            )}
           </div>
         )}
       </div>
 
       <AnimatePresence>
-        {modal && <StandardTimeModal item={modal === "new" ? null : modal} onClose={() => setModal(null)}/>}
+        {modal && department && <StandardTimeModal item={modal === "new" ? null : modal} department={department} onClose={() => setModal(null)}/>}
       </AnimatePresence>
     </div>
   );

@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend } from "recharts";
 import { CheckCircle, XCircle, Minus, ChevronDown, ChevronUp, Plus, Trash2, Save, Pencil } from "lucide-react";
 import { checklistAPI } from "@/lib/api";
+import { useDepartmentList } from "@/hooks/useDepartments";
 import { scoreColor, fmtTime } from "@/lib/format";
 import ScoreCircle from "@/components/ui/ScoreCircle";
 import { useAuthStore } from "@/lib/store";
@@ -192,11 +193,15 @@ function SubmissionEditor({ sub, config, onDone }) {
   const [shift,        setShift]        = useState(sub.shift);
   const [cleaningType, setCleaningType] = useState(sub.cleaningType);
   const [date,         setDate]         = useState(sub.date);
+  const [department,   setDepartment]   = useState(sub.department ? String(sub.department) : "");
+  const { data: allDepartments = [] } = useDepartmentList();
+  // Reparti attivi + quello già compilato (anche se nel frattempo disattivato)
+  const departmentOptions = allDepartments.filter(d => d.isActive || d._id === department);
   const [generalNote,  setGeneralNote]  = useState(sub.generalNote || "");
   const [responses,    setResponses]    = useState(sub.responses.map(r => ({ checked: r.checked, note: r.note || "" })));
 
   const mut = useMutation({
-    mutationFn: () => checklistAPI.updateSubmission(sub._id, { shift, cleaningType, date, generalNote, responses }),
+    mutationFn: () => checklistAPI.updateSubmission(sub._id, { shift, cleaningType, date, generalNote, responses, ...(department && { department }) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["checklist-submissions"] });
       qc.invalidateQueries({ queryKey: ["checklist-monthly"] });
@@ -215,7 +220,14 @@ function SubmissionEditor({ sub, config, onDone }) {
 
   return (
     <div className="mt-3 space-y-3">
-      <div className="grid sm:grid-cols-3 gap-3">
+      <div className="grid sm:grid-cols-4 gap-3">
+        <div>
+          <label className="form-label">Reparto</label>
+          <select className="form-input" value={department} onChange={e => setDepartment(e.target.value)}>
+            {!department && <option value="">Non specificato</option>}
+            {departmentOptions.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
+          </select>
+        </div>
         <div>
           <label className="form-label">Turno</label>
           <select className="form-input" value={shift} onChange={e => setShift(e.target.value)}>
@@ -324,7 +336,7 @@ function TabSubmissions() {
                     </span>
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {sub.shift} · {sub.cleaningType} · {fmtTime(sub.createdAt)}
+                    {sub.departmentName || "Reparto non specificato"} · {sub.shift} · {sub.cleaningType} · {fmtTime(sub.createdAt)}
                   </p>
                 </div>
               </div>

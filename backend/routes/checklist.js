@@ -8,6 +8,7 @@ const Checklist           = require("../models/Checklist");
 const ChecklistSubmission = require("../models/ChecklistSubmission");
 const { protect, requireAdmin, requireSupervisor } = require("../middleware/auth");
 const validate = require("../middleware/validate");
+const { checkDepartment } = require("../utils/departmentAccess");
 
 const router = express.Router();
 router.use(protect);
@@ -134,12 +135,13 @@ router.get("/submissions/today", requireSupervisor, async (req, res) => {
 // ── GET /api/checklist/submissions (admin/supervisore) ─────────
 router.get("/submissions", requireSupervisor, async (req, res) => {
   try {
-    const { page = 1, limit = 50, date, shift, userId, month } = req.query;
+    const { page = 1, limit = 50, date, shift, userId, month, department } = req.query;
     const filter = {};
     if (date)   filter.date  = date;
     if (shift)  filter.shift = shift;
     if (userId) filter.submittedBy = userId;
     if (month)  filter.date = { $regex: `^${month}` };  // YYYY-MM
+    if (department && mongoose.isValidObjectId(department)) filter.department = department;
 
     const skip  = (parseInt(page) - 1) * parseInt(limit);
     const total = await ChecklistSubmission.countDocuments(filter);
@@ -252,6 +254,7 @@ router.post("/submit",
     body("shift").trim().notEmpty().withMessage("Seleziona il turno"),
     body("cleaningType").trim().notEmpty().withMessage("Seleziona la tipologia di pulizia"),
     body("responses").isArray({ min: 1 }).withMessage("Risposte obbligatorie"),
+    body("department").notEmpty().withMessage("Seleziona il reparto/postazione").bail().isMongoId().withMessage("Reparto non valido"),
   ],
   validate,
   async (req, res) => {
@@ -259,9 +262,13 @@ router.post("/submit",
       const { shift, cleaningType, responses, generalNote } = req.body;
       const today = new Date().toISOString().slice(0, 10);
 
-      // Controlla duplicato turno
-      const existing = await ChecklistSubmission.findOne({ submittedBy: req.user._id, date: today, shift });
-      if (existing) return res.status(409).json({ message: `Hai già compilato la checklist per "${shift}" oggi.`, submission: existing });
+      const check = await checkDepartment(req.user, req.body.department, { forWrite: true });
+      if (check.status) return res.status(check.status).json({ message: check.message });
+      const department = check.department;
+
+      // Una compilazione per utente, giorno, turno e reparto (due postazioni nello stesso turno = due righe)
+      const existing = await ChecklistSubmission.findOne({ submittedBy: req.user._id, date: today, shift, department: department._id });
+      if (existing) return res.status(409).json({ message: `Hai già compilato la checklist per "${shift}" in ${department.name} oggi.`, submission: existing });
 
       const cl = await Checklist.findOne({ active: true });
       if (!cl) return res.status(404).json({ message: "Checklist non trovata." });
@@ -271,6 +278,8 @@ router.post("/submit",
       const sub = await ChecklistSubmission.create({
         checklist:       cl._id,
         shift, cleaningType,
+        department:      department._id,
+        departmentName:  department.name,
         date:            today,
         responses,
         generalNote:     generalNote || "",
@@ -295,6 +304,7 @@ router.put("/submissions/:id", requireAdmin,
     body("date").optional().matches(/^\d{4}-\d{2}-\d{2}$/).withMessage("Data non valida (YYYY-MM-DD)"),
     body("generalNote").optional().trim(),
     body("responses").optional().isArray().withMessage("Risposte non valide"),
+    body("department").optional().isMongoId().withMessage("Reparto non valido"),
   ],
   validate,
   async (req, res) => {
@@ -315,7 +325,15 @@ router.put("/submissions/:id", requireAdmin,
         }));
       }
 
-      const slotChanged = (shift !== undefined && shift !== sub.shift) || (date !== undefined && date !== sub.date);
+      let deptChanged = false;
+      if (req.body.department && req.body.department !== String(sub.department)) {
+        const check = await checkDepartment(req.user, req.body.department);
+        if (check.status) return res.status(check.status).json({ message: check.message });
+        sub.department = check.department._id;
+        sub.departmentName = check.department.name;
+        deptChanged = true;
+      }
+      const slotChanged = deptChanged || (shift !== undefined && shift !== sub.shift) || (date !== undefined && date !== sub.date);
       if (shift !== undefined)        sub.shift = shift;
       if (cleaningType !== undefined) sub.cleaningType = cleaningType;
       if (date !== undefined)         sub.date = date;
@@ -323,8 +341,10 @@ router.put("/submissions/:id", requireAdmin,
 
       // Stessa regola dell'invio: una compilazione per utente, giorno e turno.
       if (slotChanged) {
-        const clash = await ChecklistSubmission.exists({ submittedBy: sub.submittedBy, date: sub.date, shift: sub.shift, _id: { $ne: sub._id } });
-        if (clash) return res.status(409).json({ message: `Esiste già una compilazione di ${sub.submittedByName} per "${sub.shift}" il ${sub.date}.` });
+        const clash = await ChecklistSubmission.exists({
+          submittedBy: sub.submittedBy, date: sub.date, shift: sub.shift, department: sub.department, _id: { $ne: sub._id },
+        });
+        if (clash) return res.status(409).json({ message: `Esiste già una compilazione di ${sub.submittedByName} per "${sub.shift}"${sub.departmentName ? " in " + sub.departmentName : ""} il ${sub.date}.` });
       }
 
       sub.set(scoreOf(sub.responses));
