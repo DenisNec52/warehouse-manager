@@ -7,7 +7,7 @@
  */
 import { useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { Package, Eye, EyeOff, AlertCircle, ArrowLeft } from "lucide-react";
 import { authAPI } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";

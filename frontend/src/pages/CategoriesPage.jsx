@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Edit, Trash2, X } from "lucide-react";
 import { categoriesAPI } from "@/lib/api";
-import { motion, AnimatePresence } from "framer-motion";
+import { m as motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 
 const COLORS = ["#3b82f6","#10b981","#f97316","#ef4444","#8b5cf6","#06b6d4","#f59e0b","#ec4899"];

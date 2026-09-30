@@ -1,15 +1,19 @@
 /**
  * pages/ProductsPage.jsx
  */
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useCallback, memo, lazy, Suspense } from "react";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { m as motion, AnimatePresence } from "framer-motion";
 import { Plus, Search, Edit, Trash2, Eye, AlertTriangle, X, Package, ArrowDown, ArrowUp } from "lucide-react";
 import { productsAPI, categoriesAPI, movementsAPI } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
 import { Link, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import clsx from "clsx";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+
+// Pulsante fotocamera (scansione IA): solo nella pagina Magazzino, caricato on-demand
+const VisionScanner = lazy(() => import("@/components/ui/VisionScanner"));
 
 export function ProductModal({ product, categories, onClose }) {
   const qc = useQueryClient();
@@ -232,6 +236,63 @@ export function MovementModal({ product, onClose, defaultType = "IN" }) {
   );
 }
 
+// Riga memoizzata: digitare nella ricerca o aprire un modale non ridisegna tutte le righe
+const ProductRow = memo(function ProductRow({ p, isAdmin, onMove, onEdit, onDelete }) {
+  return (
+    <tr>
+      <td>
+        <code className="text-sm font-bold bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+          {p.code}
+        </code>
+        {p.isLowStock && (
+          <div className="flex items-center gap-1 text-xs text-yellow-600 mt-0.5">
+            <AlertTriangle size={10}/> Scorta bassa
+          </div>
+        )}
+      </td>
+      <td>
+        {p.category
+          ? <span className="badge badge-gray gap-1">{p.category.icon} {p.category.name}</span>
+          : <span className="text-gray-300">—</span>}
+      </td>
+      <td className="text-sm text-gray-500">
+        {p.floor || p.pallet
+          ? <>{p.floor ? `Piano ${p.floor}` : "Piano ?"} · {p.pallet ? `Pedana ${p.pallet}` : "Pedana ?"}</>
+          : <span className="text-gray-300">—</span>}
+      </td>
+      <td>
+        <span className={clsx("font-semibold tabular-nums text-lg",
+          p.isLowStock ? "text-yellow-600" : "text-gray-900 dark:text-white")}>
+          {p.quantity}
+        </span>
+        <span className="text-gray-400 text-xs ml-1">{p.unit}</span>
+      </td>
+      <td className="text-gray-500 text-sm max-w-[150px] truncate">{p.notes || "—"}</td>
+      <td>
+        <div className="flex items-center gap-1">
+          <button className="btn btn-ghost btn-sm p-1.5 text-green-600"
+            title="Movimento rapido" onClick={() => onMove(p)}>
+            <ArrowDown size={14}/>
+          </button>
+          <Link to={"/products/" + p._id} className="btn btn-ghost btn-sm p-1.5" title="Dettaglio">
+            <Eye size={14}/>
+          </Link>
+          <button className="btn btn-ghost btn-sm p-1.5" title="Modifica"
+            onClick={() => onEdit(p)}>
+            <Edit size={14}/>
+          </button>
+          {isAdmin && (
+            <button className="btn btn-ghost btn-sm p-1.5 text-red-500" title="Elimina"
+              onClick={() => onDelete(p)}>
+              <Trash2 size={14}/>
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+});
+
 export default function ProductsPage() {
   const { user } = useAuthStore();
   const isAdmin  = user?.role === "admin";
@@ -245,8 +306,10 @@ export default function ProductsPage() {
   const qc = useQueryClient();
   const [sp] = useSearchParams();
 
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+
   const params = {
-    search:   search   || undefined,
+    search:   debouncedSearch || undefined,
     category: category || undefined,
     lowStock: (lowOnly || sp.get("lowStock") === "true") ? "true" : undefined,
     page,
@@ -256,6 +319,7 @@ export default function ProductsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["products", params],
     queryFn:  () => productsAPI.list(params).then(r => r.data),
+    placeholderData: keepPreviousData,   // niente lampeggio della tabella tra una ricerca e l'altra
   });
 
   const { data: cats } = useQuery({
@@ -269,15 +333,16 @@ export default function ProductsPage() {
     onError:    () => toast.error("Errore eliminazione"),
   });
 
-  const handleDelete = (p) => {
+  const { mutate: deleteProduct } = deleteMutation;
+  const handleDelete = useCallback((p) => {
     if (!confirm("Eliminare \"" + p.name + "\"?")) return;
-    deleteMutation.mutate(p._id);
-  };
+    deleteProduct(p._id);
+  }, [deleteProduct]);
 
-  const openModal = (val) => {
+  const openModal = useCallback((val) => {
     setFrozenCats(cats || []);
     setModal(val);
-  };
+  }, [cats]);
 
   return (
     <div>
@@ -324,57 +389,7 @@ export default function ProductsPage() {
               </thead>
               <tbody>
                 {(data?.products || []).map(p => (
-                  <tr key={p._id}>
-                    <td>
-                      <code className="text-sm font-bold bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
-                        {p.code}
-                      </code>
-                      {p.isLowStock && (
-                        <div className="flex items-center gap-1 text-xs text-yellow-600 mt-0.5">
-                          <AlertTriangle size={10}/> Scorta bassa
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      {p.category
-                        ? <span className="badge badge-gray gap-1">{p.category.icon} {p.category.name}</span>
-                        : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="text-sm text-gray-500">
-                      {p.floor || p.pallet
-                        ? <>{p.floor ? `Piano ${p.floor}` : "Piano ?"} · {p.pallet ? `Pedana ${p.pallet}` : "Pedana ?"}</>
-                        : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td>
-                      <span className={clsx("font-semibold tabular-nums text-lg",
-                        p.isLowStock ? "text-yellow-600" : "text-gray-900 dark:text-white")}>
-                        {p.quantity}
-                      </span>
-                      <span className="text-gray-400 text-xs ml-1">{p.unit}</span>
-                    </td>
-                    <td className="text-gray-500 text-sm max-w-[150px] truncate">{p.notes || "—"}</td>
-                    <td>
-                      <div className="flex items-center gap-1">
-                        <button className="btn btn-ghost btn-sm p-1.5 text-green-600"
-                          title="Movimento rapido" onClick={() => setMovModal(p)}>
-                          <ArrowDown size={14}/>
-                        </button>
-                        <Link to={"/products/" + p._id} className="btn btn-ghost btn-sm p-1.5" title="Dettaglio">
-                          <Eye size={14}/>
-                        </Link>
-                        <button className="btn btn-ghost btn-sm p-1.5" title="Modifica"
-                          onClick={() => openModal(p)}>
-                          <Edit size={14}/>
-                        </button>
-                        {isAdmin && (
-                          <button className="btn btn-ghost btn-sm p-1.5 text-red-500" title="Elimina"
-                            onClick={() => handleDelete(p)}>
-                            <Trash2 size={14}/>
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                  <ProductRow key={p._id} p={p} isAdmin={isAdmin} onMove={setMovModal} onEdit={openModal} onDelete={handleDelete}/>
                 ))}
               </tbody>
             </table>
@@ -416,6 +431,10 @@ export default function ProductsPage() {
           />
         )}
       </AnimatePresence>
+
+      <Suspense fallback={null}>
+        <VisionScanner />
+      </Suspense>
     </div>
   );
 }

@@ -4,7 +4,7 @@
  * Pannello laterale per personalizzare tema, colore e stile.
  * Salva il tema nel profilo utente sul backend.
  */
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { X, Check } from "lucide-react";
 import { useThemeStore } from "@/lib/store";
 import { authAPI } from "@/lib/api";

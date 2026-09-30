@@ -3,7 +3,7 @@
  */
 import { useState, useEffect, lazy, Suspense } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { m as motion, AnimatePresence } from "framer-motion";
 import { Package, Eye, EyeOff, AlertCircle, QrCode } from "lucide-react";
 import { parseBadgeUrl, useBadgeLogin } from "@/lib/badge";
 // Scanner e libreria QR scaricati solo quando si preme "Scansiona badge"

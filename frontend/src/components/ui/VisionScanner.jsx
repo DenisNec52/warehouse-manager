@@ -9,7 +9,7 @@
  *   4. Submit → cerca prodotto per codice → registra movimento
  */
 import { useState, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { m as motion, AnimatePresence } from "framer-motion";
 import {
   Camera, X, Upload, Loader2, CheckCircle2, AlertCircle,
   ArrowDown, ArrowUp, Sparkles, RefreshCw, Send,

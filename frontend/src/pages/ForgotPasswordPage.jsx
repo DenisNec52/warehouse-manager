@@ -7,7 +7,7 @@
  */
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { Package, ArrowLeft, MailCheck } from "lucide-react";
 import { authAPI } from "@/lib/api";
 

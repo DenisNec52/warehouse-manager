@@ -8,7 +8,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Edit, Trash2, X, Timer, PauseCircle, Flag, CheckCircle2 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { m as motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import clsx from "clsx";
 import { productionAPI, usersAPI } from "@/lib/api";
@@ -212,7 +212,9 @@ export default function AndonBoardPage() {
   });
   const { data: operators } = useQuery({
     queryKey: ["users"],
-    queryFn: () => usersAPI.list().then(r => (r.data.users || []).filter(u => u.isActive !== false)),
+    // Stessa cache della pagina Utenti: il filtro va in select, non nei dati salvati
+    queryFn: () => usersAPI.list().then(r => r.data.users || []),
+    select: (users) => users.filter(u => u.isActive !== false),
     enabled: isSupervisor,
   });
   const { data: entries, isLoading } = useQuery({

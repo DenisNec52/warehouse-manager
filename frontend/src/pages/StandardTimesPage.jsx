@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Edit, Trash2, X, Clock } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { m as motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { productionAPI } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";

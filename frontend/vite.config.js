@@ -13,5 +13,15 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
+    rollupOptions: {
+      output: {
+        // Librerie in file separati: cambiano di rado, quindi dopo un deploy il browser
+        // riscarica solo il codice dell'app e tiene in cache questi
+        manualChunks: {
+          react:  ["react", "react-dom", "react-router-dom"],
+          query:  ["@tanstack/react-query", "axios", "zustand"],
+        },
+      },
+    },
   },
 });

@@ -3,7 +3,7 @@
  */
 import { useState, useRef, lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { motion, AnimatePresence } from "framer-motion";
+import { m as motion, AnimatePresence } from "framer-motion";
 import { ArrowDown, ArrowUp, Search, Package, ArrowLeftRight, Plus, X, Users, Activity } from "lucide-react";
 import { dashboardAPI, productsAPI, movementsAPI, categoriesAPI, usersAPI } from "@/lib/api";
 import { ProductModal } from "@/pages/ProductsPage";

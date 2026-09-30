@@ -2,7 +2,7 @@
  * pages/HomePage.jsx — Pannello rapido con live stats
  */
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { AlertTriangle, ArrowDown, ArrowUp, ArrowRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { dashboardAPI, checklistAPI, productionAPI } from "@/lib/api";
