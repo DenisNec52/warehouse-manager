@@ -1,6 +1,9 @@
 {
   "name": "warehouse-pro-backend",
   "version": "1.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "author": "Denis Alexandru Necula",
   "description": "Warehouse Manager Pro — REST API",
   "main": "server.js",
   "scripts": {

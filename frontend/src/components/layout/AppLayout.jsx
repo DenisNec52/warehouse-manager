@@ -20,6 +20,7 @@ import { pageVariants } from "@/lib/motion";
 import toast from "react-hot-toast";
 import ThemePanel from "@/components/ui/ThemePanel";
 import NotificationBell from "@/components/ui/NotificationBell";
+import CopyrightNotice from "@/components/ui/CopyrightNotice";
 // Caricato on-demand: contiene la logica fotocamera/analisi IA, non serve al primo render
 const VisionScanner = lazy(() => import("@/components/ui/VisionScanner"));
 import clsx from "clsx";
@@ -175,6 +176,7 @@ export default function AppLayout() {
               <LogOut size={14}/>
             </button>
           </div>
+          <CopyrightNotice className="mt-3"/>
         </div>
       </aside>
 

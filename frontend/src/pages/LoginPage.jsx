@@ -11,6 +11,7 @@ const QrScannerModal = lazy(() => import("@/components/ui/QrScannerModal"));
 import { useAuthStore, useThemeStore } from "@/lib/store";
 import { authAPI } from "@/lib/api";
 import toast from "react-hot-toast";
+import CopyrightNotice from "@/components/ui/CopyrightNotice";
 
 export default function LoginPage() {
   const [form,    setForm]    = useState({ username:"", password:"" });
@@ -141,6 +142,7 @@ export default function LoginPage() {
         <p className="text-center text-xs text-gray-400 mt-4">
           Con un tag NFC basta avvicinarlo al telefono: si apre l'app e l'accesso è automatico.
         </p>
+        <CopyrightNotice className="mt-3"/>
       </motion.div>
 
       <AnimatePresence>

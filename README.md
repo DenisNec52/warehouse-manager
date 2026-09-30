@@ -137,3 +137,13 @@ Ogni utente può personalizzare il proprio tema dall'icona 🎨 in topbar:
 - **Colore**: 6 preset + color picker custom
 - **Bordi**: 5 stili da quadro a pill
 - Il tema è salvato nel profilo sul DB e sincronizzato tra dispositivi
+
+## Proprietà e licenza
+
+Il software **Warehouse Pro** è stato sviluppato da **Denis Alexandru Necula**, che ne è l'unico titolare e proprietario.
+
+La pubblicazione di questo repository su GitHub ha finalità esclusivamente di **consultazione e portfolio professionale**. La disponibilità pubblica del codice sorgente **non conferisce alcuna licenza** di utilizzo, copia, modifica o distribuzione. Qualsiasi uso del software in contesti aziendali, produttivi o commerciali è vietato in assenza di un accordo scritto e firmato con l'autore.
+
+La proprietà intellettuale e i diritti di sfruttamento economico rimangono in capo al titolare anche in caso di consegna del software a terzi, salvo diversi accordi contrattuali. Le librerie di terze parti restano soggette alle rispettive licenze. Testo completo nel file [LICENSE](LICENSE).
+
+Per ottenere una licenza d'uso o per informazioni commerciali, contatta l'autore tramite [GitHub](https://github.com/DenisNec52).

@@ -1,6 +1,9 @@
 {
   "name": "warehouse-pro-frontend",
   "version": "1.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "author": "Denis Alexandru Necula",
   "type": "module",
   "scripts": {
     "dev": "vite",
