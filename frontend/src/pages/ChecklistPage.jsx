@@ -10,7 +10,7 @@
  */
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { motion, AnimatePresence } from "framer-motion";
+import { m as motion, AnimatePresence } from "framer-motion";
 import {
   CheckSquare, Square, Send, CheckCircle, ChevronDown, ChevronUp,
   Clock, AlertTriangle, ClipboardList, Star, RotateCcw,
@@ -141,6 +141,8 @@ export default function ChecklistPage() {
   // Cambiando reparto, un turno già compilato lì non resta selezionato
   useEffect(() => {
     if (selectedShift && compiledShifts.has(selectedShift)) setSelectedShift("");
+    // Solo al cambio di reparto: scegliere un turno non deve azzerare la scelta
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [departmentId]);
 
   // Progresso globale

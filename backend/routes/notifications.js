@@ -4,13 +4,14 @@
 const express      = require("express");
 const Notification = require("../models/Notification");
 const { protect }  = require("../middleware/auth");
+const { notificationScope } = require("../utils/colleagues");
 const router       = express.Router();
 
 router.use(protect);
 
 router.get("/", async (req, res) => {
   const { page = 1, limit = 20 } = req.query;
-  const filter = { $or: [{ userId: req.user._id }, { userId: null }] };
+  const filter = notificationScope(req.user);
   const skip   = (parseInt(page) - 1) * parseInt(limit);
   const [notifications, total] = await Promise.all([
     Notification.find(filter).sort("-createdAt").skip(skip).limit(parseInt(limit)).lean(),
@@ -26,7 +27,7 @@ router.patch("/:id/read", async (req, res) => {
 
 router.patch("/read-all", async (req, res) => {
   await Notification.updateMany(
-    { $or: [{ userId: req.user._id }, { userId: null }], read: false },
+    { ...notificationScope(req.user), read: false },
     { read: true }
   );
   res.json({ ok: true });

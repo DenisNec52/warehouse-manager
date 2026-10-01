@@ -10,9 +10,10 @@
  * GET    /api/products/low-stock — prodotti sotto soglia
  */
 const express  = require("express");
-const { body, query } = require("express-validator");
+const { body } = require("express-validator");
 const Product  = require("../models/Product");
 const Notification = require("../models/Notification");
+const { visibleColleagueIds, maskField } = require("../utils/colleagues");
 const { protect, requireAdmin } = require("../middleware/auth");
 const validate = require("../middleware/validate");
 const email    = require("../utils/email");
@@ -103,7 +104,8 @@ router.get("/:id", async (req, res) => {
     if (!product || !product.isActive)
       return res.status(404).json({ message: "Prodotto non trovato." });
 
-    res.json({ product });
+    const ids = await visibleColleagueIds(req);
+    res.json({ product: maskField(maskField(product, "createdBy", ids), "updatedBy", ids) });
   } catch (err) {
     res.status(500).json({ message: "Errore." });
   }

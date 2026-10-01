@@ -172,7 +172,7 @@ exports.sendMovementAlert = (movement, product) => sendEmail({
 });
 
 // ── Template: notifica login ──────────────────────────────────
-exports.sendLoginNotification = (user, ip) => sendEmail({
+exports.sendLoginNotification = (user) => sendEmail({
   to:      process.env.MAIL_ADMIN,
   subject: `🔐 Nuovo accesso — ${user.name}`,
   html: `

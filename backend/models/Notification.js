@@ -20,6 +20,9 @@ const notificationSchema = new mongoose.Schema({
 
   // A chi è destinata (null = broadcast a tutti gli admin)
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  // Per le notifiche generali (userId null): "managers" = solo admin e supervisori
+  // (es. movimenti, che riportano il nome di chi li ha fatti: gli operai non vedono i colleghi di altri reparti)
+  audience: { type: String, enum: ["all", "managers"], default: "all" },
 }, {
   timestamps: true,
 });

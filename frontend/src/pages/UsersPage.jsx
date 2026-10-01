@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Edit, Trash2, Ban, RotateCcw, X, ShieldCheck, User, Eye, EyeOff, MapPin, QrCode, Crown } from "lucide-react";
 import { usersAPI } from "@/lib/api";
-import { motion, AnimatePresence } from "framer-motion";
+import { m as motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { useAuthStore } from "@/lib/store";
 import BadgeManager from "@/components/ui/BadgeManager";

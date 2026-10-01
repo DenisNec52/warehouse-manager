@@ -25,6 +25,7 @@ const email    = require("../utils/email");
 const { lookupLocation } = require("../utils/geoip");
 const badge    = require("../utils/badge");
 const { clientIp } = require("../utils/clientIp");
+const { notificationScope } = require("../utils/colleagues");
 
 const router = express.Router();
 
@@ -66,7 +67,7 @@ async function startSession(req, res, user, method = "password") {
     userId:  user._id,
   });
 
-  email.sendLoginNotification(user, ip).catch(() => {});
+  email.sendLoginNotification(user).catch(() => {});
 }
 
 // ── POST /api/auth/login ──────────────────────────────────────
@@ -188,7 +189,7 @@ router.post("/logout", protect, (req, res) => {
 router.get("/me", protect, async (req, res) => {
   // Conta notifiche non lette
   const unread = await Notification.countDocuments({
-    $or: [{ userId: req.user._id }, { userId: null }],
+    ...notificationScope(req.user),
     read: false,
   });
   res.json({ user: req.user.toPublic(), unreadNotifications: unread });

@@ -4,7 +4,7 @@
  * Pannello laterale per personalizzare tema, colore e stile.
  * Salva il tema nel profilo utente sul backend.
  */
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { X, Check } from "lucide-react";
 import { useThemeStore } from "@/lib/store";
 import { authAPI } from "@/lib/api";
@@ -37,7 +37,9 @@ export default function ThemePanel({ onClose }) {
   const save = async (newMode, newAccent, newRadius) => {
     try {
       await authAPI.theme({ mode: newMode, accentColor: newAccent, radius: newRadius });
-    } catch {}
+    } catch {
+      // Preferenza non salvata sul server: il tema resta comunque applicato in questo browser
+    }
   };
 
   const handleMode = (m) => { setMode(m); save(m, accent, radius); };

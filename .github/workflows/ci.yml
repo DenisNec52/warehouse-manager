@@ -8,7 +8,7 @@ on:
 
 jobs:
   backend-test:
-    name: Backend — test
+    name: Backend — lint e test
     runs-on: ubuntu-latest
     env:
       # Stessa cartella della cache qui sotto: senza, mongodb-memory-server scarica
@@ -40,12 +40,16 @@ jobs:
         working-directory: backend
         run: npm ci
 
+      - name: Lint
+        working-directory: backend
+        run: npm run lint
+
       - name: Run tests
         working-directory: backend
         run: npm test
 
   frontend-build:
-    name: Frontend — build
+    name: Frontend — lint e build
     runs-on: ubuntu-latest
 
     steps:
@@ -62,6 +66,10 @@ jobs:
       - name: Install dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
 
       - name: Build
         working-directory: frontend

@@ -139,6 +139,9 @@ export const productionAPI = {
   updateEntry:        (id,d) => api.put(`/production/entries/${id}`, d),
   deleteEntry:        (id)   => api.delete(`/production/entries/${id}`),
   stats:              (p)    => api.get("/production/stats", { params: p }),
+  report:             (p)    => api.get("/production/report", { params: p }),
+  // File .xlsx come blob; timeout più lungo perché il file si genera al momento
+  exportExcel:        (p)    => api.get("/production/export", { params: p, responseType: "blob", timeout: 60_000 }),
 };
 export const departmentsAPI = {
   list:   ()     => api.get("/departments"),

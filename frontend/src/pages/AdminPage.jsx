@@ -5,7 +5,7 @@
  * I conteggi riusano le stesse query (e la stessa cache) delle altre pagine.
  */
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { Package, ArrowLeftRight, Tag, Users, ClipboardList, Timer, Clock, Settings, Bell, Factory } from "lucide-react";
 import { dashboardAPI, categoriesAPI, productionAPI } from "@/lib/api";

@@ -22,7 +22,6 @@ const monthLabel = (m) => { const [y,mo] = m.split("-"); return new Date(y, mo-1
 // ── Tab Vista Mensile ─────────────────────────────────────────
 function TabMonthly() {
   const [month, setMonth] = useState(fmtMonth(today));
-  const [expanded, setExpanded] = useState(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["checklist-monthly", month],
@@ -156,7 +155,7 @@ function TabMonthly() {
               {pieData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="value" label={({ name, percent }) => `${Math.round(percent*100)}%`} labelLine={false}>
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="value" label={({ percent }) => `${Math.round(percent*100)}%`} labelLine={false}>
                       {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]}/>)}
                     </Pie>
                     <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }}/>

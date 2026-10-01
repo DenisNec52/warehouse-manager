@@ -3,7 +3,7 @@
  */
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { motion, AnimatePresence } from "framer-motion";
+import { m as motion, AnimatePresence } from "framer-motion";
 import { X, Pencil, Undo2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { movementsAPI } from "@/lib/api";

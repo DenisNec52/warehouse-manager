@@ -6,9 +6,9 @@
  * - Topbar con utente, tema, notifiche
  * - Outlet per le pagine figlie
  */
-import { useState, lazy, Suspense } from "react";
+import { useState } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { m as motion, AnimatePresence } from "framer-motion";
 import {
   Package, ArrowLeftRight, Tag, Users, Bell,
   Settings, LogOut, Menu, X, Sun, Moon, Palette,
@@ -21,8 +21,6 @@ import toast from "react-hot-toast";
 import ThemePanel from "@/components/ui/ThemePanel";
 import NotificationBell from "@/components/ui/NotificationBell";
 import CopyrightNotice from "@/components/ui/CopyrightNotice";
-// Caricato on-demand: contiene la logica fotocamera/analisi IA, non serve al primo render
-const VisionScanner = lazy(() => import("@/components/ui/VisionScanner"));
 import clsx from "clsx";
 
 const NAV = [
@@ -218,11 +216,6 @@ export default function AppLayout() {
       <AnimatePresence>
         {themeOpen && <ThemePanel onClose={() => setThemeOpen(false)}/>}
       </AnimatePresence>
-
-      {/* IA Vision Scanner FAB */}
-      <Suspense fallback={null}>
-        <VisionScanner />
-      </Suspense>
     </div>
   );
 }

@@ -9,12 +9,12 @@
  *   4. Submit → cerca prodotto per codice → registra movimento
  */
 import { useState, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { m as motion, AnimatePresence } from "framer-motion";
 import {
-  Camera, X, Upload, Loader2, CheckCircle2, AlertCircle,
+  Camera, X, Loader2, CheckCircle2, AlertCircle,
   ArrowDown, ArrowUp, Sparkles, RefreshCw, Send,
 } from "lucide-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { productsAPI, movementsAPI } from "@/lib/api";
 import toast from "react-hot-toast";
 import clsx from "clsx";

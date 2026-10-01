@@ -7,7 +7,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import QrScanner from "qr-scanner";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { X, CameraOff, Loader2 } from "lucide-react";
 
 export default function QrScannerModal({ onDetected, onClose, busy }) {

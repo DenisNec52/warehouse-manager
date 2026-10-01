@@ -43,6 +43,15 @@ describe("Movimenti di magazzino (transazione stock)", () => {
     expect(check.body.product.quantity).toBe(15);
   });
 
+  test("movimenti simultanei sullo stesso prodotto: tutti registrati, giacenza esatta (conflitti ritentati)", async () => {
+    const product = await createProduct();   // 20 pezzi
+    const results = await Promise.all(Array.from({ length: 10 }, () =>
+      agent.post("/api/movements").send({ productId: product._id, type: "OUT", quantity: 1 })));
+    expect(results.map(r => r.status)).toEqual(Array(10).fill(201));
+    const check = await agent.get(`/api/products/${product._id}`);
+    expect(check.body.product.quantity).toBe(10);
+  });
+
   test("un'entrata aumenta la quantità", async () => {
     const product = await createProduct();
     const res = await agent.post("/api/movements").send({ productId: product._id, type: "IN", quantity: 10 });
