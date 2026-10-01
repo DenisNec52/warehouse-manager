@@ -141,6 +141,8 @@ export default function App() {
     // Applica tema salvato in localStorage
     applyTheme();
     return () => { cancelled = true; };
+    // Una sola volta all'avvio (le azioni degli store Zustand non cambiano)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (serverState !== "ok") return <ServerStatus state={serverState}/>;

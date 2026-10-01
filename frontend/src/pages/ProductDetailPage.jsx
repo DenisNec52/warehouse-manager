@@ -6,7 +6,6 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Edit, ArrowDown, ArrowUp, AlertTriangle, Camera, Trash2, ImageOff } from "lucide-react";
 import { productsAPI, movementsAPI } from "@/lib/api";
-import { AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import toast from "react-hot-toast";
 
@@ -93,7 +92,7 @@ export default function ProductDetailPage() {
           <div className="card p-5">
             <div className="grid grid-cols-2 gap-4">
               {[
-                ["Codice", <code className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">{product.code}</code>],
+                ["Codice", <code key="code" className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">{product.code}</code>],
                 ["Unità", product.unit],
                 ["Categoria", product.category ? `${product.category.icon} ${product.category.name}` : "—"],
                 ["Posizione", product.location || "—"],

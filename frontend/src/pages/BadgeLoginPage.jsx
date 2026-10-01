@@ -31,6 +31,8 @@ export default function BadgeLoginPage() {
       return;
     }
     badgeLogin(badge, "/").catch(() => navigate("/login?badge=error", { replace: true }));
+    // Solo quando termina la verifica iniziale della sessione: started impedisce un secondo login
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
   return (

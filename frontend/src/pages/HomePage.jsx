@@ -37,7 +37,6 @@ function QuickTiles({ tiles }) {
 export default function HomePage() {
   const { user } = useAuthStore();
   const nav = useNavigate();
-  const isAdmin = user?.role === "admin";
 
   const { data: dash } = useQuery({
     queryKey: ["dashboard"],

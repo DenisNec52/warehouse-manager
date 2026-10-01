@@ -37,7 +37,9 @@ export default function ThemePanel({ onClose }) {
   const save = async (newMode, newAccent, newRadius) => {
     try {
       await authAPI.theme({ mode: newMode, accentColor: newAccent, radius: newRadius });
-    } catch {}
+    } catch {
+      // Preferenza non salvata sul server: il tema resta comunque applicato in questo browser
+    }
   };
 
   const handleMode = (m) => { setMode(m); save(m, accent, radius); };

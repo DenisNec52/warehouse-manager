@@ -141,6 +141,8 @@ export default function ChecklistPage() {
   // Cambiando reparto, un turno già compilato lì non resta selezionato
   useEffect(() => {
     if (selectedShift && compiledShifts.has(selectedShift)) setSelectedShift("");
+    // Solo al cambio di reparto: scegliere un turno non deve azzerare la scelta
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [departmentId]);
 
   // Progresso globale

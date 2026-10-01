@@ -45,6 +45,8 @@ export default function LoginPage() {
     return true;
   };
 
+  // Solo quando l'utente diventa loggato (from e navigate non cambiano durante la visita)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (user) navigate(from, { replace: true }); }, [user]);
 
   // Login automatico da QR/NFC non riuscito (badge disattivato, revocato o link non valido)
@@ -53,6 +55,8 @@ export default function LoginPage() {
       setError("Accesso automatico non riuscito. Il badge potrebbe essere stato revocato o disattivato: accedi con le credenziali oppure chiedine uno nuovo all'amministratore.");
       navigate("/login", { replace: true });
     }
+    // Una volta all'apertura: poi il parametro viene tolto dall'URL
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = async (e) => {
