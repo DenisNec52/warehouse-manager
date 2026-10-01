@@ -81,6 +81,16 @@ const MIGRATIONS = [
       return { notificationsForManagers: r.modifiedCount };
     },
   },
+  {
+    // Turni: nuovo campo User.shift (default null = "non assegnato"). Nessun backfill:
+    // gli utenti esistenti restano senza turno e compaiono nella sezione dedicata.
+    // Voce registrata solo per tracciare l'introduzione del campo.
+    name: "2026-10-02-user-shift",
+    async run() {
+      const senzaTurno = await User.countDocuments({ shift: { $in: [null, undefined] } });
+      return { senzaTurno };
+    },
+  },
 ];
 
 async function runMigrations({ log = console.log } = {}) {

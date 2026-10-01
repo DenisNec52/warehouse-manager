@@ -79,3 +79,24 @@ Branch: `feat/utenti-gerarchia-turni` (da `main` @29aaa22).
 
 ## FASE 2 — Gemini Pro: revisione e completamento
 (in corso)
+
+**FATTO:** Gemini **Pro non disponibile (quota 429)** → usato gemini-3-flash-preview. Ha prodotto: nuovo `loadManageableTarget` (super-admin→404, supervisore solo propri operai), lista con filtri (search anti-regex-injection, role, department, shift) + hideSuperAdmin, `GET /:id` con 404 per super-admin, validazione shift/supervisor, frammenti create/update.
+**CORREZIONE necessaria (fase 3):** Gemini vietava ai supervisori di cambiare shift e departments dei propri operai → SBAGLIATO: la specifica dice che possono (solo NON il ruolo e NON riassegnare il supervisore). Forbidden per supervisore = solo ['role','supervisor'].
+**RESTA (fase 3 Claude):** applicare e correggere le rotte; nascondere super-admin anche in dashboard/Andon/movements/products/snapshot; migrazione shift; frontend (toggle Elenco/Gerarchia, filtri, selettori turno+supervisore nel modal); sicurezza; build+lint+test; PR.
+
+## FASE 3 — Claude: integrazione, sicurezza, test, PR
+(in corso)
+
+**FATTO (Claude):**
+- routes/users.js: loadManageableTarget (super-admin→404, supervisore solo propri operai); lista con filtri (ricerca anti-regex-injection, ruolo, reparto, turno) + hideSuperAdmin; GET /:id (404 per super-admin ad altri); create/update accettano turno+supervisore con `staffFields` (turno a chi gestisce; supervisore solo admin, deve essere un supervisore esistente; supervisore NON cambia ruolo né riassegna).
+- Super-admin invisibile anche ai manager: utils/colleagues.js `hiddenSuperAdminId` + `visibilityContext` {ids,hideId}; maschere aggiornate; applicato a movements, dashboard (recentMovements + totalUsers), products (createdBy/updatedBy), production (entries, /stats perOperatore, /report, /export via andonReport hideUserId).
+- Migrazione `2026-10-02-user-shift` (solo conteggio, nessun backfill).
+- Frontend: UsersPage con toggle Elenco/Gerarchia, ricerca + filtri (ruolo/reparto/turno), UserHierarchy integrata; UserModal con selettori Turno e Supervisore (supervisore assegnabile solo da admin).
+- Test: +15 (tests/users-staff.test.js) su super-admin invisibile, permessi supervisore, visibilità operaio (turno+reparto), assegnazione turni. Aggiornati colleagues/departments test alla nuova regola. **Totale 122 backend, verdi. Lint OK. Build OK.**
+- e2e Chrome: Utenti 9/9 (due viste, filtri, organigramma per turno, selettori, mobile), regressioni perf 21/21 e Andon 17/17.
+
+**COSA DEVE FARE DENIS:**
+- Migrazioni: automatiche all'avvio (nessuna azione). Gli utenti esistenti restano "non assegnato" (turno) e "senza supervisore".
+- Assegnazioni manuali (pagina Utenti): assegnare a ogni operaio il **turno** e il **supervisore**. Finché un operaio non ha turno+reparto, vede solo sé stesso.
+- Nessuna variabile d'ambiente nuova obbligatoria (facoltativo: RATE_LIMIT_EXPORT_MAX).
+- Modelli: Fase 1 Ollama gemma4:26b; Fase 2 Gemini (Pro in quota 429 → flash); Fase 3 Claude.

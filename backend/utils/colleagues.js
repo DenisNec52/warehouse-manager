@@ -41,6 +41,30 @@ function hideSuperAdmin(req) {
   return req.user?.isSuperAdmin ? {} : { isSuperAdmin: { $ne: true } };
 }
 
+/** _id (stringa) del super-admin da nascondere a chi guarda, oppure null (se guarda lui o non esiste). Cache per richiesta. */
+async function hiddenSuperAdminId(req) {
+  if (req.user?.isSuperAdmin) return null;
+  if (req._hiddenSaId !== undefined) return req._hiddenSaId;
+  const sa = await User.findOne({ isSuperAdmin: true }).select("_id").lean();
+  req._hiddenSaId = sa ? String(sa._id) : null;
+  return req._hiddenSaId;
+}
+
+/**
+ * Contesto di visibilità delle PERSONE per una richiesta:
+ * - ids: colleghi visibili (Set) o null (manager = tutti);
+ * - hideId: id del super-admin da mascherare comunque (anche ai manager), o null.
+ * Un utente va mascherato se non è tra gli ids (quando ids è impostato) OPPURE se è il super-admin nascosto.
+ */
+async function visibilityContext(req) {
+  return { ids: await visibleColleagueIds(req), hideId: await hiddenSuperAdminId(req) };
+}
+const shouldHide = (id, ctx) => {
+  if (!id) return !!ctx.ids;                       // autore assente: nascosto se c'è un filtro colleghi
+  const s = String(id);
+  return (ctx.ids && !ctx.ids.has(s)) || (ctx.hideId && s === ctx.hideId);
+};
+
 /** Un supervisore può gestire solo i propri operai (operatore con supervisor == lui). */
 function supervisorCanManage(actor, target) {
   return actor.role === "supervisore"
@@ -56,22 +80,29 @@ async function colleagueFilter(req, field) {
 
 const OTHER = Object.freeze({ name: "Altro operatore", username: null, role: null });
 
+// I mascheratori accettano un contesto { ids, hideId } (visibilityContext). Per compatibilità
+// accettano anche un semplice Set di colleghi (vecchia firma) = { ids:set, hideId:null }.
+const toCtx = (x) => (x && x.ids !== undefined ? x : { ids: x || null, hideId: null });
+const noMasking = (ctx) => !ctx.ids && !ctx.hideId;
+
 /**
- * Nasconde un utente popolato ({ _id, name, ... }) se non è un collega visibile:
+ * Nasconde un utente popolato ({ _id, name, ... }) se non è visibile (non collega, o super-admin):
  * resta l'informazione che qualcuno ha fatto l'operazione, non chi.
  */
-function maskUser(user, ids) {
-  if (!ids || !user || typeof user !== "object" || !user._id) return user;
-  return ids.has(String(user._id)) ? user : { ...OTHER };
+function maskUser(user, ctxOrIds) {
+  const ctx = toCtx(ctxOrIds);
+  if (noMasking(ctx) || !user || typeof user !== "object" || !user._id) return user;
+  return shouldHide(user._id, ctx) ? { ...OTHER } : user;
 }
 
 /** Maschera il campo `field` di ogni documento (oggetti semplici o documenti mongoose). */
-function maskField(docs, field, ids) {
-  if (!ids) return docs;
+function maskField(docs, field, ctxOrIds) {
+  const ctx = toCtx(ctxOrIds);
+  if (noMasking(ctx)) return docs;
   const one = (d) => {
     if (!d) return d;
     const plain = typeof d.toObject === "function" ? d.toObject() : d;
-    return { ...plain, [field]: maskUser(plain[field], ids) };
+    return { ...plain, [field]: maskUser(plain[field], ctx) };
   };
   return Array.isArray(docs) ? docs.map(one) : one(docs);
 }
@@ -81,19 +112,19 @@ function maskField(docs, field, ids) {
  * movimento (performedByName, correctedByName), altrimenti il nome passerebbe comunque.
  * Un autore non più esistente (utente eliminato) conta come non visibile.
  */
-function maskMovements(docs, ids) {
-  if (!ids) return docs;
+function maskMovements(docs, ctxOrIds) {
+  const ctx = toCtx(ctxOrIds);
+  if (noMasking(ctx)) return docs;
   const idOf = (u) => (u && typeof u === "object" ? u._id : u);
   const one = (d) => {
     if (!d) return d;
     const m = typeof d.toObject === "function" ? d.toObject() : { ...d };
-    const author = idOf(m.performedBy);
-    if (!author || !ids.has(String(author))) {
+    if (shouldHide(idOf(m.performedBy), ctx)) {
       m.performedBy = { ...OTHER };
       if ("performedByName" in m) m.performedByName = OTHER.name;
     }
     const fixer = idOf(m.correctedBy);
-    if (fixer && !ids.has(String(fixer))) {
+    if (fixer && shouldHide(fixer, ctx)) {
       m.correctedBy = null;
       m.correctedByName = OTHER.name;
     }
@@ -112,4 +143,4 @@ function notificationScope(user) {
     : { $or: [{ userId: user._id }, { userId: null, audience: { $ne: "managers" } }] };
 }
 
-module.exports = { visibleColleagueIds, colleagueFilter, maskUser, maskField, maskMovements, notificationScope, isManager, hideSuperAdmin, supervisorCanManage };
+module.exports = { visibleColleagueIds, colleagueFilter, maskUser, maskField, maskMovements, notificationScope, isManager, hideSuperAdmin, supervisorCanManage, visibilityContext, hiddenSuperAdminId };

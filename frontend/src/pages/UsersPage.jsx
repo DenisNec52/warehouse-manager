@@ -6,14 +6,19 @@
  */
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, Ban, RotateCcw, X, ShieldCheck, User, Eye, EyeOff, MapPin, QrCode, Crown } from "lucide-react";
+import { Plus, Edit, Trash2, Ban, RotateCcw, X, ShieldCheck, User, Eye, EyeOff, MapPin, QrCode, Crown, List, Network, Search } from "lucide-react";
 import { usersAPI } from "@/lib/api";
 import { m as motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { useAuthStore } from "@/lib/store";
 import BadgeManager from "@/components/ui/BadgeManager";
 import { useDepartmentList } from "@/hooks/useDepartments";
+import UserHierarchy from "@/components/users/UserHierarchy";
 import clsx from "clsx";
+
+// Etichette turni, usate anche nel modale e nella tabella
+export const SHIFTS = [["turno1", "Turno 1"], ["turno2", "Turno 2"], ["centrale", "Turno centrale"]];
+export const shiftLabel = (s) => SHIFTS.find(([v]) => v === s)?.[1] || "Non assegnato";
 
 function BadgeModal({ user, onClose }) {
   const qc = useQueryClient();
@@ -56,7 +61,7 @@ function DepartmentChecks({ departments, value, onChange }) {
   );
 }
 
-function UserModal({ user, me, departments, onClose }) {
+function UserModal({ user, me, departments, users = [], onClose }) {
   const qc = useQueryClient();
   const isEdit = !!user;
   const isSuperAdmin = !!user?.isSuperAdmin;
@@ -67,7 +72,12 @@ function UserModal({ user, me, departments, onClose }) {
     role:     user?.role     || "operatore",
     password: "",
     departments: (user?.departments || []).map(String),
+    shift:      user?.shift || "",
+    supervisor: user?.supervisor ? String(user.supervisor) : "",
   });
+  // Solo admin/super-admin assegnano il supervisore (il backend rifiuta gli altri)
+  const canSetSupervisor = me?.role === "admin";
+  const supervisors = users.filter(u => u.role === "supervisore");
   // Visibilità personalizzata: null = come i gruppi
   const [customVisible, setCustomVisible] = useState(Array.isArray(user?.visibleDepartments));
   const [visible, setVisible] = useState((user?.visibleDepartments || user?.departments || []).map(String));
@@ -88,8 +98,17 @@ function UserModal({ user, me, departments, onClose }) {
         // Solo gli operatori hanno visibilità limitata: per gli altri ruoli si azzera l'eccezione
         visibleDepartments: isOperator && customVisible ? visible : null,
       };
-      if (!isEdit) return usersAPI.create({ username: d.username, password: d.password, name: d.name, email: d.email, role: d.role, ...deptFields });
-      await usersAPI.update(user._id, { name: d.name, email: d.email, ...(isSuperAdmin ? {} : { role: d.role }), ...deptFields });
+      // Turno e supervisore solo per gli operatori; il supervisore solo se chi modifica è admin
+      const staffFields = {};
+      if (isOperator) {
+        staffFields.shift = d.shift || "";
+        if (canSetSupervisor) staffFields.supervisor = d.supervisor || null;
+      } else {
+        staffFields.shift = "";
+        if (canSetSupervisor) staffFields.supervisor = null;
+      }
+      if (!isEdit) return usersAPI.create({ username: d.username, password: d.password, name: d.name, email: d.email, role: d.role, ...deptFields, ...staffFields });
+      await usersAPI.update(user._id, { name: d.name, email: d.email, ...(isSuperAdmin ? {} : { role: d.role }), ...deptFields, ...staffFields });
       if (changePw && d.password) await usersAPI.resetPassword(user._id, { newPassword: d.password });
     },
     onSuccess: () => {
@@ -204,6 +223,27 @@ function UserModal({ user, me, departments, onClose }) {
           </div>
 
           {isOperator && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="form-label">Turno</label>
+                <select className="form-input" value={form.shift} onChange={e => s("shift", e.target.value)}>
+                  <option value="">Non assegnato</option>
+                  {SHIFTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="form-label">Supervisore</label>
+                <select className="form-input disabled:opacity-60" value={form.supervisor}
+                  disabled={!canSetSupervisor} onChange={e => s("supervisor", e.target.value)}>
+                  <option value="">Nessuno</option>
+                  {supervisors.map(sv => <option key={sv._id} value={sv._id}>{sv.name}</option>)}
+                </select>
+                {!canSetSupervisor && <p className="text-xs text-gray-400 mt-1">Solo un admin può assegnarlo.</p>}
+              </div>
+            </div>
+          )}
+
+          {isOperator && (
             <div className="rounded-[var(--radius)] border border-gray-200 dark:border-gray-700 p-3 space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
                 <input type="checkbox" className="accent-[var(--brand-500)]" checked={customVisible}
@@ -236,6 +276,8 @@ function UserModal({ user, me, departments, onClose }) {
 export default function UsersPage() {
   const [modal, setModal] = useState(null);
   const [badgeUser, setBadgeUser] = useState(null);
+  const [view, setView] = useState("list");                 // "list" | "tree"
+  const [filters, setFilters] = useState({ search: "", role: "", department: "", shift: "" });
   const qc = useQueryClient();
   const { user: me } = useAuthStore();
   const { data: allDepartments = [] } = useDepartmentList();
@@ -266,18 +308,70 @@ export default function UsersPage() {
     onError:    e => toast.error(e.response?.data?.message || "Errore"),
   });
 
+  // Filtri applicati lato client (dataset piccolo, solo admin/supervisori). Il super-admin
+  // è già escluso dal backend per chi non è lui.
+  const q = filters.search.trim().toLowerCase();
+  const filtered = (data || []).filter(u =>
+    (!q || u.name?.toLowerCase().includes(q) || u.username?.toLowerCase().includes(q)) &&
+    (!filters.role || u.role === filters.role) &&
+    (!filters.shift || u.shift === filters.shift) &&
+    (!filters.department || (u.departments || []).map(String).includes(filters.department))
+  );
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Utenti</h1>
           <p className="text-sm text-gray-500 mt-0.5">{data?.length || 0} utenti nel sistema</p>
         </div>
-        <button className="btn btn-md btn-primary gap-2" onClick={() => setModal("new")}>
-          <Plus size={16}/> Nuovo utente
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Selettore vista: Elenco / Gerarchia */}
+          <div className="inline-flex rounded-[var(--radius)] border border-gray-200 dark:border-gray-700 overflow-hidden" role="tablist">
+            <button role="tab" aria-selected={view === "list"} onClick={() => setView("list")}
+              className={clsx("btn btn-sm gap-1.5 rounded-none border-0", view === "list" ? "btn-primary" : "btn-ghost")}>
+              <List size={15}/> Elenco
+            </button>
+            <button role="tab" aria-selected={view === "tree"} onClick={() => setView("tree")}
+              className={clsx("btn btn-sm gap-1.5 rounded-none border-0", view === "tree" ? "btn-primary" : "btn-ghost")}>
+              <Network size={15}/> Gerarchia
+            </button>
+          </div>
+          <button className="btn btn-md btn-primary gap-2" onClick={() => setModal("new")}>
+            <Plus size={16}/> Nuovo utente
+          </button>
+        </div>
       </div>
 
+      {view === "list" && (
+        <div className="card p-3 mb-4 flex gap-3 flex-wrap items-center">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+            <input className="form-input pl-9 py-2 text-sm" placeholder="Cerca per nome o username..."
+              value={filters.search} onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}/>
+          </div>
+          <select className="form-input py-2 text-sm w-auto" value={filters.role} onChange={e => setFilters(f => ({ ...f, role: e.target.value }))}>
+            <option value="">Tutti i ruoli</option>
+            <option value="admin">Admin</option>
+            <option value="supervisore">Supervisore</option>
+            <option value="operatore">Operatore</option>
+          </select>
+          <select className="form-input py-2 text-sm w-auto" value={filters.department} onChange={e => setFilters(f => ({ ...f, department: e.target.value }))}>
+            <option value="">Tutti i reparti</option>
+            {activeDepartments.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
+          </select>
+          <select className="form-input py-2 text-sm w-auto" value={filters.shift} onChange={e => setFilters(f => ({ ...f, shift: e.target.value }))}>
+            <option value="">Tutti i turni</option>
+            {SHIFTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+      )}
+
+      {view === "tree" ? (
+        <div className="card overflow-hidden">
+          <UserHierarchy users={data || []} />
+        </div>
+      ) : (
       <div className="card overflow-hidden">
         <div className="table-wrap">
           <table className="data-table">
@@ -288,7 +382,7 @@ export default function UsersPage() {
               </tr>
             </thead>
             <tbody>
-              {(data || []).map(u => (
+              {filtered.map(u => (
                 <tr key={u._id}>
                   <td>
                     <div className="flex items-center gap-2.5">
@@ -382,13 +476,14 @@ export default function UsersPage() {
             </tbody>
           </table>
         </div>
-        {!data?.length && (
+        {!filtered.length && (
           <div className="py-12 text-center">
             <User size={32} className="mx-auto text-gray-300 mb-3"/>
             <p className="text-gray-500 font-medium">Nessun utente trovato</p>
           </div>
         )}
       </div>
+      )}
 
       <AnimatePresence>
         {modal && (
@@ -396,6 +491,7 @@ export default function UsersPage() {
             user={modal === "new" ? null : modal}
             me={me}
             departments={activeDepartments}
+            users={data || []}
             onClose={() => setModal(null)}
           />
         )}

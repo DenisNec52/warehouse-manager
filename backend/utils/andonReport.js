@@ -21,8 +21,9 @@ const clean = ({ _id, ...r }) => ({ ...r, efficienza: efficiency(r) });
  * @param scope   filtro reparto/visibilità (da departmentFilter)
  * @param range   risultato di resolvePeriod
  * @param withRows se true include le righe di dettaglio (per l'Excel)
+ * @param hideUserId id operatore da mascherare (super-admin invisibile): il suo nome diventa "Altro operatore"
  */
-async function buildReport(scope, range, { withRows = false } = {}) {
+async function buildReport(scope, range, { withRows = false, hideUserId = null } = {}) {
   const match = { ...scope, ...dateRangeFilter(range) };
   const [agg] = await ProductionEntry.aggregate([
     { $match: match },
@@ -44,17 +45,26 @@ async function buildReport(scope, range, { withRows = false } = {}) {
     return { giorno, pezzi: d?.pezzi || 0, efficienza: d ? efficiency(d) : null };
   });
 
+  // Super-admin invisibile: il suo nome diventa "Altro operatore" (l'id resta solo come riferimento tecnico)
+  const HIDDEN = "Altro operatore";
+  const perOperatore = agg.perOperatore.map((r) => {
+    const c = clean(r);
+    if (hideUserId && String(r._id) === String(hideUserId)) c.nome = HIDDEN;
+    return c;
+  });
+
   const empty = { righe: 0, pezzi: 0, attesoMinuti: 0, impiegatoMinuti: 0 };
   const report = {
     period: range.period, from: range.from, to: range.to, trendRange: range.trend,
     totale:       clean(agg.totale[0] || { _id: null, ...empty }),
-    perOperatore: agg.perOperatore.map(clean),
+    perOperatore,
     perTipologia: agg.perTipologia.map((r) => ({ tipologia: r._id, ...clean(r) })),
     andamento,
     trend: trendDirection(andamento.map((d) => d.efficienza)),
   };
   if (withRows) {
     report.righe = await ProductionEntry.find(match).sort({ data: 1, operatoreNome: 1 }).lean();
+    if (hideUserId) report.righe.forEach((r) => { if (String(r.operatore) === String(hideUserId)) r.operatoreNome = HIDDEN; });
   }
   return report;
 }

@@ -10,7 +10,7 @@ const Product  = require("../models/Product");
 const Movement = require("../models/Movement");
 const User     = require("../models/User");
 const Notification = require("../models/Notification");
-const { visibleColleagueIds, maskMovements, notificationScope, isManager } = require("../utils/colleagues");
+const { maskMovements, notificationScope, isManager, visibilityContext, hideSuperAdmin } = require("../utils/colleagues");
 const { protect }  = require("../middleware/auth");
 const router       = express.Router();
 
@@ -30,7 +30,7 @@ router.get("/stats", async (req, res) => {
       Product.countDocuments({ isActive: true }),
       Product.countDocuments({ isActive: true, $expr: { $lte: ["$quantity","$minQuantity"] } }),
       Movement.countDocuments({ createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) } }),
-      User.countDocuments({ isActive: true }),
+      User.countDocuments({ isActive: true, ...hideSuperAdmin(req) }),
       Product.aggregate([
         { $match: { isActive: true } },
         { $group: { _id: null, total: { $sum: { $multiply: ["$quantity","$unitPrice"] } } } },
@@ -68,7 +68,7 @@ router.get("/stats", async (req, res) => {
         // Dati economici/organizzativi: visibili solo ad admin e supervisori
         ...(canSeeBusiness ? { totalUsers, totalValue: totalValue[0]?.total || 0 } : {}),
       },
-      recentMovements: maskMovements(recentMovements, await visibleColleagueIds(req)),
+      recentMovements: maskMovements(recentMovements, await visibilityContext(req)),
       criticalProducts: criticalProducts.map(p => ({ ...p, isLowStock: true })),
     });
   } catch (err) {

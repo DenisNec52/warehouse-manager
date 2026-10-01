@@ -16,7 +16,7 @@ const mongoose = require("mongoose");
 const Movement = require("../models/Movement");
 const Product  = require("../models/Product");
 const Notification = require("../models/Notification");
-const { visibleColleagueIds, maskMovements } = require("../utils/colleagues");
+const { visibleColleagueIds, maskMovements, visibilityContext } = require("../utils/colleagues");
 
 // MongoDB può annullare una transazione con un errore "transitorio" (TransientTransactionError,
 // es. WriteConflict con due movimenti simultanei sullo stesso prodotto): niente è stato scritto
@@ -78,7 +78,7 @@ router.get("/", async (req, res) => {
       .lean();
 
     res.json({
-      movements: maskMovements(movements, await visibleColleagueIds(req)),
+      movements: maskMovements(movements, await visibilityContext(req)),
       pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / parseInt(limit)) },
     });
   } catch (err) {
@@ -94,7 +94,7 @@ router.get("/product/:productId", async (req, res) => {
       .sort("-createdAt")
       .limit(100)
       .lean();
-    res.json({ movements: maskMovements(movements, await visibleColleagueIds(req)) });
+    res.json({ movements: maskMovements(movements, await visibilityContext(req)) });
   } catch (err) {
     res.status(500).json({ message: "Errore." });
   }
@@ -107,7 +107,7 @@ router.get("/:id", async (req, res) => {
       .populate("product",     "name code unit category")
       .populate("performedBy", "name username role");
     if (!m) return res.status(404).json({ message: "Movimento non trovato." });
-    res.json({ movement: maskMovements(m, await visibleColleagueIds(req)) });
+    res.json({ movement: maskMovements(m, await visibilityContext(req)) });
   } catch (err) {
     res.status(500).json({ message: "Errore." });
   }
