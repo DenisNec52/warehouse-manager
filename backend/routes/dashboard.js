@@ -10,7 +10,7 @@ const Product  = require("../models/Product");
 const Movement = require("../models/Movement");
 const User     = require("../models/User");
 const Notification = require("../models/Notification");
-const { visibleColleagueIds, maskMovements, notificationScope } = require("../utils/colleagues");
+const { visibleColleagueIds, maskMovements, notificationScope, isManager } = require("../utils/colleagues");
 const { protect }  = require("../middleware/auth");
 const router       = express.Router();
 
@@ -38,6 +38,9 @@ router.get("/stats", async (req, res) => {
       Notification.countDocuments({ ...notificationScope(req.user), read: false }),
     ]);
 
+    // Dati di valore economico/organizzativo: solo per admin e supervisori
+    const canSeeBusiness = isManager(req.user);
+
     // Ultimi 5 movimenti
     const recentMovements = await Movement.find()
       .populate("product",     "name code unit")
@@ -61,9 +64,9 @@ router.get("/stats", async (req, res) => {
         totalProducts,
         lowStockCount,
         todayMovements,
-        totalUsers,
-        totalValue: totalValue[0]?.total || 0,
         unreadNotifications,
+        // Dati economici/organizzativi: visibili solo ad admin e supervisori
+        ...(canSeeBusiness ? { totalUsers, totalValue: totalValue[0]?.total || 0 } : {}),
       },
       recentMovements: maskMovements(recentMovements, await visibleColleagueIds(req)),
       criticalProducts: criticalProducts.map(p => ({ ...p, isLowStock: true })),

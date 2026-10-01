@@ -16,7 +16,7 @@ exports.protect = async (req, res, next) => {
     const token = req.cookies?.wh_token;
     if (!token) return res.status(401).json({ message: "Non autenticato. Effettua il login." });
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
     const user    = await User.findById(decoded.id).select("-password");
 
     if (!user || !user.isActive)

@@ -45,6 +45,14 @@ app.use(cookieParser());
 // ── Request logger (solo in sviluppo, silenzioso nei test) ────
 if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") app.use(morgan("dev"));
 
+// ── Rate limiting globale ─────────────────────────────────────
+// Rete di sicurezza contro abusi/DoS su tutte le API. Saltato nei test
+// (le suite fanno molte richieste ravvicinate di proposito).
+if (process.env.NODE_ENV !== "test") {
+  const { apiLimiter } = require("./middleware/rateLimiter");
+  app.use("/api", apiLimiter);
+}
+
 // ── Routes ────────────────────────────────────────────────────
 app.use("/api/auth",         require("./routes/auth"));
 app.use("/api/users",        require("./routes/users"));

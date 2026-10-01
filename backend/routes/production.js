@@ -13,6 +13,7 @@ const { checkDepartment, visibleScope } = require("../utils/departmentAccess");
 const { colleagueFilter } = require("../utils/colleagues");
 const Department = require("../models/Department");
 const { PERIODS, resolvePeriod } = require("../utils/reportPeriod");
+const { exportLimiter } = require("../middleware/rateLimiter");
 const { buildReport } = require("../utils/andonReport");
 const { buildAndonWorkbook } = require("../utils/andonExcel");
 const router   = express.Router();
@@ -321,7 +322,7 @@ router.get("/report", reportRules, validate, async (req, res) => {
   res.json(await buildReport(scope, resolvePeriod(req.query.period, req.query.date)));
 });
 
-router.get("/export", [...reportRules, query("charts").optional().isIn(["0", "1"])], validate, async (req, res) => {
+router.get("/export", exportLimiter, [...reportRules, query("charts").optional().isIn(["0", "1"])], validate, async (req, res) => {
   const scope = await productionScope(req, res);
   if (!scope) return;
   const range = resolvePeriod(req.query.period, req.query.date);

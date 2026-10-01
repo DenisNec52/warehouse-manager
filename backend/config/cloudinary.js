@@ -26,6 +26,11 @@
 // .v2 (l'API a promise, non quella a callback). Aggiornare "cloudinary"
 // alla v2 rompe l'installazione (ERESOLVE) finché quel pacchetto non
 // verrà aggiornato a sua volta.
+// AVVISO SICUREZZA: cloudinary 1.x ha una CVE di argument injection (GHSA-g4mf-96x5-5m2c,
+// risolta in 2.7.0). Non possiamo aggiornare finché usiamo multer-storage-cloudinary@4
+// (richiede cloudinary ^1.21). Mitigazione: Cloudinary è disattivato di default
+// (ENABLE_CLOUDINARY=false) e l'upload è riservato ad admin. Migrazione futura: passare
+// a cloudinary 2.x con un motore di storage per multer mantenuto.
 const cloudinary = require("cloudinary").v2;
 // multer è fissato alla v2.x in package.json (non la v1 usata nei test di
 // multer-storage-cloudinary) per via di alcune CVE note sulla v1: è comunque
