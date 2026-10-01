@@ -27,7 +27,16 @@ router.use(protect);  // tutte le route richiedono autenticazione
 // ── GET /api/products — lista con ricerca e filtri ────────────
 router.get("/", async (req, res) => {
   try {
-    const { search, category, lowStock, page = 1, limit = 20, sort = "-createdAt" } = req.query;
+    // I parametri arrivano dalla query string: forziamo il tipo così un valore inatteso
+    // (es. ?search[$ne]=) non manda in errore 500 la ricerca.
+    const asStr = (v) => (typeof v === "string" ? v : "");
+    const search = asStr(req.query.search).trim();
+    const category = asStr(req.query.category);
+    const lowStock = asStr(req.query.lowStock);
+    const sortFields = ["createdAt", "-createdAt", "name", "-name", "quantity", "-quantity", "code", "-code"];
+    const sort = sortFields.includes(req.query.sort) ? req.query.sort : "-createdAt";
+    const page  = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
     const filter = { isActive: true };
 
     // Se la ricerca è nel formato "commessa-posizione" (es. "1684-2" o

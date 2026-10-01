@@ -8,11 +8,24 @@ const { clientIp } = require("../utils/clientIp");
 
 const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
 
-/** Limiter generico per tutte le API */
+/** Limiter generico per tutte le API: chiave per utente autenticato (più persone possono
+ *  stare dietro lo stesso IP aziendale), limite alto perché il frontend fa molte chiamate. */
 exports.apiLimiter = rateLimit({
   windowMs,
-  max:     parseInt(process.env.RATE_LIMIT_MAX) || 200,
+  max:     parseInt(process.env.RATE_LIMIT_MAX) || 1000,
+  keyGenerator: (req) => req.user?._id?.toString() || clientIp(req),
   message: { message: "Troppe richieste. Riprova tra qualche minuto." },
+  standardHeaders: true,
+  legacyHeaders:   false,
+});
+
+/** Limiter stretto per operazioni costose (es. export Excel con grafici): generare il file
+ *  occupa CPU e memoria, e su un'istanza piccola una raffica la metterebbe in ginocchio. */
+exports.exportLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max:     parseInt(process.env.RATE_LIMIT_EXPORT_MAX) || 10,
+  keyGenerator: (req) => req.user?._id?.toString() || clientIp(req),
+  message: { message: "Troppe esportazioni ravvicinate. Attendi qualche minuto." },
   standardHeaders: true,
   legacyHeaders:   false,
 });
