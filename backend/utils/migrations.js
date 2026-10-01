@@ -11,6 +11,7 @@ const Department      = require("../models/Department");
 const StandardTime    = require("../models/StandardTime");
 const ProductionEntry = require("../models/ProductionEntry");
 const User            = require("../models/User");
+const Notification    = require("../models/Notification");
 
 const DEFAULT_DEPARTMENTS = ["Prima Saldatura", "Seconda Saldatura", "Finitura", "Prova Idraulica", "Riempimento"];
 
@@ -69,6 +70,15 @@ const MIGRATIONS = [
         entriesAssigned: entries.modifiedCount,
         superAdmin: superAdmin?.username || null,
       };
+    },
+  },
+  {
+    // Gli operai vedono solo i colleghi della propria mansione: le notifiche generali dei
+    // movimenti riportano il nome di chi li ha fatti, quindi passano ai soli responsabili
+    name: "2026-10-01-notification-audience",
+    async run() {
+      const r = await Notification.updateMany({ type: "movement", userId: null }, { $set: { audience: "managers" } });
+      return { notificationsForManagers: r.modifiedCount };
     },
   },
 ];

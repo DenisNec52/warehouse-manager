@@ -16,6 +16,29 @@ const mongoose = require("mongoose");
 const Movement = require("../models/Movement");
 const Product  = require("../models/Product");
 const Notification = require("../models/Notification");
+const { visibleColleagueIds, maskMovements } = require("../utils/colleagues");
+
+// MongoDB può annullare una transazione con un errore "transitorio" (TransientTransactionError,
+// es. WriteConflict con due movimenti simultanei sullo stesso prodotto): niente è stato scritto
+// e la documentazione MongoDB indica di ripetere l'operazione. Si ripete fino a 8 volte con
+// un'attesa casuale crescente, così le richieste in conflitto non si riscontrano allo stesso istante.
+const isTransient = (err) => typeof err?.hasErrorLabel === "function" && err.hasErrorLabel("TransientTransactionError");
+function retryOnTransient(handler, attempts = 8) {
+  return async (req, res, next) => {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await handler(req, res, next);
+      } catch (err) {
+        if (!isTransient(err) || attempt >= attempts || res.headersSent) {
+          console.error(`[movements] ${req.method} non riuscito dopo ${attempt} tentativi`, err.message);
+          if (!res.headersSent) res.status(500).json({ message: "Operazione non riuscita, riprova." });
+          return;
+        }
+        await new Promise((r) => setTimeout(r, (25 + Math.random() * 75) * attempt));
+      }
+    }
+  };
+}
 const { protect, requireAdmin } = require("../middleware/auth");
 const validate    = require("../middleware/validate");
 const email       = require("../utils/email");
@@ -31,7 +54,12 @@ router.get("/", async (req, res) => {
 
     if (type)      filter.type    = type;
     if (productId) filter.product = productId;
-    if (userId)    filter.performedBy = userId;
+    if (userId) {
+      // Un operaio può filtrare solo per i colleghi che vede (altrimenti il filtro rivelerebbe chi ha fatto cosa)
+      const ids = await visibleColleagueIds(req);
+      if (ids && !ids.has(String(userId))) return res.status(403).json({ message: "Non puoi vedere i movimenti di questo utente." });
+      filter.performedBy = userId;
+    }
     if (from || to) {
       filter.createdAt = {};
       if (from) filter.createdAt.$gte = new Date(from);
@@ -50,7 +78,7 @@ router.get("/", async (req, res) => {
       .lean();
 
     res.json({
-      movements,
+      movements: maskMovements(movements, await visibleColleagueIds(req)),
       pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / parseInt(limit)) },
     });
   } catch (err) {
@@ -66,7 +94,7 @@ router.get("/product/:productId", async (req, res) => {
       .sort("-createdAt")
       .limit(100)
       .lean();
-    res.json({ movements });
+    res.json({ movements: maskMovements(movements, await visibleColleagueIds(req)) });
   } catch (err) {
     res.status(500).json({ message: "Errore." });
   }
@@ -79,7 +107,7 @@ router.get("/:id", async (req, res) => {
       .populate("product",     "name code unit category")
       .populate("performedBy", "name username role");
     if (!m) return res.status(404).json({ message: "Movimento non trovato." });
-    res.json({ movement: m });
+    res.json({ movement: maskMovements(m, await visibleColleagueIds(req)) });
   } catch (err) {
     res.status(500).json({ message: "Errore." });
   }
@@ -96,7 +124,7 @@ router.post("/",
     body("reference").optional().trim(),
   ],
   validate,
-  async (req, res) => {
+  retryOnTransient(async (req, res) => {
     // Usa una sessione MongoDB per transazione atomica
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -175,6 +203,7 @@ router.post("/",
       // Movimento importante → notifica
       await Notification.create({
         type:    "movement",
+        audience: "managers",
         title:   `${type === "IN" ? "Entrata" : "Uscita"} — ${product.name}`,
         message: `${qty} ${product.unit} ${type === "IN" ? "aggiunti" : "rimossi"} da ${req.user.name}.`,
         link:    `/movements`,
@@ -186,13 +215,14 @@ router.post("/",
 
       res.status(201).json({ movement: movement[0] });
     } catch (err) {
-      await session.abortTransaction();
+      if (session.inTransaction()) await session.abortTransaction();
+      if (isTransient(err)) throw err;   // transazione annullata: retryOnTransient la ripete
       console.error("[movements/post]", err);
       res.status(500).json({ message: "Errore registrazione movimento." });
     } finally {
       session.endSession();
     }
-  }
+  })
 );
 
 // ── Correzione / annullamento movimenti (solo admin) ─────────────
@@ -220,7 +250,7 @@ router.put("/:id", requireAdmin,
     body("reference").optional().trim(),
   ],
   validate,
-  async (req, res) => {
+  retryOnTransient(async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
@@ -261,6 +291,7 @@ router.put("/:id", requireAdmin,
       try {
         await Notification.create({
           type:    "movement",
+          audience: "managers",
           title:   `Movimento corretto — ${movement.productSnapshot?.name || product.name}`,
           message: `${before} → ${typeLabel(type)} ${quantity} ${product.unit}, corretto da ${req.user.name}. Giacenza: ${product.quantity} → ${newStock}.`,
           link:    "/movements",
@@ -274,15 +305,16 @@ router.put("/:id", requireAdmin,
       res.json({ movement, quantity: newStock });
     } catch (err) {
       if (session.inTransaction()) await session.abortTransaction();
+      if (isTransient(err)) throw err;
       console.error("[movements/put]", err);
       res.status(500).json({ message: "Errore correzione movimento." });
     } finally {
       session.endSession();
     }
-  }
+  })
 );
 
-router.delete("/:id", requireAdmin, async (req, res) => {
+router.delete("/:id", requireAdmin, retryOnTransient(async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
@@ -308,6 +340,7 @@ router.delete("/:id", requireAdmin, async (req, res) => {
       const unit = movement.productSnapshot?.unit || product.unit;
       await Notification.create({
         type:    "movement",
+        audience: "managers",
         title:   `Movimento annullato — ${movement.productSnapshot?.name || product.name}`,
         message: `${typeLabel(movement.type)} di ${movement.quantity} ${unit} del ${new Date(movement.createdAt).toLocaleDateString("it-IT")} annullata da ${req.user.name}. Giacenza: ${product.quantity} → ${newStock}.`,
         link:    "/movements",
@@ -319,11 +352,12 @@ router.delete("/:id", requireAdmin, async (req, res) => {
     res.json({ message: "Movimento annullato.", quantity: newStock });
   } catch (err) {
     if (session.inTransaction()) await session.abortTransaction();
+    if (isTransient(err)) throw err;
     console.error("[movements/delete]", err);
     res.status(500).json({ message: "Errore annullamento movimento." });
   } finally {
     session.endSession();
   }
-});
+}));
 
 module.exports = router;

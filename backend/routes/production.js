@@ -10,6 +10,7 @@ const User            = require("../models/User");
 const { protect, requireSupervisor } = require("../middleware/auth");
 const validate = require("../middleware/validate");
 const { checkDepartment, visibleScope } = require("../utils/departmentAccess");
+const { colleagueFilter } = require("../utils/colleagues");
 const Department = require("../models/Department");
 const { PERIODS, resolvePeriod } = require("../utils/reportPeriod");
 const { buildReport } = require("../utils/andonReport");
@@ -45,6 +46,16 @@ async function departmentFilter(req, res) {
   const check = await checkDepartment(req.user, req.query.department);
   if (check.status) { res.status(check.status).json({ message: check.message }); return null; }
   return { department: check.department._id };
+}
+
+/**
+ * Filtro delle righe di produzione per le letture: reparti visibili (departmentFilter)
+ * e, per gli operai, solo le righe dei colleghi della propria mansione (utils/colleagues).
+ */
+async function productionScope(req, res) {
+  const scope = await departmentFilter(req, res);
+  if (!scope) return null;
+  return { ...scope, ...(await colleagueFilter(req, "operatore")) };
 }
 
 router.get("/standard-times", async (req, res) => {
@@ -125,7 +136,7 @@ function periodFilter(q) {
 }
 
 router.get("/entries", periodRules, validate, async (req, res) => {
-  const scope = await departmentFilter(req, res);
+  const scope = await productionScope(req, res);
   if (!scope) return;
   const entries = await ProductionEntry.find({ ...periodFilter(req.query), ...scope })
     .sort({ data: -1, createdAt: -1 })
@@ -261,7 +272,7 @@ router.delete("/entries/:id", async (req, res) => {
 // ── Confronto tempo standard vs impiegato ─────────────────────
 
 router.get("/stats", periodRules, validate, async (req, res) => {
-  const scope = await departmentFilter(req, res);
+  const scope = await productionScope(req, res);
   if (!scope) return;
   const match = { ...periodFilter(req.query), ...scope };
   const sums = {
@@ -305,13 +316,13 @@ const reportRules = [
 ];
 
 router.get("/report", reportRules, validate, async (req, res) => {
-  const scope = await departmentFilter(req, res);
+  const scope = await productionScope(req, res);
   if (!scope) return;
   res.json(await buildReport(scope, resolvePeriod(req.query.period, req.query.date)));
 });
 
 router.get("/export", [...reportRules, query("charts").optional().isIn(["0", "1"])], validate, async (req, res) => {
-  const scope = await departmentFilter(req, res);
+  const scope = await productionScope(req, res);
   if (!scope) return;
   const range = resolvePeriod(req.query.period, req.query.date);
   const report = await buildReport(scope, range, { withRows: true });

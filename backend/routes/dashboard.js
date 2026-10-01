@@ -10,6 +10,7 @@ const Product  = require("../models/Product");
 const Movement = require("../models/Movement");
 const User     = require("../models/User");
 const Notification = require("../models/Notification");
+const { visibleColleagueIds, maskMovements, notificationScope } = require("../utils/colleagues");
 const { protect }  = require("../middleware/auth");
 const router       = express.Router();
 
@@ -34,10 +35,7 @@ router.get("/stats", async (req, res) => {
         { $match: { isActive: true } },
         { $group: { _id: null, total: { $sum: { $multiply: ["$quantity","$unitPrice"] } } } },
       ]),
-      Notification.countDocuments({
-        $or: [{ userId: req.user._id }, { userId: null }],
-        read: false,
-      }),
+      Notification.countDocuments({ ...notificationScope(req.user), read: false }),
     ]);
 
     // Ultimi 5 movimenti
@@ -67,7 +65,7 @@ router.get("/stats", async (req, res) => {
         totalValue: totalValue[0]?.total || 0,
         unreadNotifications,
       },
-      recentMovements,
+      recentMovements: maskMovements(recentMovements, await visibleColleagueIds(req)),
       criticalProducts: criticalProducts.map(p => ({ ...p, isLowStock: true })),
     });
   } catch (err) {

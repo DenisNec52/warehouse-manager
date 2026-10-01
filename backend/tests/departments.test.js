@@ -54,7 +54,7 @@ describe("Migrazione reparti (dati come in produzione oggi)", () => {
     await runMigrations(quiet);
     expect(await Department.countDocuments()).toBe(5);
     expect(await StandardTime.countDocuments()).toBe(9);
-    expect(await Migration.countDocuments()).toBe(1);
+    expect(await Migration.countDocuments()).toBe(2);   // reparti + destinatari delle notifiche
   });
 });
 

@@ -128,8 +128,13 @@ describe("Produzione saldatura (Andon Board)", () => {
     await op1.post("/api/production/entries").send(entryBody({ standardTime: id, tempoImpiegatoMinuti: 320 }));
     await op2.post("/api/production/entries").send(entryBody({ standardTime: id, quantita: 5, tempoImpiegatoMinuti: 300 }));
 
-    const res = await op1.get("/api/production/stats?from=2026-09-25&to=2026-09-25");
+    // Il supervisore vede tutti gli operai: totali e per operatore
+    const res = await capo.get("/api/production/stats?from=2026-09-25&to=2026-09-25");
     expect(res.body.totale).toMatchObject({ righe: 2, pezzi: 11, attesoMinuti: 990, impiegatoMinuti: 620, efficienza: 1.6 });
+    // Un operaio senza reparto assegnato vede solo le proprie righe (nessun collega di mansione)
+    const own = await op1.get("/api/production/stats?from=2026-09-25&to=2026-09-25");
+    expect(own.body.totale).toMatchObject({ righe: 1, pezzi: 6 });
+    expect(own.body.perOperatore.map(o => o.nome)).toEqual(["Alessandro"]);
     expect(res.body.perOperatore.find(o => o.nome === "Alessandro").efficienza).toBe(1.69);
     expect(res.body.perOperatore.find(o => o.nome === "Denis").efficienza).toBe(1.5);
     expect(res.body.perCommessa).toHaveLength(1);
