@@ -2,9 +2,9 @@
  * utils/colleagues.js — quali colleghi può vedere un utente (applicato lato server).
  *
  * Admin e supervisori vedono tutti. Un operaio vede solo i colleghi della propria
- * "mansione", cioè chi ha almeno un reparto in comune con i reparti che l'operaio
- * vede (User.visibleDepartments se impostato, altrimenti i suoi gruppi), più sé stesso.
- * Un operaio senza reparto assegnato vede solo sé stesso.
+ * squadra: chi ha almeno un reparto in comune E lo stesso turno (shift), più sé stesso.
+ * Un operaio senza reparto o senza turno assegnato vede solo sé stesso.
+ * Il super-admin è sempre escluso (non deve comparire a nessuno tranne sé stesso).
  *
  * Nota: qui si filtrano le PERSONE. L'accesso ai reparti resta quello di
  * utils/departmentAccess.js (un operaio senza reparto può comunque lavorare).
@@ -18,11 +18,34 @@ const isManager = (user) => user.role === "admin" || user.role === "supervisore"
 async function visibleColleagueIds(req) {
   if (isManager(req.user)) return null;
   if (req._colleagueIds) return req._colleagueIds;
-  // Per i colleghi conta il reparto assegnato: null ("nessun gruppo") vuol dire nessun collega
+  const self = String(req.user._id);
   const depts = Array.isArray(req.user.visibleDepartments) ? req.user.visibleDepartments : (req.user.departments || []);
-  const ids = depts.length ? await User.find({ departments: { $in: depts } }).distinct("_id") : [];
-  req._colleagueIds = new Set([...ids.map(String), String(req.user._id)]);
+  const shift = req.user.shift;
+  // Senza reparto o senza turno: nessun collega, solo sé stesso
+  if (!depts.length || !shift) {
+    req._colleagueIds = new Set([self]);
+    return req._colleagueIds;
+  }
+  // Colleghi = stesso turno + almeno un reparto in comune (super-admin sempre escluso)
+  const ids = await User.find({
+    shift,
+    departments: { $in: depts },
+    isSuperAdmin: { $ne: true },
+  }).distinct("_id");
+  req._colleagueIds = new Set([...ids.map(String), self]);
   return req._colleagueIds;
+}
+
+/** Filtro Mongo per nascondere il super-admin a tutti tranne a sé stesso. */
+function hideSuperAdmin(req) {
+  return req.user?.isSuperAdmin ? {} : { isSuperAdmin: { $ne: true } };
+}
+
+/** Un supervisore può gestire solo i propri operai (operatore con supervisor == lui). */
+function supervisorCanManage(actor, target) {
+  return actor.role === "supervisore"
+    && target.role === "operatore"
+    && String(target.supervisor || "") === String(actor._id);
 }
 
 /** Filtro Mongo sul campo che contiene l'utente (es. "operatore"): {} per admin/supervisori. */
@@ -89,4 +112,4 @@ function notificationScope(user) {
     : { $or: [{ userId: user._id }, { userId: null, audience: { $ne: "managers" } }] };
 }
 
-module.exports = { visibleColleagueIds, colleagueFilter, maskUser, maskField, maskMovements, notificationScope, isManager };
+module.exports = { visibleColleagueIds, colleagueFilter, maskUser, maskField, maskMovements, notificationScope, isManager, hideSuperAdmin, supervisorCanManage };

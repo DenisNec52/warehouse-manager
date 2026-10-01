@@ -93,6 +93,15 @@ const userSchema = new mongoose.Schema({
   departments:        [{ type: mongoose.Schema.Types.ObjectId, ref: "Department" }],
   visibleDepartments: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Department" }], default: null },
 
+  // ── Turno ─────────────────────────────────────────────────────
+  // null = "non assegnato" (mostrato in una sezione dedicata nella gerarchia).
+  shift: { type: String, enum: ["turno1", "turno2", "centrale"], default: null },
+
+  // ── Supervisore (solo per gli operai) ─────────────────────────
+  // L'operaio è "sotto" questo supervisore: lo assegnano admin/super-admin.
+  // Un supervisore può modificare solo i propri operai (vedi routes/users.js).
+  supervisor: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+
   // Un solo super-admin (indice sotto): nessun altro può eliminarlo, disattivarlo,
   // declassarlo o cambiargli password/badge. Non assegnabile via API.
   isSuperAdmin: { type: Boolean, default: false },
@@ -139,6 +148,8 @@ userSchema.methods.toPublic = function() {
     isSuperAdmin:       this.isSuperAdmin,
     departments:        this.departments,
     visibleDepartments: this.visibleDepartments,
+    shift:              this.shift,
+    supervisor:         this.supervisor,
     // Per l'interfaccia: reparti effettivamente visibili (null = tutti)
     visibleDepartmentIds: this.visibleDepartmentIds(),
   };
