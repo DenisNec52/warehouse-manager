@@ -18,11 +18,43 @@ const Department = require("../models/Department");
 const { protect, requireSupervisor, requireAdmin } = require("../middleware/auth");
 const validate = require("../middleware/validate");
 const badge    = require("../utils/badge");
+const { hideSuperAdmin, supervisorCanManage } = require("../utils/colleagues");
 const router   = express.Router();
 
 router.use(protect, requireSupervisor);
 
 const ROLES = ["admin", "supervisore", "operatore"];
+const SHIFTS = ["turno1", "turno2", "centrale"];
+
+// Turno e supervisore: validazione comune a creazione e modifica.
+const staffRules = [
+  // null/"" = togli il turno ("non assegnato")
+  body("shift").optional({ nullable: true }).custom(v => v === null || v === "" || SHIFTS.includes(v)).withMessage("Turno non valido"),
+  body("supervisor").optional({ nullable: true }).custom(v => v === null || v === "" || mongoose.isValidObjectId(v)).withMessage("Supervisore non valido"),
+];
+
+/**
+ * Campi "staff" (turno, supervisore) dal body, con permessi:
+ * - shift: chiunque gestisca l'utente può impostarlo (anche il supervisore sui propri operai).
+ * - supervisor: solo admin/super-admin; deve riferirsi a un utente esistente con ruolo supervisore.
+ * Restituisce { fields } oppure { error }.
+ */
+async function staffFields(req) {
+  const out = {};
+  const b = req.body;
+  if (b.shift !== undefined) out.shift = (b.shift === "" ? null : b.shift);
+  if (b.supervisor !== undefined) {
+    const isPower = req.user.role === "admin" || req.user.isSuperAdmin;
+    if (!isPower) return { error: "Solo un admin può assegnare il supervisore." };
+    if (b.supervisor === null || b.supervisor === "") out.supervisor = null;
+    else {
+      const sv = await User.findOne({ _id: b.supervisor, role: "supervisore" });
+      if (!sv) return { error: "Il supervisore indicato non esiste." };
+      out.supervisor = sv._id;
+    }
+  }
+  return { fields: out };
+}
 
 /**
  * Carica il destinatario e verifica che chi agisce possa gestirlo:
@@ -35,10 +67,13 @@ async function loadManageableTarget(req, res, next) {
   try { target = await User.findById(req.params.id); } catch (err) { return next(err); }
   if (!target) return res.status(404).json({ message: "Utente non trovato." });
   const isSelf = String(target._id) === String(req.user._id);
-  if (target.isSuperAdmin && !isSelf)
-    return res.status(403).json({ message: "L'account super-admin può essere gestito solo dal suo titolare." });
+  // Super-admin: invisibile a tutti tranne a sé stesso (404, non 403, per non rivelarne l'esistenza)
+  if (target.isSuperAdmin && !isSelf) return res.status(404).json({ message: "Utente non trovato." });
   if (target.role === "admin" && req.user.role !== "admin")
     return res.status(403).json({ message: "Non puoi modificare un account admin." });
+  // Un supervisore può gestire solo i propri operai (oltre a sé stesso)
+  if (req.user.role === "supervisore" && !isSelf && !supervisorCanManage(req.user, target))
+    return res.status(403).json({ message: "Puoi gestire solo i tuoi operai." });
   req.target = target;
   next();
 }
@@ -78,10 +113,38 @@ async function departmentFields(reqBody) {
   return { fields: out };
 }
 
-// Lista utenti
-router.get("/", async (_req, res) => {
-  const users = await User.find().sort("-createdAt").lean();
-  res.json({ users: users.map(u => ({ ...u, password: undefined, badgeSecretHash: undefined })) });
+// Lista utenti con ricerca e filtri (ruolo, reparto, turno). Il super-admin è sempre escluso
+// (tranne per sé stesso). I parametri sono forzati a stringa: un input inatteso non causa 500.
+router.get("/", async (req, res) => {
+  const str = (v) => (typeof v === "string" ? v.trim() : "");
+  const filter = { ...hideSuperAdmin(req) };
+  const role = str(req.query.role);
+  if (ROLES.includes(role)) filter.role = role;
+  const shift = str(req.query.shift);
+  if (SHIFTS.includes(shift)) filter.shift = shift;
+  const department = str(req.query.department);
+  if (mongoose.isValidObjectId(department)) filter.departments = department;
+  const search = str(req.query.search);
+  if (search) {
+    const safe = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");   // no regex injection
+    filter.$or = [{ name: { $regex: safe, $options: "i" } }, { username: { $regex: safe, $options: "i" } }];
+  }
+  const users = await User.find(filter)
+    .sort("-createdAt")
+    .select("-password -badgeSecretHash -resetPasswordTokenHash -resetPasswordExpires")
+    .lean();
+  res.json({ users });
+});
+
+// Dettaglio singolo utente — super-admin non visibile ad altri (404)
+router.get("/:id", async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ message: "Utente non trovato." });
+  const target = await User.findById(req.params.id)
+    .select("-password -badgeSecretHash -resetPasswordTokenHash -resetPasswordExpires")
+    .lean();
+  const isSelf = target && String(target._id) === String(req.user._id);
+  if (!target || (target.isSuperAdmin && !isSelf)) return res.status(404).json({ message: "Utente non trovato." });
+  res.json({ user: target });
 });
 
 // Crea utente
@@ -93,6 +156,7 @@ router.post("/",
     body("role").isIn(ROLES).withMessage("Ruolo non valido"),
     body("email").optional({ checkFalsy: true }).isEmail().withMessage("Email non valida").normalizeEmail(),
     ...deptRules,
+    ...staffRules,
   ],
   validate,
   async (req, res) => {
@@ -100,9 +164,11 @@ router.post("/",
       return res.status(403).json({ message: "Solo un admin può creare altri admin." });
     const dept = await departmentFields(req.body);
     if (dept.error) return res.status(400).json({ message: dept.error });
+    const staff = await staffFields(req);
+    if (staff.error) return res.status(400).json({ message: staff.error });
     try {
       const { username, password, name, role, email } = req.body;
-      const user = await User.create({ username, password, name, role, email, ...dept.fields });
+      const user = await User.create({ username, password, name, role, email, ...dept.fields, ...staff.fields });
       res.status(201).json({ user: user.toPublic() });
     } catch (err) {
       if (err.code === 11000) {
@@ -122,10 +188,18 @@ router.put("/:id",
     body("role").optional().isIn(ROLES).withMessage("Ruolo non valido"),
     body("email").optional({ checkFalsy: true }).isEmail().withMessage("Email non valida").normalizeEmail(),
     ...deptRules,
+    ...staffRules,
   ],
   validate,
   async (req, res) => {
     const target = req.target;
+
+    // Un supervisore gestisce solo i propri operai e NON può cambiare ruolo né riassegnare il supervisore
+    // (può invece cambiare anagrafica, turno e reparti dei suoi operai).
+    if (req.user.role === "supervisore") {
+      delete req.body.role;
+      delete req.body.supervisor;
+    }
     const { name, role, email } = req.body;
 
     if (role !== undefined && role !== target.role) {
@@ -135,9 +209,11 @@ router.put("/:id",
     }
     const dept = await departmentFields(req.body);
     if (dept.error) return res.status(400).json({ message: dept.error });
+    const staff = await staffFields(req);
+    if (staff.error) return res.status(400).json({ message: staff.error });
 
     try {
-      const $set = { ...dept.fields };
+      const $set = { ...dept.fields, ...staff.fields };
       if (name !== undefined) $set.name = name;
       if (role !== undefined) $set.role = role;
       // Email vuota ("") RIMUOVE l'email: con l'indice sparse va resa assente ($unset), non null.

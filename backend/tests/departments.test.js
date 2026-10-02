@@ -54,7 +54,7 @@ describe("Migrazione reparti (dati come in produzione oggi)", () => {
     await runMigrations(quiet);
     expect(await Department.countDocuments()).toBe(5);
     expect(await StandardTime.countDocuments()).toBe(9);
-    expect(await Migration.countDocuments()).toBe(2);   // reparti + destinatari delle notifiche
+    expect(await Migration.countDocuments()).toBe(3);   // reparti + destinatari notifiche + turni
   });
 });
 
@@ -119,7 +119,8 @@ describe("Visibilità dei reparti (applicata dal backend)", () => {
 
   test("il supervisore imposta un'eccezione individuale e la può togliere", async () => {
     const sup = await agentFor("super", "supervisore");
-    const op  = await agentFor("mario", "operatore", { departments: [prima._id] });
+    const supId = await idOf("super");
+    const op  = await agentFor("mario", "operatore", { departments: [prima._id], supervisor: supId });
     const id  = await idOf("mario");
 
     await sup.put(`/api/users/${id}`).send({ visibleDepartments: [String(seconda._id)] });
@@ -186,11 +187,12 @@ describe("Gerarchia admin e super-admin", () => {
   });
 
   test("nessun altro admin può toccare il super-admin", async () => {
-    expect((await admin2.put(`/api/users/${rootId}`).send({ name: "X" })).status).toBe(403);
-    expect((await admin2.put(`/api/users/${rootId}/status`).send({ isActive: false })).status).toBe(403);
-    expect((await admin2.put(`/api/users/${rootId}/password`).send({ newPassword: "NuovaPass123" })).status).toBe(403);
-    expect((await admin2.post(`/api/users/${rootId}/badge/regenerate`)).status).toBe(403);
-    expect((await admin2.delete(`/api/users/${rootId}`)).status).toBe(403);
+    // Super-admin invisibile: ad altri admin risponde 404 (non 403), per non rivelarne l'esistenza
+    expect((await admin2.put(`/api/users/${rootId}`).send({ name: "X" })).status).toBe(404);
+    expect((await admin2.put(`/api/users/${rootId}/status`).send({ isActive: false })).status).toBe(404);
+    expect((await admin2.put(`/api/users/${rootId}/password`).send({ newPassword: "NuovaPass123" })).status).toBe(404);
+    expect((await admin2.post(`/api/users/${rootId}/badge/regenerate`)).status).toBe(404);
+    expect((await admin2.delete(`/api/users/${rootId}`)).status).toBe(404);
     const me = await User.findById(rootId);
     expect(me).toMatchObject({ isActive: true, role: "admin", isSuperAdmin: true, name: "admin" });
   });

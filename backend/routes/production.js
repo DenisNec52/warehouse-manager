@@ -10,7 +10,7 @@ const User            = require("../models/User");
 const { protect, requireSupervisor } = require("../middleware/auth");
 const validate = require("../middleware/validate");
 const { checkDepartment, visibleScope } = require("../utils/departmentAccess");
-const { colleagueFilter } = require("../utils/colleagues");
+const { colleagueFilter, hiddenSuperAdminId } = require("../utils/colleagues");
 const Department = require("../models/Department");
 const { PERIODS, resolvePeriod } = require("../utils/reportPeriod");
 const { exportLimiter } = require("../middleware/rateLimiter");
@@ -141,7 +141,10 @@ router.get("/entries", periodRules, validate, async (req, res) => {
   if (!scope) return;
   const entries = await ProductionEntry.find({ ...periodFilter(req.query), ...scope })
     .sort({ data: -1, createdAt: -1 })
-    .limit(500);
+    .limit(500)
+    .lean();
+  const hideId = await hiddenSuperAdminId(req);
+  if (hideId) entries.forEach(e => { if (String(e.operatore) === hideId) e.operatoreNome = "Altro operatore"; });
   res.json({ entries });
 });
 
@@ -299,9 +302,11 @@ router.get("/stats", periodRules, validate, async (req, res) => {
   });
   const empty = { righe: 0, pezzi: 0, attesoMinuti: 0, impiegatoMinuti: 0 };
 
+  const hideStatsId = await hiddenSuperAdminId(req);
+  const maskName = (row) => (hideStatsId && String(row._id) === hideStatsId ? { ...row, nome: "Altro operatore" } : row);
   res.json({
     totale:       withEfficiency(result.totale[0] ? { ...result.totale[0], _id: undefined } : empty),
-    perOperatore: result.perOperatore.map(withEfficiency),
+    perOperatore: result.perOperatore.map(maskName).map(withEfficiency),
     perCommessa:  result.perCommessa.map(withEfficiency),
     perGiorno:    result.perGiorno.map(withEfficiency),
   });
@@ -319,14 +324,14 @@ const reportRules = [
 router.get("/report", reportRules, validate, async (req, res) => {
   const scope = await productionScope(req, res);
   if (!scope) return;
-  res.json(await buildReport(scope, resolvePeriod(req.query.period, req.query.date)));
+  res.json(await buildReport(scope, resolvePeriod(req.query.period, req.query.date), { hideUserId: await hiddenSuperAdminId(req) }));
 });
 
 router.get("/export", exportLimiter, [...reportRules, query("charts").optional().isIn(["0", "1"])], validate, async (req, res) => {
   const scope = await productionScope(req, res);
   if (!scope) return;
   const range = resolvePeriod(req.query.period, req.query.date);
-  const report = await buildReport(scope, range, { withRows: true });
+  const report = await buildReport(scope, range, { withRows: true, hideUserId: await hiddenSuperAdminId(req) });
   const dept = scope.department ? await Department.findById(scope.department).select("name").lean() : null;
   const buffer = await buildAndonWorkbook(report, dept?.name || "Tutti i reparti visibili", req.query.charts === "1");
 

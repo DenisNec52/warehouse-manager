@@ -13,7 +13,7 @@ const express  = require("express");
 const { body } = require("express-validator");
 const Product  = require("../models/Product");
 const Notification = require("../models/Notification");
-const { visibleColleagueIds, maskField } = require("../utils/colleagues");
+const { maskField, visibilityContext } = require("../utils/colleagues");
 const { protect, requireAdmin } = require("../middleware/auth");
 const validate = require("../middleware/validate");
 const email    = require("../utils/email");
@@ -113,8 +113,8 @@ router.get("/:id", async (req, res) => {
     if (!product || !product.isActive)
       return res.status(404).json({ message: "Prodotto non trovato." });
 
-    const ids = await visibleColleagueIds(req);
-    res.json({ product: maskField(maskField(product, "createdBy", ids), "updatedBy", ids) });
+    const ctx = await visibilityContext(req);
+    res.json({ product: maskField(maskField(product, "createdBy", ctx), "updatedBy", ctx) });
   } catch (err) {
     res.status(500).json({ message: "Errore." });
   }

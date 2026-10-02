@@ -30,10 +30,10 @@ describe("Visibilità dei colleghi per mansione (reparto)", () => {
     prima = await Department.findOne({ name: "Prima Saldatura" });
     seconda = await Department.findOne({ name: "Seconda Saldatura" });
     capo  = await agentFor("capo", "supervisore");
-    anna  = await agentFor("anna", "operatore", { departments: [prima._id] });   // Prima
-    bruno = await agentFor("bruno", "operatore", { departments: [prima._id] });  // Prima: collega di Anna
-    carlo = await agentFor("carlo", "operatore", { departments: [seconda._id] }); // Seconda
-    nadia = await agentFor("nadia", "operatore");                                 // nessun reparto
+    anna  = await agentFor("anna", "operatore", { departments: [prima._id], shift: "turno1" });   // Prima, turno 1
+    bruno = await agentFor("bruno", "operatore", { departments: [prima._id], shift: "turno1" });  // Prima, turno 1: collega di Anna
+    carlo = await agentFor("carlo", "operatore", { departments: [seconda._id], shift: "turno2" }); // Seconda, turno 2
+    nadia = await agentFor("nadia", "operatore");                                 // nessun reparto, nessun turno
 
     // Un tempo standard in Prima Saldatura per poter registrare righe
     std = (await capo.post("/api/production/standard-times").send({ department: String(prima._id), tipologia: "Tubo", dimensione: "", label: "Tubo", minuti: 30 })).body.standardTime;
