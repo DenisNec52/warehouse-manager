@@ -16,6 +16,10 @@ const { PERIODS, resolvePeriod } = require("../utils/reportPeriod");
 const { exportLimiter } = require("../middleware/rateLimiter");
 const { buildReport } = require("../utils/andonReport");
 const { buildAndonWorkbook } = require("../utils/andonExcel");
+const multer = require("multer");
+const {
+  ImportError, parseStandardTimesWorkbook, planStandardTimesImport, applyStandardTimesImport,
+} = require("../utils/standardTimeImporter");
 const router   = express.Router();
 
 // Express 4 does not forward rejected promises: without this, a DB error in an async
@@ -104,6 +108,52 @@ router.put("/standard-times/:id", requireSupervisor, standardTimeRules, validate
     if (err.code === 11000) return res.status(409).json({ message: "In questo reparto esiste già un tempo per questa tipologia e dimensione." });
     res.status(500).json({ message: "Errore." });
   }
+});
+
+// ── Import tempi standard da Excel ────────────────────────────
+// Due passaggi con lo stesso file: dryRun=1 restituisce l'anteprima (nuovi / aggiornati /
+// invariati / conflitti), poi senza dryRun applica. Il file resta in memoria, mai su disco.
+const xlsxUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => cb(null, /\.xlsx$/i.test(file.originalname)),
+}).single("file");
+
+function receiveXlsx(req, res, next) {
+  xlsxUpload(req, res, (err) => {
+    if (err?.code === "LIMIT_FILE_SIZE") return res.status(400).json({ message: "File troppo grande (max 5 MB)." });
+    if (err) return res.status(400).json({ message: "Upload non riuscito." });
+    if (!req.file) return res.status(400).json({ message: "Carica un file Excel .xlsx." });
+    next();
+  });
+}
+
+router.post("/standard-times/import", requireSupervisor, receiveXlsx, async (req, res) => {
+  const check = await checkDepartment(req.user, req.body.department, { forWrite: true });
+  if (check.status) return res.status(check.status).json({ message: check.message });
+  const departmentId = check.department._id;
+  const dryRun = ["1", "true"].includes(String(req.body.dryRun));
+
+  let parsed;
+  try {
+    parsed = await parseStandardTimesWorkbook(req.file.buffer);
+  } catch (err) {
+    if (err instanceof ImportError) return res.status(400).json({ message: err.message });
+    throw err;
+  }
+
+  const plan = await planStandardTimesImport(parsed.items, departmentId);
+  const preview = {
+    department: { _id: departmentId, name: check.department.name },
+    items: plan.map(({ id: _id, ...p }) => p),
+    conflicts: parsed.conflicts,
+    errors: parsed.errors,
+    sheetsRead: parsed.sheetsRead,
+  };
+  if (dryRun) return res.json(preview);
+
+  const result = await applyStandardTimesImport(plan, departmentId, req.user._id);
+  res.json({ ...preview, result });
 });
 
 // Disattivazione, non cancellazione: le righe storiche continuano a referenziarlo.

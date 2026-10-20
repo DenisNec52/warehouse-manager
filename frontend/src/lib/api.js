@@ -134,6 +134,11 @@ export const productionAPI = {
   createStandardTime: (d)    => api.post("/production/standard-times", d),
   updateStandardTime: (id,d) => api.put(`/production/standard-times/${id}`, d),
   deleteStandardTime: (id)   => api.delete(`/production/standard-times/${id}`),
+  // FormData { department, file, dryRun? }: il Content-Type esplicito serve perché l'istanza
+  // ha application/json di default e axios convertirebbe il FormData in JSON.
+  importStandardTimes: (fd)  => api.post("/production/standard-times/import", fd, {
+    headers: { "Content-Type": "multipart/form-data" }, timeout: 60_000,
+  }),
   entries:            (p)    => api.get("/production/entries", { params: p }),
   createEntry:        (d)    => api.post("/production/entries", d),
   updateEntry:        (id,d) => api.put(`/production/entries/${id}`, d),
