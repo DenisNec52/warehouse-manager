@@ -12,7 +12,7 @@ import { m as motion, AnimatePresence } from "framer-motion";
 import {
   Package, ArrowLeftRight, Tag, Users, Bell,
   Settings, LogOut, Menu, X, Sun, Moon, Palette,
-  Home, ClipboardCheck, ClipboardList, Timer, Clock, ShieldCheck, Factory
+  Home, ClipboardCheck, ClipboardList, Timer, Clock, ShieldCheck, Factory, Crown
 } from "lucide-react";
 import { useAuthStore, useThemeStore } from "@/lib/store";
 import { authAPI } from "@/lib/api";
@@ -25,24 +25,24 @@ import clsx from "clsx";
 
 const NAV = [
   { to:"/",          label:"Home",       icon:Home,            exact:true },
-  { to:"/checklist", label:"Pulizia 5S", icon:ClipboardCheck               },
-  { to:"/products",  label:"Magazzino",  icon:Package                      },
-  { to:"/movements", label:"Movimenti",  icon:ArrowLeftRight                },
-  { to:"/production", label:"Andon Board", icon:Timer, exact:true },
-  { to:"/production/standard-times", label:"Tempi standard", icon:Clock },
+  { key:"checklist",      to:"/checklist", label:"Pulizia 5S", icon:ClipboardCheck },
+  { key:"products",       to:"/products",  label:"Magazzino",  icon:Package        },
+  { key:"movements",      to:"/movements", label:"Movimenti",  icon:ArrowLeftRight },
+  { key:"production",     to:"/production", label:"Andon Board", icon:Timer, exact:true },
+  { key:"standard-times", to:"/production/standard-times", label:"Tempi standard", icon:Clock },
 ];
 
 // Visibili ad admin e supervisore
 const NAV_SUPERVISOR = [
-  { to:"/users",           label:"Utenti",       icon:Users         },
-  { to:"/admin/checklist", label:"Gestione 5S",  icon:ClipboardList },
+  { key:"users",           to:"/users",           label:"Utenti",       icon:Users         },
+  { key:"admin-checklist", to:"/admin/checklist", label:"Gestione 5S",  icon:ClipboardList },
 ];
 
 // Visibili solo ad admin
 const NAV_ADMIN = [
-  { to:"/admin",           label:"Amministrazione", icon:ShieldCheck, exact:true },
-  { to:"/admin/departments", label:"Reparti",    icon:Factory       },
-  { to:"/categories",      label:"Categorie",    icon:Tag           },
+  { key:"admin",       to:"/admin",           label:"Amministrazione", icon:ShieldCheck, exact:true },
+  { key:"departments", to:"/admin/departments", label:"Reparti",    icon:Factory       },
+  { key:"categories",  to:"/categories",      label:"Categorie",    icon:Tag           },
 ];
 
 const NAV_BOTTOM = [
@@ -53,10 +53,20 @@ const NAV_BOTTOM = [
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [themeOpen,   setThemeOpen]   = useState(false);
-  const { user, logout }  = useAuthStore();
+  const { user, logout, settings }  = useAuthStore();
   const { mode, setMode } = useThemeStore();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Visibilità moduli decisa dal super-admin (strato UI; i controlli veri sono lato server).
+  // Il super-admin vede tutto. Senza una regola per quel modulo → visibile.
+  const canSee = (key) => {
+    if (!key || user?.isSuperAdmin) return true;
+    const allowed = settings?.moduleVisibility?.[key];
+    return !Array.isArray(allowed) || allowed.includes(user?.role);
+  };
+  const visible = (items) => items.filter((i) => canSee(i.key));
+  const appName = settings?.appName || "Warehouse Manager";
 
   const handleLogout = async () => {
     await authAPI.logout().catch(() => {});
@@ -95,8 +105,7 @@ export default function AppLayout() {
               <Package size={16} className="text-white"/>
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-900 dark:text-white leading-none">Warehouse</p>
-              <p className="text-xs text-gray-400 mt-0.5">Pro</p>
+              <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{appName}</p>
             </div>
           </div>
           <button className="lg:hidden btn btn-ghost btn-sm p-1.5" onClick={() => setSidebarOpen(false)}>
@@ -107,7 +116,7 @@ export default function AppLayout() {
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 px-3 mb-2">Menu</p>
-          {NAV.map(({ to, label, icon:Icon, exact }) => (
+          {visible(NAV).map(({ to, label, icon:Icon, exact }) => (
             <NavLink key={to} to={to} end={exact}
               className={({ isActive }) => clsx("nav-item", isActive && "active")}
               onClick={() => setSidebarOpen(false)}
@@ -120,7 +129,7 @@ export default function AppLayout() {
           {["admin","supervisore"].includes(user?.role) && (
             <>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 px-3 mt-4 mb-2">Gestione</p>
-              {NAV_SUPERVISOR.map(({ to, label, icon:Icon }) => (
+              {visible(NAV_SUPERVISOR).map(({ to, label, icon:Icon }) => (
                 <NavLink key={to} to={to}
                   className={({ isActive }) => clsx("nav-item", isActive && "active")}
                   onClick={() => setSidebarOpen(false)}
@@ -135,7 +144,7 @@ export default function AppLayout() {
           {user?.role === "admin" && (
             <>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 px-3 mt-4 mb-2">Admin</p>
-              {NAV_ADMIN.map(({ to, label, icon:Icon, exact }) => (
+              {visible(NAV_ADMIN).map(({ to, label, icon:Icon, exact }) => (
                 <NavLink key={to} to={to} end={exact}
                   className={({ isActive }) => clsx("nav-item", isActive && "active")}
                   onClick={() => setSidebarOpen(false)}
@@ -144,6 +153,19 @@ export default function AppLayout() {
                   <span>{label}</span>
                 </NavLink>
               ))}
+            </>
+          )}
+
+          {user?.isSuperAdmin && (
+            <>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 px-3 mt-4 mb-2">Super-admin</p>
+              <NavLink to="/superadmin"
+                className={({ isActive }) => clsx("nav-item", isActive && "active")}
+                onClick={() => setSidebarOpen(false)}
+              >
+                <Crown size={16} className="shrink-0"/>
+                <span>Impostazioni app</span>
+              </NavLink>
             </>
           )}
 

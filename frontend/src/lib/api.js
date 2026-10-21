@@ -163,4 +163,10 @@ export const departmentsAPI = {
   create: (d)    => api.post("/departments", d),
   update: (id,d) => api.put(`/departments/${id}`, d),   // disattivazione: { isActive: false }
 };
+// ── Impostazioni globali (super-admin) ────────────────────────
+export const settingsAPI = {
+  get:    ()  => api.get("/settings"),
+  update: (d) => api.put("/settings", d),
+};
+
 export default api;

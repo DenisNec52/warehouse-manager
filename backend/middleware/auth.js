@@ -56,3 +56,13 @@ exports.requireSupervisor = (req, res, next) => {
     return res.status(403).json({ message: "Accesso negato. Richiesto ruolo supervisore o admin." });
   next();
 };
+
+/**
+ * requireSuperAdmin — da usare dopo protect.
+ * Riservato all'unico super-admin (impostazioni globali dell'app).
+ */
+exports.requireSuperAdmin = (req, res, next) => {
+  if (!req.user?.isSuperAdmin)
+    return res.status(403).json({ message: "Accesso riservato al super-admin." });
+  next();
+};
