@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, Check, Trash2, CheckCheck } from "lucide-react";
+import { Bell, Check, Trash2, CheckCheck, Trash, ChevronDown } from "lucide-react";
+import toast from "react-hot-toast";
 import { notificationsAPI } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
 import clsx from "clsx";
@@ -9,15 +11,40 @@ const TYPE_ICON = { low_stock:"⚠️", movement:"📦", login:"🔐", system:"�
 export default function NotificationsPage() {
   const qc = useQueryClient();
   const { setUnread } = useAuthStore();
+  const [clearOpen, setClearOpen] = useState(false);
   const { data } = useQuery({ queryKey:["notifications"], queryFn: () => notificationsAPI.list().then(r=>r.data) });
   const readAll = useMutation({ mutationFn: () => notificationsAPI.readAll(), onSuccess: () => { qc.invalidateQueries({queryKey:["notifications"]}); setUnread(0); } });
   const del = useMutation({ mutationFn: id => notificationsAPI.delete(id), onSuccess: () => qc.invalidateQueries({queryKey:["notifications"]}) });
   const read = useMutation({ mutationFn: id => notificationsAPI.read(id), onSuccess: () => qc.invalidateQueries({queryKey:["notifications"]}) });
+  const clear = useMutation({
+    mutationFn: (opts) => notificationsAPI.clear(opts),
+    onSuccess: (r) => { qc.invalidateQueries({queryKey:["notifications"]}); setUnread(0); toast.success(`${r.data?.deleted || 0} notifiche eliminate`); setClearOpen(false); },
+    onError: (e) => toast.error(e.response?.data?.message || "Errore"),
+  });
+  const doClear = (opts, label) => { if (confirm(`Eliminare ${label}? L'operazione non è reversibile.`)) clear.mutate(opts); };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div><h1 className="text-xl font-bold text-gray-900 dark:text-white">Notifiche</h1><p className="text-sm text-gray-500 mt-0.5">{data?.unread||0} non lette</p></div>
-        {data?.unread > 0 && <button className="btn btn-md btn-secondary gap-2" onClick={() => readAll.mutate()}><CheckCheck size={14}/> Segna tutte lette</button>}
+        <div className="flex gap-2">
+          {data?.unread > 0 && <button className="btn btn-md btn-secondary gap-2" onClick={() => readAll.mutate()}><CheckCheck size={14}/> Segna tutte lette</button>}
+          {data?.notifications?.length > 0 && (
+            <div className="relative">
+              <button className="btn btn-md btn-secondary gap-2" onClick={() => setClearOpen(o => !o)}><Trash size={14}/> Pulisci <ChevronDown size={13}/></button>
+              {clearOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setClearOpen(false)}/>
+                  <div className="absolute right-0 mt-1 z-20 w-56 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[var(--radius-md)] shadow-modal py-1 text-sm">
+                    <button className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800" onClick={() => doClear({ type:"login" }, "tutte le notifiche di accesso")}>🔐 Solo accessi</button>
+                    <button className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800" onClick={() => doClear({ onlyRead:true }, "tutte le notifiche già lette")}>✓ Solo già lette</button>
+                    <button className="w-full text-left px-4 py-2 text-red-500 hover:bg-gray-50 dark:hover:bg-gray-800" onClick={() => doClear({ type:"all" }, "TUTTE le notifiche")}>🗑 Tutte</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       <div className="space-y-2">
         {(data?.notifications||[]).map(n => (

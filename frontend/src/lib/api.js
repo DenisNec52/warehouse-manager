@@ -104,6 +104,9 @@ export const notificationsAPI = {
   read:    (id) => api.patch(`/notifications/${id}/read`),
   readAll: ()   => api.patch("/notifications/read-all"),
   delete:  (id) => api.delete(`/notifications/${id}`),
+  // Cancellazione selettiva: type "all" oppure un tipo (es. "login" = accessi); onlyRead opzionale.
+  clear:   ({ type = "all", onlyRead = false } = {}) =>
+    api.delete("/notifications", { params: { type, ...(onlyRead ? { onlyRead: "true" } : {}) } }),
 };
 
 // ── Dashboard ─────────────────────────────────────────────────
@@ -134,6 +137,18 @@ export const productionAPI = {
   createStandardTime: (d)    => api.post("/production/standard-times", d),
   updateStandardTime: (id,d) => api.put(`/production/standard-times/${id}`, d),
   deleteStandardTime: (id)   => api.delete(`/production/standard-times/${id}`),
+  // Import da Excel: commit=false → anteprima (non salva); commit=true → salva.
+  // Il file viaggia come multipart; il backend accetta solo .xlsx veri (vedi secureUpload).
+  importStandardTimes: (departmentId, file, commit = false) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("department", departmentId);
+    form.append("commit", commit ? "true" : "false");
+    return api.post("/production/standard-times/import", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 30_000,
+    });
+  },
   entries:            (p)    => api.get("/production/entries", { params: p }),
   createEntry:        (d)    => api.post("/production/entries", d),
   updateEntry:        (id,d) => api.put(`/production/entries/${id}`, d),

@@ -13,10 +13,22 @@ const { checkDepartment, visibleScope } = require("../utils/departmentAccess");
 const { colleagueFilter, hiddenSuperAdminId } = require("../utils/colleagues");
 const Department = require("../models/Department");
 const { PERIODS, resolvePeriod } = require("../utils/reportPeriod");
-const { exportLimiter } = require("../middleware/rateLimiter");
+const { exportLimiter, importLimiter } = require("../middleware/rateLimiter");
 const { buildReport } = require("../utils/andonReport");
 const { buildAndonWorkbook } = require("../utils/andonExcel");
+const { secureUpload } = require("../middleware/secureUpload");
+const { parseStandardTimesXlsx } = require("../utils/xlsxImport");
 const router   = express.Router();
+
+// Upload Excel "a prova di malware": solo .xlsx vero (magic bytes), in memoria,
+// max ~1.5MB (un foglio di tempi standard è piccolo), mai scritto su disco.
+const uploadXlsx = secureUpload({
+  field:       "file",
+  maxBytes:    1.5 * 1024 * 1024,
+  allowedExt:  [".xlsx"],
+  allowedMime: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+  signature:   "xlsx",
+});
 
 // Express 4 does not forward rejected promises: without this, a DB error in an async
 // handler becomes an unhandled rejection and takes the whole process down.
@@ -111,6 +123,62 @@ router.delete("/standard-times/:id", requireSupervisor, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ message: "Tempo standard non trovato." });
   await StandardTime.findByIdAndUpdate(req.params.id, { isActive: false, updatedBy: req.user._id });
   res.json({ message: "Tempo standard rimosso." });
+});
+
+// ── Import tempi standard da Excel (.xlsx) ─────────────────────
+// Due passi nello STESSO endpoint, il file è sempre la fonte di verità (non ci
+// fidiamo mai di righe pre-parsate inviate dal client):
+//   • commit assente/false → ANTEPRIMA: parsa e restituisce righe valide + errori,
+//     senza scrivere nulla. Il supervisore controlla prima di salvare.
+//   • commit="true"        → SALVA nel reparto scelto (upsert: aggiorna i minuti
+//     se tipologia+dimensione esiste già, altrimenti crea; non cancella nulla).
+// Catena di sicurezza: importLimiter (anti-DoS) → requireSupervisor (ruolo) →
+// uploadXlsx (solo .xlsx vero, in memoria) → parser in sola lettura (anti
+// zip-bomb / formula-injection / prototype-pollution).
+router.post("/standard-times/import", importLimiter, requireSupervisor, uploadXlsx, async (req, res) => {
+  const check = await checkDepartment(req.user, req.body.department, { forWrite: true });
+  if (check.status) return res.status(check.status).json({ message: check.message });
+
+  let parsed;
+  try {
+    parsed = await parseStandardTimesXlsx(req.file.buffer);
+  } catch (err) {
+    return res.status(err.status || 400).json({ message: err.message || "File Excel non leggibile." });
+  }
+
+  const commit = req.body.commit === "true" || req.body.commit === true;
+  if (!commit) {
+    return res.json({
+      preview:   true,
+      department: check.department._id,
+      summary:   { valid: parsed.rows.length, errors: parsed.errors.length, truncated: parsed.truncated },
+      rows:      parsed.rows,
+      errors:    parsed.errors,
+    });
+  }
+
+  // Salvataggio: upsert riga per riga (whitelist fissa di campi).
+  let created = 0, updated = 0, failed = 0;
+  for (const r of parsed.rows) {
+    try {
+      const resUp = await StandardTime.updateOne(
+        { department: check.department._id, tipologia: r.tipologia, dimensione: r.dimensione || "" },
+        { $set: { label: r.label, minuti: r.minuti, isActive: true, updatedBy: req.user._id } },
+        { upsert: true },
+      );
+      if (resUp.upsertedCount) created++;
+      else if (resUp.modifiedCount || resUp.matchedCount) updated++;
+    } catch {
+      failed++;
+    }
+  }
+
+  res.json({
+    preview:  false,
+    department: check.department._id,
+    summary:  { created, updated, failed, skipped: parsed.errors.length, truncated: parsed.truncated },
+    errors:   parsed.errors,
+  });
 });
 
 // ── Andon Board ───────────────────────────────────────────────

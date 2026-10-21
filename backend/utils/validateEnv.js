@@ -56,6 +56,12 @@ function checkCloudinaryConfig(warnings) {
     warnings.push(`ENABLE_CLOUDINARY=true ma manca: ${missing.join(", ")}. L'upload immagini prodotto non funzionerà.`);
 }
 
+// Forza minima del JWT_SECRET. Il token di sessione è firmato con questo segreto:
+// se è corto o prevedibile, un attaccante può forgiarne uno valido (anche da admin)
+// e l'intera autenticazione crolla. 32 caratteri sono il minimo ragionevole; il
+// comando suggerito in REQUIRED ne genera 128 (64 byte esadecimali).
+const JWT_SECRET_MIN_LEN = 32;
+
 module.exports = function validateEnv() {
   const missing     = REQUIRED.filter(({ key }) => !process.env[key]);
   const placeholder = REQUIRED.filter(({ key }) => PLACEHOLDER_VALUES.has(process.env[key]));
@@ -66,6 +72,19 @@ module.exports = function validateEnv() {
     placeholder.forEach(({ key, hint }) => console.error(`   • ${key} ha ancora il valore d'esempio, va cambiato — ${hint}`));
     console.error("\nControlla il tuo file .env (parti da backend/.env.example) e riavvia.\n");
     process.exit(1);
+  }
+
+  // JWT_SECRET troppo corto: in produzione è un rischio di compromissione totale,
+  // quindi il server non parte. In sviluppo/test è solo un avviso (i test usano un
+  // segreto fisso non segreto) per non intralciare il lavoro locale.
+  if ((process.env.JWT_SECRET || "").length < JWT_SECRET_MIN_LEN) {
+    const msg = `JWT_SECRET troppo corto (min ${JWT_SECRET_MIN_LEN} caratteri). ` +
+      `Genera un valore robusto con: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`;
+    if (process.env.NODE_ENV === "production") {
+      console.error(`\n❌  ${msg}\n`);
+      process.exit(1);
+    }
+    console.warn(`\n⚠️  ${msg}\n`);
   }
 
   const warnings = [];

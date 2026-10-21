@@ -23,6 +23,10 @@ const app = express();
 // Necessario per rate limiter e IP detection dietro reverse proxy
 app.set("trust proxy", 1);
 
+// Non rivelare il framework/stack (helmet lo fa già, ma esplicitarlo
+// non costa nulla ed è robusto anche se un giorno helmet venisse tolto).
+app.disable("x-powered-by");
+
 // ── Security headers via Helmet ───────────────────────────────
 app.use(helmet());
 
@@ -38,8 +42,13 @@ app.use(cors({
 }));
 
 // ── Body parsing ──────────────────────────────────────────────
+// Solo JSON: il frontend invia esclusivamente application/json (e multipart
+// per gli upload, gestito da multer nelle singole route). Niente parser
+// urlencoded: un form HTML cross-site può inviare SOLO urlencoded/multipart/
+// text, mai JSON — non parsando l'urlencoded, un eventuale form malevolo non
+// produce comunque un req.body sfruttabile. Difesa in profondità anti-CSRF
+// che si somma al cookie sameSite=lax.
 app.use(express.json({ limit: "5mb" }));
-app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // ── Request logger (solo in sviluppo, silenzioso nei test) ────
@@ -78,12 +87,21 @@ app.get("/api/health", (_req, res) => res.json({
 app.use((_req, res) => res.status(404).json({ message: "Endpoint non trovato" }));
 
 // ── Global error handler ──────────────────────────────────────
+// In produzione i dettagli di un errore 5xx (messaggio ed eventuale stack)
+// restano solo nei log del server: al client va un messaggio generico, così
+// non trapelano informazioni interne (query, path, nomi di libreria...) utili
+// a un attaccante. Gli errori 4xx "voluti" conservano il loro messaggio: sono
+// pensati per l'utente (es. "Credenziali non valide").
 app.use((err, _req, res, _next) => {
-  console.error("[ERR]", err.message);
+  console.error("[ERR]", err.stack || err.message);
   const status = err.status || err.statusCode || 500;
+  const isProd = process.env.NODE_ENV === "production";
+  const message = (isProd && status >= 500)
+    ? "Errore interno del server"
+    : (err.message || "Errore interno del server");
   res.status(status).json({
-    message: err.message || "Errore interno del server",
-    ...(process.env.NODE_ENV !== "production" && { stack: err.stack }),
+    message,
+    ...(!isProd && { stack: err.stack }),
   });
 });
 
