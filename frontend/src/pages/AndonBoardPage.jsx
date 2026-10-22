@@ -7,7 +7,7 @@
 import { useMemo, useState, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, X, Timer, PauseCircle, Flag, CheckCircle2, Package } from "lucide-react";
+import { Plus, Edit, Trash2, X, Timer, PauseCircle, Flag, CheckCircle2, Package, FileSpreadsheet, Upload, AlertTriangle } from "lucide-react";
 import { m as motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import clsx from "clsx";
@@ -240,6 +240,115 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
   );
 }
 
+// ── Import foglio saldatura (.xlsx) → righe Andon ─────────────
+function AndonImportModal({ department, operators, onClose }) {
+  const qc = useQueryClient();
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [operatore, setOperatore] = useState("");
+  const [data, setData] = useState(toIsoDay(new Date()));
+
+  const previewMut = useMutation({
+    mutationFn: (f) => productionAPI.importEntries(department._id, f, { commit: false }).then(r => r.data),
+    onSuccess: setPreview,
+    onError: e => toast.error(e.response?.data?.message || "File non valido"),
+  });
+  const commitMut = useMutation({
+    mutationFn: () => productionAPI.importEntries(department._id, file, { commit: true, operatore: operatore || undefined, data }).then(r => r.data),
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["production"] }); toast.success(`Importate ${d.summary?.created || 0} righe`); onClose(); },
+    onError: e => toast.error(e.response?.data?.message || "Errore"),
+  });
+  const onPick = (e) => { const f = e.target.files?.[0]; setPreview(null); setFile(f || null); if (f) previewMut.mutate(f); };
+  const s = preview?.summary;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+      <motion.div initial={{opacity:0,scale:.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.95}}
+        className="relative z-10 w-full max-w-3xl max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 rounded-[var(--radius-lg)] shadow-modal">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+          <div>
+            <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2"><FileSpreadsheet size={18}/> Importa foglio saldatura</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Reparto: {department.name} — .xlsx (Comm., Pos., Cliente, Q.tà, Tipologia, DN, Ø, Dimensione, Temp standard)</p>
+          </div>
+          <button className="btn btn-ghost btn-sm p-1.5" onClick={onClose}><X size={16}/></button>
+        </div>
+
+        <div className="p-5 space-y-4 overflow-y-auto">
+          <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-[var(--radius-md)] py-6 cursor-pointer hover:border-[var(--brand-500)] transition-colors">
+            <Upload size={22} className="text-gray-400"/>
+            <span className="text-sm text-gray-600 dark:text-gray-300">{file ? file.name : "Scegli il file .xlsx"}</span>
+            <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={onPick}/>
+          </label>
+
+          {previewMut.isPending && <p className="text-sm text-gray-500 text-center">Lettura del file…</p>}
+
+          {preview && (
+            <>
+              <div className="flex flex-wrap gap-3 text-sm">
+                <span className="inline-flex items-center gap-1.5 text-green-600"><CheckCircle2 size={15}/> {s.valid} righe valide</span>
+                {s.errors > 0 && <span className="inline-flex items-center gap-1.5 text-amber-600"><AlertTriangle size={15}/> {s.errors} scartate</span>}
+                {s.truncated && <span className="text-amber-600">⚠ troncato al limite righe</span>}
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Data da assegnare</label>
+                  <input type="date" className="form-input" value={data} onChange={e => setData(e.target.value)}/>
+                </div>
+                {operators && (
+                  <div>
+                    <label className="form-label">Saldatore (opzionale)</label>
+                    <select className="form-input" value={operatore} onChange={e => setOperatore(e.target.value)}>
+                      <option value="">— non assegnato —</option>
+                      {operators.map(o => <option key={o._id} value={o._id}>{o.name || o.username}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {s.valid > 0 && (
+                <div className="table-wrap max-h-64 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-[var(--radius-md)]">
+                  <table className="data-table text-sm">
+                    <thead><tr><th>Comm.</th><th>Pos.</th><th>Cliente</th><th>Q.tà</th><th>Custodia</th><th>DN</th><th>Ø</th><th>Tempo STD</th></tr></thead>
+                    <tbody>
+                      {preview.rows.map((r, i) => (
+                        <tr key={i}>
+                          <td className="font-medium">{r.commessa}</td>
+                          <td className="text-gray-500">{r.posizione || "—"}</td>
+                          <td className="truncate max-w-[10rem]">{r.cliente || "—"}</td>
+                          <td className="tabular-nums">{r.quantita}</td>
+                          <td><span className="badge badge-blue">{r.custodiaLabel}</span></td>
+                          <td className="text-gray-500">{r.dn || "—"}</td>
+                          <td className="text-gray-500">{r.diametro || "—"}</td>
+                          <td className="tabular-nums">{fmtMinutes(r.tempoStdMinuti)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {preview.errors?.length > 0 && (
+                <div className="text-xs text-amber-700 dark:text-amber-400 space-y-1 max-h-24 overflow-y-auto">
+                  {preview.errors.slice(0, 20).map((e, i) => <div key={i}>Riga {e.row}: {e.message}</div>)}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="flex gap-3 px-5 py-4 border-t border-gray-100 dark:border-gray-800">
+          <button className="btn btn-md btn-secondary flex-1" onClick={onClose}>Annulla</button>
+          <button className="btn btn-md btn-primary flex-1" disabled={!preview || !s?.valid || commitMut.isPending} onClick={() => commitMut.mutate()}>
+            {commitMut.isPending ? "Importazione…" : `Importa ${s?.valid || 0} righe`}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 // ── Pagina ────────────────────────────────────────────────────
 function StatCard({ label, value, hint }) {
   return (
@@ -258,6 +367,7 @@ export default function AndonBoardPage() {
   const [preset, setPreset] = useState("week");
   const [range, setRange] = useState(() => presetRange("week"));
   const [modal, setModal] = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
   const qc = useQueryClient();
 
   const applyPreset = (p) => { setPreset(p); setRange(presetRange(p)); };
@@ -306,9 +416,16 @@ export default function AndonBoardPage() {
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Andon Board</h1>
           <p className="text-sm text-gray-500 mt-0.5">Tempo standard atteso vs tempo impiegato{department ? ` — ${department.name}` : ""}</p>
         </div>
-        <button className="btn btn-md btn-primary gap-2" onClick={() => setModal("new")} disabled={!department || !standardTimes.length}>
-          <Plus size={16}/> Nuova riga
-        </button>
+        <div className="flex gap-2">
+          {isSupervisor && (
+            <button className="btn btn-md btn-secondary gap-2" onClick={() => setImportOpen(true)} disabled={!department}>
+              <FileSpreadsheet size={16}/> Importa Excel
+            </button>
+          )}
+          <button className="btn btn-md btn-primary gap-2" onClick={() => setModal("new")} disabled={!department || !standardTimes.length}>
+            <Plus size={16}/> Nuova riga
+          </button>
+        </div>
       </div>
 
       <DepartmentSelector departments={departments} value={departmentId} onChange={select} className="mb-4"/>
@@ -396,8 +513,12 @@ export default function AndonBoardPage() {
                       <td className="text-sm">{e.operatoreNome}</td>
                       <td className="font-medium text-gray-900 dark:text-white whitespace-nowrap">
                         {e.commessa}{e.posizione && <span className="text-gray-400 font-normal"> / pos. {e.posizione}</span>}
+                        {e.cliente && <span className="block text-xs text-gray-400 font-normal truncate max-w-[12rem]">{e.cliente}</span>}
                       </td>
-                      <td><span className="badge badge-blue">{e.custodiaLabel}</span></td>
+                      <td>
+                        <span className="badge badge-blue">{e.custodiaLabel}</span>
+                        {(e.dn || e.diametro) && <span className="block text-xs text-gray-400 mt-0.5">{[e.dn && `DN ${e.dn}`, e.diametro && `Ø ${e.diametro}`].filter(Boolean).join(" · ")}</span>}
+                      </td>
                       <td className="tabular-nums">{e.quantita}</td>
                       <td className="tabular-nums text-gray-500">{fmtMinutes(e.tempoStdMinuti)}</td>
                       <td className="tabular-nums">{fmtMinutes(e.tempoAttesoMinuti)}</td>
@@ -446,6 +567,9 @@ export default function AndonBoardPage() {
             operators={isSupervisor ? operators : null}
             onClose={() => setModal(null)}
           />
+        )}
+        {importOpen && department && (
+          <AndonImportModal department={department} operators={isSupervisor ? operators : null} onClose={() => setImportOpen(false)}/>
         )}
       </AnimatePresence>
     </div>

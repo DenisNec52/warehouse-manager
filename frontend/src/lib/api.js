@@ -151,6 +151,16 @@ export const productionAPI = {
   },
   entries:            (p)    => api.get("/production/entries", { params: p }),
   createEntry:        (d)    => api.post("/production/entries", d),
+  // Import foglio saldatura (.xlsx) → righe Andon. commit=false → anteprima.
+  importEntries: (departmentId, file, { commit = false, operatore, data } = {}) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("department", departmentId);
+    form.append("commit", commit ? "true" : "false");
+    if (operatore) form.append("operatore", operatore);
+    if (data) form.append("data", data);
+    return api.post("/production/entries/import", form, { headers: { "Content-Type": "multipart/form-data" }, timeout: 60_000 });
+  },
   // Distinta base (BOM) e proposta componenti per lo scarico magazzino
   bomList:            (p)    => api.get("/production/bom", { params: p }),
   bomResolve:         (p)    => api.get("/production/bom/resolve", { params: p }),
