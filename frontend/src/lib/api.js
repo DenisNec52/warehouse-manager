@@ -151,6 +151,11 @@ export const productionAPI = {
   },
   entries:            (p)    => api.get("/production/entries", { params: p }),
   createEntry:        (d)    => api.post("/production/entries", d),
+  // Distinta base (BOM) e proposta componenti per lo scarico magazzino
+  bomList:            (p)    => api.get("/production/bom", { params: p }),
+  bomResolve:         (p)    => api.get("/production/bom/resolve", { params: p }),
+  bomSave:            (d)    => api.post("/production/bom", d),
+  bomDelete:          (id)   => api.delete(`/production/bom/${id}`),
   updateEntry:        (id,d) => api.put(`/production/entries/${id}`, d),
   deleteEntry:        (id)   => api.delete(`/production/entries/${id}`),
   stats:              (p)    => api.get("/production/stats", { params: p }),
