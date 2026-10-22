@@ -100,7 +100,10 @@ function detectColumns(worksheet) {
 }
 
 function sanitizeField(raw) {
-  let s = String(raw ?? "").replace(/[\u0000-\u001f]+/g, " ").trim(); // via caratteri di controllo
+  // Rimuove i caratteri di controllo (0x00–0x1F) da una cella: è voluto, serve a
+  // sanificare testo proveniente da file esterni, quindi la regola è disattivata qui.
+  // eslint-disable-next-line no-control-regex
+  let s = String(raw ?? "").replace(/[\u0000-\u001f]+/g, " ").trim();
   if (s.length > LIMITS.textMax) s = s.slice(0, LIMITS.textMax);
   return s;
 }
