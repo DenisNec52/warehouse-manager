@@ -28,6 +28,22 @@ const productionEntrySchema = new mongoose.Schema({
   sospesa:        { type: Boolean, default: false },
   bindello:       { type: Boolean, default: false },
   note:           { type: String, trim: true, default: "" },
+
+  // ── Fase di lavorazione + consumo magazzino ───────────────────
+  // fase: una delle AppSettings.workPhases (es. "Prima saldatura"). Facoltativa:
+  // le righe storiche e quelle senza scarico restano valide con fase null.
+  fase:           { type: String, trim: true, default: null },
+  // Snapshot degli articoli scalati dal magazzino per questa riga (per lo storico
+  // e per mostrare nell'Andon "fascia presa/preparata da X, saldata da Y").
+  // I movimenti OUT corrispondenti sono in Movement (movementIds).
+  consumi: [{
+    _id:         false,
+    product:     { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
+    productName: String,
+    code:        String,
+    quantita:    Number,
+  }],
+  movementIds:    [{ type: mongoose.Schema.Types.ObjectId, ref: "Movement" }],
   createdBy:      { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 }, { timestamps: true });
 

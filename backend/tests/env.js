@@ -16,6 +16,8 @@ process.env.ENABLE_CLOUDINARY = "false";
 // reale, non per decine di richieste ravvicinate fatte da Supertest.
 process.env.RATE_LIMIT_MAX          = "100000";
 process.env.RATE_LIMIT_LOGIN_MAX    = "100000";
+process.env.RATE_LIMIT_LOGIN_IP_MAX = "100000";
 process.env.RATE_LIMIT_BADGE_MAX    = "100000";
 process.env.RATE_LIMIT_VISION_MAX   = "100000";
 process.env.RATE_LIMIT_FORGOT_MAX   = "100000";
+process.env.RATE_LIMIT_IMPORT_MAX   = "100000";

@@ -13,10 +13,26 @@ const { checkDepartment, visibleScope } = require("../utils/departmentAccess");
 const { colleagueFilter, hiddenSuperAdminId } = require("../utils/colleagues");
 const Department = require("../models/Department");
 const { PERIODS, resolvePeriod } = require("../utils/reportPeriod");
-const { exportLimiter } = require("../middleware/rateLimiter");
+const { exportLimiter, importLimiter } = require("../middleware/rateLimiter");
 const { buildReport } = require("../utils/andonReport");
 const { buildAndonWorkbook } = require("../utils/andonExcel");
+const { secureUpload } = require("../middleware/secureUpload");
+const { parseStandardTimesXlsx } = require("../utils/xlsxImport");
+const BomRecipe   = require("../models/BomRecipe");
+const Product     = require("../models/Product");
+const Movement    = require("../models/Movement");
+const AppSettings = require("../models/AppSettings");
 const router   = express.Router();
+
+// Upload Excel "a prova di malware": solo .xlsx vero (magic bytes), in memoria,
+// max ~1.5MB (un foglio di tempi standard è piccolo), mai scritto su disco.
+const uploadXlsx = secureUpload({
+  field:       "file",
+  maxBytes:    1.5 * 1024 * 1024,
+  allowedExt:  [".xlsx"],
+  allowedMime: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+  signature:   "xlsx",
+});
 
 // Express 4 does not forward rejected promises: without this, a DB error in an async
 // handler becomes an unhandled rejection and takes the whole process down.
@@ -111,6 +127,153 @@ router.delete("/standard-times/:id", requireSupervisor, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ message: "Tempo standard non trovato." });
   await StandardTime.findByIdAndUpdate(req.params.id, { isActive: false, updatedBy: req.user._id });
   res.json({ message: "Tempo standard rimosso." });
+});
+
+// ── Import tempi standard da Excel (.xlsx) ─────────────────────
+// Due passi nello STESSO endpoint, il file è sempre la fonte di verità (non ci
+// fidiamo mai di righe pre-parsate inviate dal client):
+//   • commit assente/false → ANTEPRIMA: parsa e restituisce righe valide + errori,
+//     senza scrivere nulla. Il supervisore controlla prima di salvare.
+//   • commit="true"        → SALVA nel reparto scelto (upsert: aggiorna i minuti
+//     se tipologia+dimensione esiste già, altrimenti crea; non cancella nulla).
+// Catena di sicurezza: importLimiter (anti-DoS) → requireSupervisor (ruolo) →
+// uploadXlsx (solo .xlsx vero, in memoria) → parser in sola lettura (anti
+// zip-bomb / formula-injection / prototype-pollution).
+router.post("/standard-times/import", importLimiter, requireSupervisor, uploadXlsx, async (req, res) => {
+  const check = await checkDepartment(req.user, req.body.department, { forWrite: true });
+  if (check.status) return res.status(check.status).json({ message: check.message });
+
+  let parsed;
+  try {
+    parsed = await parseStandardTimesXlsx(req.file.buffer);
+  } catch (err) {
+    return res.status(err.status || 400).json({ message: err.message || "File Excel non leggibile." });
+  }
+
+  const commit = req.body.commit === "true" || req.body.commit === true;
+  if (!commit) {
+    return res.json({
+      preview:   true,
+      department: check.department._id,
+      summary:   { valid: parsed.rows.length, errors: parsed.errors.length, truncated: parsed.truncated },
+      rows:      parsed.rows,
+      errors:    parsed.errors,
+    });
+  }
+
+  // Salvataggio: upsert riga per riga (whitelist fissa di campi).
+  let created = 0, updated = 0, failed = 0;
+  for (const r of parsed.rows) {
+    try {
+      const resUp = await StandardTime.updateOne(
+        { department: check.department._id, tipologia: r.tipologia, dimensione: r.dimensione || "" },
+        { $set: { label: r.label, minuti: r.minuti, isActive: true, updatedBy: req.user._id } },
+        { upsert: true },
+      );
+      if (resUp.upsertedCount) created++;
+      else if (resUp.modifiedCount || resUp.matchedCount) updated++;
+    } catch {
+      failed++;
+    }
+  }
+
+  res.json({
+    preview:  false,
+    department: check.department._id,
+    summary:  { created, updated, failed, skipped: parsed.errors.length, truncated: parsed.truncated },
+    errors:   parsed.errors,
+  });
+});
+
+// ── Distinta base (BOM) per custodia × fase ───────────────────
+// La distinta dice quali articoli di magazzino consuma una custodia in una fase.
+// Serve alla modalità ibrida: proporre i componenti, poi l'operatore conferma.
+
+const bomRules = [
+  body("department").optional().isMongoId().withMessage("Reparto non valido"),
+  body("standardTime").isMongoId().withMessage("Custodia non valida"),
+  body("fase").trim().notEmpty().withMessage("Fase obbligatoria"),
+  body("components").isArray({ max: 100 }).withMessage("Componenti non validi"),
+];
+
+/** Valida e normalizza una lista di componenti {product, quantita}. { list } o { error }. */
+async function validComponents(raw) {
+  if (!Array.isArray(raw)) return { error: "Componenti non validi." };
+  const list = [];
+  for (const c of raw) {
+    if (!mongoose.isValidObjectId(c?.product)) return { error: "Articolo non valido." };
+    const q = parseInt(c.quantita, 10);
+    if (!Number.isInteger(q) || q < 1 || q > 100000) return { error: "Quantità componente non valida." };
+    list.push({ product: c.product, quantita: q });
+  }
+  const ids = [...new Set(list.map(c => String(c.product)))];
+  if (ids.length) {
+    const found = await Product.countDocuments({ _id: { $in: ids }, isActive: true });
+    if (found !== ids.length) return { error: "Uno o più articoli non esistono o non sono attivi." };
+  }
+  return { list };
+}
+
+// Lista distinte (di una custodia o di tutto il reparto visibile)
+router.get("/bom", async (req, res) => {
+  const scope = await departmentFilter(req, res);
+  if (!scope) return;
+  const filter = { ...scope, isActive: true };
+  if (mongoose.isValidObjectId(req.query.standardTime)) filter.standardTime = req.query.standardTime;
+  const recipes = await BomRecipe.find(filter).populate("components.product", "name code quantity unit").lean();
+  res.json({ recipes });
+});
+
+// Proposta componenti per custodia + fase, già moltiplicata per la quantità (modalità ibrida)
+router.get("/bom/resolve", async (req, res) => {
+  const quantita = Math.max(1, Math.min(100000, parseInt(req.query.quantita, 10) || 1));
+  if (!mongoose.isValidObjectId(req.query.standardTime)) return res.status(400).json({ message: "Custodia non valida." });
+  const recipe = await BomRecipe.findOne({
+    standardTime: req.query.standardTime,
+    fase: String(req.query.fase || "").trim(),
+    isActive: true,
+  }).populate("components.product", "name code quantity unit");
+  if (!recipe) return res.json({ found: false, components: [] });
+  const components = recipe.components.filter(c => c.product).map(c => ({
+    product: c.product._id,
+    name:    c.product.name,
+    code:    c.product.code,
+    unit:    c.product.unit,
+    stock:   c.product.quantity,
+    quantitaPerPezzo: c.quantita,
+    quantita:         c.quantita * quantita,
+  }));
+  res.json({ found: true, components });
+});
+
+// Crea/aggiorna la distinta (upsert per reparto + custodia + fase) — supervisore/admin
+router.post("/bom", requireSupervisor, bomRules, validate, async (req, res) => {
+  const check = await checkDepartment(req.user, req.body.department, { forWrite: true });
+  if (check.status) return res.status(check.status).json({ message: check.message });
+
+  const std = await StandardTime.findOne({ _id: req.body.standardTime, department: check.department._id });
+  if (!std) return res.status(400).json({ message: "Custodia non trovata in questo reparto." });
+
+  const settings = await AppSettings.getSettings();
+  const fase = String(req.body.fase).trim();
+  if (!settings.workPhases.includes(fase)) return res.status(400).json({ message: "Fase di lavorazione non valida." });
+
+  const comp = await validComponents(req.body.components);
+  if (comp.error) return res.status(400).json({ message: comp.error });
+
+  const recipe = await BomRecipe.findOneAndUpdate(
+    { department: check.department._id, standardTime: std._id, fase },
+    { $set: { components: comp.list, isActive: true, updatedBy: req.user._id } },
+    { new: true, upsert: true, setDefaultsOnInsert: true },
+  ).populate("components.product", "name code quantity unit");
+  res.status(201).json({ recipe });
+});
+
+// Elimina una distinta — supervisore/admin
+router.delete("/bom/:id", requireSupervisor, async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ message: "Distinta non trovata." });
+  await BomRecipe.findByIdAndDelete(req.params.id);
+  res.json({ message: "Distinta eliminata." });
 });
 
 // ── Andon Board ───────────────────────────────────────────────
@@ -209,6 +372,45 @@ async function resolveOperatore(req, fallbackUser) {
   return { user };
 }
 
+/**
+ * Scarica dal magazzino gli articoli consumati, DENTRO una transazione:
+ * per ciascuno verifica la scorta (blocca se insufficiente), decrementa la
+ * giacenza e registra un Movement OUT. Restituisce lo snapshot da salvare sulla
+ * riga e gli id dei movimenti. Lancia { status, message } in caso di problema
+ * (la transazione viene annullata: nessuno scarico parziale).
+ */
+async function applyConsumi(consumi, meta, session) {
+  const snap = [];
+  const movementIds = [];
+  for (const c of consumi) {
+    const product = await Product.findById(c.product).session(session);
+    if (!product || !product.isActive) throw { status: 400, message: "Articolo da scalare non trovato." };
+    if (product.quantity < c.quantita)
+      throw { status: 409, message: `Scorta insufficiente per ${product.code}: disponibili ${product.quantity}, richiesti ${c.quantita}.` };
+
+    const before = product.quantity;
+    product.quantity = before - c.quantita;
+    await product.save({ session });
+
+    const [mv] = await Movement.create([{
+      product: product._id,
+      productSnapshot: { name: product.name, code: product.code, unit: product.unit, category: "" },
+      type: "OUT",
+      quantity: c.quantita,
+      quantityBefore: before,
+      quantityAfter:  product.quantity,
+      reason:    `Produzione — ${meta.fase}`,
+      reference: meta.commessa,
+      performedBy:     meta.performedBy,
+      performedByName: meta.operatoreNome,
+    }], { session });
+
+    movementIds.push(mv._id);
+    snap.push({ product: product._id, productName: product.name, code: product.code, quantita: c.quantita });
+  }
+  return { snap, movementIds };
+}
+
 router.post("/entries", entryRules, validate, async (req, res) => {
   const check = await checkDepartment(req.user, req.body.department, { forWrite: true });
   if (check.status) return res.status(check.status).json({ message: check.message });
@@ -217,13 +419,47 @@ router.post("/entries", entryRules, validate, async (req, res) => {
   const op = await resolveOperatore(req, req.user);
   if (op.error) return res.status(op.status).json({ message: op.error });
 
-  const entry = await ProductionEntry.create({
-    ...fields,
-    operatore: op.user._id,
-    operatoreNome: op.user.name || op.user.username,
-    createdBy: req.user._id,
-  });
-  res.status(201).json({ entry });
+  const operatoreNome = op.user.name || op.user.username;
+  const consumiInput = Array.isArray(req.body.consumi) ? req.body.consumi : null;
+
+  // Senza consumi confermati → comportamento classico (nessuno scarico magazzino).
+  if (!consumiInput || !consumiInput.length) {
+    const entry = await ProductionEntry.create({
+      ...fields, operatore: op.user._id, operatoreNome, createdBy: req.user._id,
+    });
+    return res.status(201).json({ entry });
+  }
+
+  // Con scarico: la fase deve essere valida e i consumi ben formati.
+  const fase = typeof req.body.fase === "string" ? req.body.fase.trim() : "";
+  const settings = await AppSettings.getSettings();
+  if (!fase || !settings.workPhases.includes(fase))
+    return res.status(400).json({ message: "Fase di lavorazione obbligatoria per lo scarico magazzino." });
+
+  const comp = await validComponents(consumiInput);
+  if (comp.error) return res.status(400).json({ message: comp.error });
+
+  const session = await mongoose.startSession();
+  try {
+    let entry;
+    await session.withTransaction(async () => {
+      const { snap, movementIds } = await applyConsumi(
+        comp.list, { fase, commessa: fields.commessa, operatoreNome, performedBy: req.user._id }, session,
+      );
+      const [created] = await ProductionEntry.create([{
+        ...fields, fase, operatore: op.user._id, operatoreNome, createdBy: req.user._id,
+        consumi: snap, movementIds,
+      }], { session });
+      entry = created;
+    });
+    res.status(201).json({ entry });
+  } catch (err) {
+    if (err && err.status) return res.status(err.status).json({ message: err.message });
+    console.error("[production/entries scarico]", err);
+    res.status(500).json({ message: "Errore durante lo scarico del magazzino. Nessuna modifica applicata." });
+  } finally {
+    session.endSession();
+  }
 });
 
 async function loadEditableEntry(req, res) {

@@ -19,7 +19,7 @@ const jwt      = require("jsonwebtoken");
 const User     = require("../models/User");
 const Notification = require("../models/Notification");
 const { protect }  = require("../middleware/auth");
-const { loginLimiter, badgeLoginLimiter, forgotPasswordLimiter } = require("../middleware/rateLimiter");
+const { loginLimiter, loginIpLimiter, badgeLoginLimiter, forgotPasswordLimiter } = require("../middleware/rateLimiter");
 const validate = require("../middleware/validate");
 const email    = require("../utils/email");
 const { lookupLocation } = require("../utils/geoip");
@@ -30,10 +30,16 @@ const { notificationScope } = require("../utils/colleagues");
 const router = express.Router();
 
 // ── Cookie options ────────────────────────────────────────────
+// sameSite "lax": in produzione il frontend (Vercel) chiama le API tramite la
+// rewrite /api -> Render, quindi dal browser sono richieste SAME-ORIGIN del sito
+// e il cookie viaggia normalmente. Non serve "none" (che inviava il cookie anche
+// in contesti cross-site, riaprendo il CSRF): con "lax" un sito malevolo non può
+// far partire POST/PUT/DELETE autenticati verso le nostre API. I login legittimi
+// (anche l'atterraggio GET dal link badge via email) continuano a funzionare.
 const cookieOpts = {
   httpOnly: true,
   secure:   process.env.COOKIE_SECURE === "true",
-  sameSite: process.env.COOKIE_SECURE === "true" ? "none" : "lax",
+  sameSite: "lax",
   maxAge:   7 * 24 * 60 * 60 * 1000,  // 7 giorni
 };
 
@@ -72,6 +78,7 @@ async function startSession(req, res, user, method = "password") {
 
 // ── POST /api/auth/login ──────────────────────────────────────
 router.post("/login",
+  loginIpLimiter,
   loginLimiter,
   [
     body("username").trim().notEmpty().withMessage("Username obbligatorio"),

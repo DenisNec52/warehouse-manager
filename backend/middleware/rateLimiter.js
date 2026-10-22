@@ -50,6 +50,25 @@ exports.loginLimiter = rateLimit({
 });
 
 /**
+ * Secondo limite sul login, stavolta per IP — difesa contro il "password
+ * spraying": una stessa password provata su TANTI username diversi. Il limiter
+ * per-username (sopra) non la fermerebbe, perché ogni username ha il suo
+ * contatore; questo invece conta TUTTI i tentativi falliti da uno stesso IP.
+ * Soglia più alta del per-username (più persone legittime possono stare dietro
+ * lo stesso IP aziendale), ma abbastanza bassa da stroncare uno spray massivo.
+ * skipSuccessfulRequests: i login riusciti non consumano il budget.
+ */
+exports.loginIpLimiter = rateLimit({
+  keyGenerator: clientIp,
+  windowMs,
+  max:     parseInt(process.env.RATE_LIMIT_LOGIN_IP_MAX) || 50,
+  message: { message: "Troppi tentativi di accesso da questa rete. Riprova tra qualche minuto." },
+  standardHeaders: true,
+  legacyHeaders:   false,
+  skipSuccessfulRequests: true,
+});
+
+/**
  * Limiter per il login via badge (QR/NFC).
  * Il segreto ha 256 bit di entropia quindi il brute-force è comunque
  * infattibile: questo limite serve soprattutto contro scansioni ripetute
@@ -83,6 +102,20 @@ exports.visionLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders:   false,
   keyGenerator: (req) => req.user?._id?.toString() || clientIp(req),
+});
+
+/**
+ * Limiter per l'import di file (es. Excel dei tempi standard). Parsare un file
+ * è più costoso di una normale API e un upload ripetuto è un vettore di DoS:
+ * poche operazioni per finestra bastano per un uso legittimo (si importa di rado).
+ */
+exports.importLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max:     parseInt(process.env.RATE_LIMIT_IMPORT_MAX) || 20,
+  keyGenerator: (req) => req.user?._id?.toString() || clientIp(req),
+  message: { message: "Troppi caricamenti ravvicinati. Attendi qualche minuto." },
+  standardHeaders: true,
+  legacyHeaders:   false,
 });
 
 /** Limiter per "password dimenticata" — anti spam/email-bombing */

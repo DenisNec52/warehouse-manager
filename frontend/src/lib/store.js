@@ -14,11 +14,13 @@ export const useAuthStore = create((set) => ({
   user:    null,
   loading: true,
   unread:  0,
+  settings: null,   // impostazioni globali (nome app, fasi, visibilità moduli)
 
-  setUser:    (user)   => set({ user }),
-  setLoading: (v)      => set({ loading: v }),
-  setUnread:  (n)      => set({ unread: n }),
-  logout:     ()       => set({ user: null, unread: 0 }),
+  setUser:     (user) => set({ user }),
+  setLoading:  (v)    => set({ loading: v }),
+  setUnread:   (n)    => set({ unread: n }),
+  setSettings: (s)    => set({ settings: s }),
+  logout:      ()     => set({ user: null, unread: 0 }),
 }));
 
 // ── Theme Store (persiste in localStorage) ────────────────────

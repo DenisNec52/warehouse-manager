@@ -9,7 +9,7 @@
 import { useEffect, useState, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore, useThemeStore } from "@/lib/store";
-import { authAPI } from "@/lib/api";
+import { authAPI, settingsAPI } from "@/lib/api";
 
 // Pages — nel bundle iniziale solo quelle del primo accesso
 import LoginPage          from "@/pages/LoginPage";
@@ -36,6 +36,7 @@ const AndonBoardPage     = lazy(() => import("@/pages/AndonBoardPage"));
 const StandardTimesPage  = lazy(() => import("@/pages/StandardTimesPage"));
 const AdminPage          = lazy(() => import("@/pages/AdminPage"));
 const DepartmentsPage    = lazy(() => import("@/pages/DepartmentsPage"));
+const SuperAdminPage     = lazy(() => import("@/pages/SuperAdminPage"));
 
 // Un solo punto per il fallback di caricamento delle pagine lazy
 const page = (el) => <Suspense fallback={<RouteLoader/>}>{el}</Suspense>;
@@ -103,8 +104,15 @@ function RequireSupervisor({ children }) {
   return children;
 }
 
+// ── Route solo super-admin ──────────────────────────────────────
+function RequireSuperAdmin({ children }) {
+  const { user } = useAuthStore();
+  if (!user?.isSuperAdmin) return <Navigate to="/" replace />;
+  return children;
+}
+
 export default function App() {
-  const { setUser, setLoading, setUnread } = useAuthStore();
+  const { setUser, setLoading, setUnread, setSettings } = useAuthStore();
   const { loadFromProfile, applyTheme }    = useThemeStore();
   const location = useLocation();
 
@@ -126,6 +134,8 @@ export default function App() {
           setUser(res.data.user);
           setUnread(res.data.unreadNotifications || 0);
           loadFromProfile(res.data.user?.theme);
+          // Impostazioni globali (best-effort: non bloccano il login se falliscono)
+          settingsAPI.get().then(r => setSettings(r.data.settings)).catch(() => {});
           break;
         } catch (err) {
           if (cancelled) return;
@@ -186,6 +196,9 @@ export default function App() {
       }/>
       <Route path="admin/checklist" element={
         <RequireSupervisor>{page(<ChecklistAdminPage/>)}</RequireSupervisor>
+      }/>
+      <Route path="superadmin" element={
+        <RequireSuperAdmin>{page(<SuperAdminPage/>)}</RequireSuperAdmin>
       }/>
       </Route>
 

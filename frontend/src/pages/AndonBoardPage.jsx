@@ -7,7 +7,7 @@
 import { useMemo, useState, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, X, Timer, PauseCircle, Flag, CheckCircle2 } from "lucide-react";
+import { Plus, Edit, Trash2, X, Timer, PauseCircle, Flag, CheckCircle2, Package } from "lucide-react";
 import { m as motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import clsx from "clsx";
@@ -34,7 +34,7 @@ function presetRange(preset) {
 // ── Modale riga ───────────────────────────────────────────────
 function EntryModal({ entry, department, standardTimes, operators, onClose }) {
   const qc = useQueryClient();
-  const { user } = useAuthStore();
+  const { user, settings } = useAuthStore();
   const [form, setForm] = useState({
     data:         isoFromDate(entry?.data) || toIsoDay(new Date()),
     operatore:    entry?.operatore || user?.id || "",
@@ -49,6 +49,24 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
     note:         entry?.note || "",
   });
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
+
+  // Scarico magazzino (solo nuove righe): fase + materiali proposti dalla distinta, modificabili.
+  const isNew = !entry;
+  const phases = settings?.workPhases || [];
+  const [fase, setFase] = useState("");
+  const [consumi, setConsumi] = useState(null);   // null = non proposto; array = proposto (anche vuoto)
+  const [loadingBom, setLoadingBom] = useState(false);
+  const proposeComponents = async () => {
+    setLoadingBom(true);
+    try {
+      const r = await productionAPI.bomResolve({ standardTime: form.standardTime, fase, quantita: Number(form.quantita) });
+      setConsumi(r.data.components.map(c => ({ ...c })));
+      if (!r.data.found) toast("Nessuna distinta per questa custodia/fase. Definiscila nei Tempi standard.", { icon: "ℹ️" });
+    } catch { toast.error("Errore nel proporre i materiali"); }
+    finally { setLoadingBom(false); }
+  };
+  const setConsumoQ = (i, v) => setConsumi(cs => cs.map((c, idx) => idx === i ? { ...c, quantita: Math.max(0, parseInt(v, 10) || 0) } : c));
+  const removeConsumo = (i) => setConsumi(cs => cs.filter((_, idx) => idx !== i));
 
   // In modifica, se la tipologia resta quella, vale lo snapshot della riga (non il valore attuale in tabella).
   const std = standardTimes.find(t => t._id === form.standardTime);
@@ -69,6 +87,9 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
   });
 
   const valid = form.data && form.commessa.trim() && quantita >= 1 && form.standardTime && impiegato > 0;
+  const consumiPayload = isNew && Array.isArray(consumi)
+    ? consumi.filter(c => c.quantita > 0).map(c => ({ product: c.product, quantita: c.quantita }))
+    : null;
   const submit = () => mut.mutate({
     department: department._id,
     data: form.data,
@@ -82,6 +103,7 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
     sospesa: form.sospesa,
     bindello: form.bindello,
     note: form.note,
+    ...(consumiPayload && consumiPayload.length ? { fase, consumi: consumiPayload } : {}),
   });
 
   return (
@@ -160,6 +182,39 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
               <span className="text-gray-500">STD <strong className="text-gray-900 dark:text-white tabular-nums">{fmtMinutes(stdMinuti)}</strong>/pz</span>
               <span className="text-gray-500">Atteso <strong className="text-gray-900 dark:text-white tabular-nums">{fmtMinutes(atteso)}</strong></span>
               {preview && <span className={clsx("badge", preview.cls)}>Efficienza {preview.text}</span>}
+            </div>
+          )}
+
+          {/* Scarico magazzino (solo nuove righe): fase + materiali dalla distinta, confermabili */}
+          {isNew && phases.length > 0 && (
+            <div className="rounded-[var(--radius-md)] border border-gray-100 dark:border-gray-800 p-3 space-y-3">
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <label className="form-label">Fase lavorazione (scarico magazzino)</label>
+                  <select className="form-input" value={fase} onChange={e => { setFase(e.target.value); setConsumi(null); }}>
+                    <option value="">— nessuno scarico —</option>
+                    {phases.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <button type="button" className="btn btn-md btn-secondary whitespace-nowrap"
+                  disabled={!fase || !form.standardTime || !(quantita >= 1) || loadingBom}
+                  onClick={proposeComponents}>{loadingBom ? "..." : "Proponi materiali"}</button>
+              </div>
+
+              {Array.isArray(consumi) && (consumi.length ? (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-gray-500">Materiali che verranno scalati (modificabili):</p>
+                  {consumi.map((c, i) => (
+                    <div key={c.product} className="flex items-center gap-2 text-sm">
+                      <span className="flex-1 truncate"><span className="font-medium text-gray-900 dark:text-white">{c.code}</span> <span className="text-gray-500">{c.name}</span></span>
+                      <span className={clsx("text-xs tabular-nums", c.quantita > c.stock ? "text-red-500" : "text-gray-400")}>disp. {c.stock}</span>
+                      <input type="number" min="0" className="form-input py-1 w-20" value={c.quantita} onChange={e => setConsumoQ(i, e.target.value)}/>
+                      <button type="button" className="btn btn-ghost btn-sm p-1 text-red-400" onClick={() => removeConsumo(i)} aria-label="Togli"><X size={13}/></button>
+                    </div>
+                  ))}
+                  {consumi.some(c => c.quantita > c.stock) && <p className="form-error">Alcuni materiali superano la scorta: il salvataggio verrà bloccato dal server.</p>}
+                </div>
+              ) : <p className="text-xs text-gray-400">Nessun materiale in distinta per questa fase. Puoi salvare senza scarico o definire la distinta nei Tempi standard.</p>)}
             </div>
           )}
 
@@ -353,6 +408,11 @@ export default function AndonBoardPage() {
                           {e.dataFine && <span title={`Finita il ${fmtDay(e.dataFine)}`}><CheckCircle2 size={15} className="text-green-600"/></span>}
                           {e.sospesa && <span title="Sospesa"><PauseCircle size={15} className="text-amber-500"/></span>}
                           {e.bindello && <span title="Bindello"><Flag size={15} className="text-purple-500"/></span>}
+                          {e.consumi?.length > 0 && (
+                            <span title={`${e.fase ? e.fase + ": " : ""}${e.consumi.map(c => `${c.quantita}× ${c.code}`).join(", ")} — saldato da ${e.operatoreNome}`}>
+                              <Package size={15} className="text-blue-500"/>
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="text-right whitespace-nowrap">
