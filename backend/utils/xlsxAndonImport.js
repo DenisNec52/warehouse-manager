@@ -65,13 +65,24 @@ function parseMinutes(cell) {
   return Number.isNaN(d.getTime()) ? NaN : d.getUTCHours() * 60 + d.getUTCMinutes();
 }
 
+/** Data ISO da una cella: Date, numero seriale Excel (es. 46315) o testo gg/mm/aaaa. */
+function cellDate(v) {
+  if (v instanceof Date) return v.getUTCFullYear() > 2000 ? v.toISOString().slice(0, 10) : null;
+  // Seriale Excel senza formato data: giorni dal 1899-12-30; 36526..73050 = anni 2000..2099
+  if (typeof v === "number" && Number.isInteger(v) && v >= 36526 && v <= 73050)
+    return new Date(Date.UTC(1899, 11, 30) + v * 86400000).toISOString().slice(0, 10);
+  const m = typeof v === "string" && v.trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  return null;
+}
+
 /** Data del foglio: prima cella data nelle righe sopra l'intestazione (es. C2 unita). */
 function detectSheetDate(ws, headerRow) {
   for (let r = 1; r < headerRow; r++) {
     const row = ws.getRow(r);
     for (let c = 1; c <= (ws.columnCount || 30); c++) {
-      const v = row.getCell(c).value;
-      if (v instanceof Date && v.getUTCFullYear() > 2000) return v.toISOString().slice(0, 10);
+      const d = cellDate(row.getCell(c).value);
+      if (d) return d;
     }
   }
   return null;

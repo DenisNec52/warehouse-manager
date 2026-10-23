@@ -64,6 +64,34 @@ describe("Import foglio saldatura → righe Andon", () => {
     expect(r.rows.map(x => x.row)).toEqual([5, 7, 9, 11, 13, 15, 17, 19, 21, 23]);
   });
 
+  test("stesso foglio con valori grezzi (data seriale, tempi in frazione di giorno, intestazioni a capo)", async () => {
+    const ExcelJS = require("exceljs");
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Foglio 94");
+    ws.getCell("C2").value = 46315;                     // = 20/10/2026, senza formato data
+    ws.getRow(3).values = [, "Firma\n(inizio lavorazione)", "Comm.", "Pos.", "Cliente", "Q.tà (n°)", "Tipologia", "DN",
+      "Ø Elem.  (mm)", "Dimensione", "Temp standard\n(a pezzo)", "Firma\n(fine lavorazione)"];
+    const data = [
+      [2630, 1, "ENON BV", 1, "T.F.", 95, "10 inc.", "PICCOLA", 0.041666666666666664],
+      [2400, 1, "ABC", 1, "T.I.", "/", 10, "PICCOLA", 0.020833333333333332],
+      [2961, 9, "NUOVO PIGNONE SRL", 1, "T.C.", 193, 16, "MEDIA", 0.041666666666666664],
+      [2975, 1, "HEATING GROUP INTERNATIONAL", 1, "T.F.", 75, 12.5, "PICCOLA", 0.041666666666666664],
+      [2347, 1, "ROSSI", 4, "Speciale", "/", 10, "PICCOLA", 0.041666666666666664],
+      [2810, 1, "PEGORARO GAS TECHNOLOGIES", 3, "T.C.", 145, 16, "PICCOLA", 0.03125],
+      [3009, 1, "ROSSI", 4, "T.I.", "/", 10, "PICCOLA", 0.020833333333333332],
+      [3000, 1, "NAVALIMPIANTI SPA", 1, "T.I.", "/", 10, "PICCOLA", 0.020833333333333332],
+      [2446, 3, "NUOVO PIGNONE SRL", 1, "T.C.", 145, 16, "PICCOLA", 0.03125],
+      [1703, 17, "NUOVO PIGNONE SRL", 1, "T.C.", 195, 16, "MEDIA", 0.041666666666666664],
+    ];
+    data.forEach((d, i) => { ws.getRow(5 + i * 2).values = [, , ...d]; });   // da colonna C, una riga vuota tra i capi
+
+    const raw = await parseAndonXlsx(Buffer.from(await wb.xlsx.writeBuffer()));
+    const real = await parseAndonXlsx(fs.readFileSync(FILE));
+    expect(raw.errors).toEqual([]);
+    expect(raw.sheetDate).toBe("2026-10-20");
+    expect(raw.rows).toEqual(real.rows);                // stesso risultato del file originale, campo per campo
+  });
+
   test("anteprima: non salva nulla", async () => {
     const a = await adminAgent();
     const dep = await Department.create({ name: "Saldatura", isActive: true });
