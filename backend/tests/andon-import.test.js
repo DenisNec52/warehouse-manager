@@ -161,6 +161,53 @@ describe("Import foglio saldatura → righe Andon", () => {
     expect(onlyFirst.body.entries.every(e => e.fase === "Prima saldatura")).toBe(true);
   });
 
+  test("firme automatiche: A inizia la commessa, B (un altro) la finisce", async () => {
+    const admin = await adminAgent();
+    const dep = await Department.create({ name: "Saldatura", isActive: true });
+    await importAs(admin, dep, { commit: "true" });
+    const e = await ProductionEntry.findOne({ commessa: "2630" }).lean();
+    expect(e.firmaInizio).toBe("");                       // dal foglio non arriva nessuna firma
+    expect(e.operatore).toBeNull();
+
+    const login = async (username, name) => {
+      await User.create({ username, password: "Password123!", name, role: "operatore", departments: [dep._id] });
+      const a = request.agent(app);
+      await a.post("/api/auth/login").send({ username, password: "Password123!" });
+      return a;
+    };
+    const mario = await login("mario", "Mario Rossi");
+    const luca  = await login("luca", "Luca Bianchi");
+    const url = `/api/production/entries/${e._id}`;
+
+    expect((await luca.post(`${url}/finish`)).status).toBe(409);    // non ancora iniziata
+    const s = await mario.post(`${url}/start`);
+    expect(s.status).toBe(200);
+    expect(s.body.entry).toMatchObject({ firmaInizio: "Mario Rossi", operatoreNome: "Mario Rossi" });
+    expect((await luca.post(`${url}/start`)).status).toBe(409);     // già presa
+
+    const f = await luca.post(`${url}/finish`);
+    expect(f.status).toBe(200);
+    expect(f.body.entry).toMatchObject({ firmaInizio: "Mario Rossi", firmaFine: "Luca Bianchi", operatoreNome: "Mario Rossi" });
+    expect(f.body.entry.dataFine).toBeTruthy();
+    expect((await mario.post(`${url}/finish`)).status).toBe(409);   // già finita
+
+    expect((await mario.post(`${url}/undo`)).status).toBe(403);     // annullare: solo supervisori
+    const u = await admin.post(`${url}/undo`);
+    expect(u.body.entry).toMatchObject({ firmaInizio: "Mario Rossi", firmaFine: "", dataFine: null });
+  });
+
+  test("firme: un operatore di un altro reparto non può iniziare", async () => {
+    const admin = await adminAgent();
+    const dep = await Department.create({ name: "Saldatura", isActive: true });
+    const altro = await Department.create({ name: "Verniciatura", isActive: true });
+    await importAs(admin, dep, { commit: "true" });
+    const e = await ProductionEntry.findOne({ commessa: "2630" }).lean();
+    await User.create({ username: "vern", password: "Password123!", name: "V", role: "operatore", departments: [altro._id] });
+    const a = request.agent(app);
+    await a.post("/api/auth/login").send({ username: "vern", password: "Password123!" });
+    expect((await a.post(`/api/production/entries/${e._id}/start`)).status).toBe(403);
+  });
+
   test("fase non configurata → 400, nulla salvato", async () => {
     const a = await adminAgent();
     const dep = await Department.create({ name: "Saldatura", isActive: true });

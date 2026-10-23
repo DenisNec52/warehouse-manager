@@ -531,7 +531,7 @@ router.post("/entries/import", importLimiter, requireSupervisor, uploadXlsx, asy
     standardTime: null,
     custodiaLabel: r.custodiaLabel, dn: r.dn, diametro: r.diametro,
     tipologia: r.tipologia, dimensione: r.dimensione,
-    firmaInizio: r.firmaInizio, firmaFine: r.firmaFine,
+    // Le firme del foglio non si importano: le mette l'app con Inizia/Finisci.
     fase,
     tempoStdMinuti: r.tempoStdMinuti,
     tempoImpiegatoMinuti: r.tempoStdMinuti * r.quantita,   // default = al tempo standard (eff. 100%), poi correggibile
@@ -604,6 +604,65 @@ router.delete("/entries/:id", async (req, res) => {
   if (!entry) return;
   await entry.deleteOne();
   res.json({ message: "Riga eliminata." });
+});
+
+// ── Firma inizio / fine lavorazione ───────────────────────────
+// Chi prende la commessa preme "Inizia", chi la completa "Finisci" (anche un altro
+// utente). Ogni passo è un update condizionato: se due persone premono insieme,
+// solo la prima vince e la seconda riceve 409, nessuna firma viene sovrascritta.
+
+async function loadVisibleEntry(req, res) {
+  if (!mongoose.isValidObjectId(req.params.id)) { res.status(404).json({ message: "Riga non trovata." }); return null; }
+  const entry = await ProductionEntry.findById(req.params.id).select("department").lean();
+  if (!entry) { res.status(404).json({ message: "Riga non trovata." }); return null; }
+  const visible = req.user.visibleDepartmentIds();
+  if (visible && !visible.includes(String(entry.department))) {
+    res.status(403).json({ message: "Non hai accesso a questo reparto." });
+    return null;
+  }
+  return entry;
+}
+
+const nomeUtente = (u) => u.name || u.username;
+
+router.post("/entries/:id/start", async (req, res) => {
+  if (!(await loadVisibleEntry(req, res))) return;
+  const now = new Date();
+  const set = { iniziataDa: req.user._id, iniziataAt: now, firmaInizio: nomeUtente(req.user) };
+  let entry = await ProductionEntry.findOneAndUpdate({ _id: req.params.id, iniziataAt: null }, { $set: set }, { new: true });
+  if (!entry) return res.status(409).json({ message: "Commessa già iniziata." });
+  // Riga importata senza operatore: diventa di chi l'ha presa
+  if (!entry.operatore) {
+    entry = await ProductionEntry.findOneAndUpdate({ _id: entry._id, operatore: null },
+      { $set: { operatore: req.user._id, operatoreNome: nomeUtente(req.user) } }, { new: true }) || entry;
+  }
+  res.json({ entry });
+});
+
+router.post("/entries/:id/finish", async (req, res) => {
+  if (!(await loadVisibleEntry(req, res))) return;
+  const now = new Date();
+  const entry = await ProductionEntry.findOneAndUpdate(
+    { _id: req.params.id, iniziataAt: { $ne: null }, finitaAt: null },
+    { $set: { finitaDa: req.user._id, finitaAt: now, firmaFine: nomeUtente(req.user), dataFine: dayStart(now.toISOString().slice(0, 10)) } },
+    { new: true },
+  );
+  if (!entry) {
+    const cur = await ProductionEntry.findById(req.params.id).select("iniziataAt").lean();
+    return res.status(409).json({ message: cur?.iniziataAt ? "Commessa già finita." : "Prima va iniziata." });
+  }
+  res.json({ entry });
+});
+
+// Correzione di una firma messa per sbaglio: solo supervisori, annulla l'ultimo passo.
+router.post("/entries/:id/undo", requireSupervisor, async (req, res) => {
+  if (!(await loadVisibleEntry(req, res))) return;
+  const entry = await ProductionEntry.findById(req.params.id);
+  if (entry.finitaAt) entry.set({ finitaDa: null, finitaAt: null, firmaFine: "", dataFine: null });
+  else if (entry.iniziataAt) entry.set({ iniziataDa: null, iniziataAt: null, firmaInizio: "" });
+  else return res.status(409).json({ message: "Niente da annullare." });
+  await entry.save();
+  res.json({ entry });
 });
 
 // ── Confronto tempo standard vs impiegato ─────────────────────

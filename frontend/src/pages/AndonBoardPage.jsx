@@ -7,7 +7,7 @@
 import { useMemo, useState, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, X, Timer, PauseCircle, Flag, CheckCircle2, Package, FileSpreadsheet, Upload, AlertTriangle } from "lucide-react";
+import { Plus, Edit, Trash2, X, Timer, PauseCircle, Flag, CheckCircle2, Package, FileSpreadsheet, Upload, AlertTriangle, Play, Undo2 } from "lucide-react";
 import { m as motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import clsx from "clsx";
@@ -280,7 +280,7 @@ function AndonImportModal({ department, operators, onClose }) {
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <div>
             <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2"><FileSpreadsheet size={18}/> Importa foglio saldatura</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Reparto: {department.name} — .xlsx (Firma inizio, Comm., Pos., Cliente, Q.tà, Tipologia, DN, Ø, Dimensione, Temp standard, Firma fine)</p>
+            <p className="text-xs text-gray-500 mt-0.5">Reparto: {department.name} — .xlsx (Comm., Pos., Cliente, Q.tà, Tipologia, DN, Ø Elem., Grandezza, Temp standard). Le firme di inizio e fine si mettono dall’app con Inizia / Finisci.</p>
           </div>
           <button className="btn btn-ghost btn-sm p-1.5" onClick={onClose}><X size={16}/></button>
         </div>
@@ -328,7 +328,7 @@ function AndonImportModal({ department, operators, onClose }) {
               {s.valid > 0 && (
                 <div className="table-wrap max-h-64 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-md">
                   <table className="data-table text-sm">
-                    <thead><tr><th>Riga</th><th>Comm.</th><th>Pos.</th><th>Cliente</th><th>Q.tà</th><th>Tipologia</th><th>DN</th><th>Ø</th><th>Dimensione</th><th>Tempo STD</th><th>Firme</th></tr></thead>
+                    <thead><tr><th>Riga</th><th>Comm.</th><th>Pos.</th><th>Cliente</th><th>Q.tà</th><th>Tipologia</th><th>DN</th><th>Ø Elem.</th><th>Grandezza</th><th>Tempo STD</th></tr></thead>
                     <tbody>
                       {preview.rows.map((r, i) => (
                         <tr key={i} className={clsx(r.duplicate && "opacity-50")} title={r.duplicate ? "Già importato: verrà saltato" : undefined}>
@@ -342,7 +342,6 @@ function AndonImportModal({ department, operators, onClose }) {
                           <td className="text-gray-500">{r.diametro || "—"}</td>
                           <td className="text-gray-500">{r.dimensione || "—"}</td>
                           <td className="tabular-nums">{fmtMinutes(r.tempoStdMinuti)}</td>
-                          <td className="text-xs text-gray-500">{[r.firmaInizio, r.firmaFine].filter(Boolean).join(" → ") || "—"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -422,6 +421,18 @@ export default function AndonBoardPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["production"] }); toast.success("Riga eliminata"); },
     onError: e => toast.error(e.response?.data?.message || "Errore"),
   });
+
+  // Inizia / Finisci / Annulla: stessa forma, cambia solo la chiamata
+  const stepMut = useMutation({
+    mutationFn: ({ id, step }) => ({ start: productionAPI.startEntry, finish: productionAPI.finishEntry, undo: productionAPI.undoEntryStep })[step](id),
+    onSuccess: (_, { step }) => {
+      qc.invalidateQueries({ queryKey: ["production"] });
+      toast.success({ start: "Commessa iniziata", finish: "Commessa finita", undo: "Ultima firma annullata" }[step]);
+    },
+    onError: e => { qc.invalidateQueries({ queryKey: ["production"] }); toast.error(e.response?.data?.message || "Errore"); },
+  });
+  const step = (id, s) => stepMut.mutate({ id, step: s });
+  const fmtTime = (iso) => new Date(iso).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
   const canEdit = (e) => isSupervisor || e.operatore === user?.id;
   const totale = stats?.totale;
@@ -522,28 +533,55 @@ export default function AndonBoardPage() {
           <div className="table-wrap">
             <table className="data-table">
               <thead><tr>
-                <th>Data</th><th>Operatore</th><th>Commessa</th><th>Custodia</th><th>Pz</th>
+                <th>Data</th><th>Operatore</th><th>Commessa</th><th>Inizio / Fine</th><th>Pos.</th><th>Cliente</th><th>Q.tà</th>
+                <th>Tipologia</th><th>DN</th><th>Ø Elem.</th><th>Grandezza</th>
                 <th>STD/pz</th><th>Atteso</th><th>Impiegato</th><th>Eff.</th><th>Stato</th><th/>
               </tr></thead>
               <tbody>
                 {(entries || []).map(e => {
-                  const badge = efficiencyBadge(e.tempoAttesoMinuti / e.tempoImpiegatoMinuti);
+                  // atteso = STD × pezzi: calcolato qui perché la lista arriva con .lean() (senza i virtual del modello)
+                  const atteso = e.tempoStdMinuti * e.quantita;
+                  const badge = efficiencyBadge(atteso / e.tempoImpiegatoMinuti);
                   return (
                     <tr key={e._id}>
                       <td className="text-sm tabular-nums whitespace-nowrap">{fmtDay(e.data)}</td>
                       <td className="text-sm">{e.operatoreNome}</td>
                       <td className="font-medium text-gray-900 dark:text-white whitespace-nowrap">
-                        {e.commessa}{e.posizione && <span className="text-gray-400 font-normal"> / pos. {e.posizione}</span>}
-                        {e.cliente && <span className="block text-xs text-gray-400 font-normal truncate max-w-48">{e.cliente}</span>}
+                        {e.commessa}
+                        {e.fase && <span className="block text-xs text-gray-400 font-normal">{e.fase}</span>}
                       </td>
-                      <td>
-                        <span className="badge badge-blue">{e.custodiaLabel}</span>
-                        {(e.dn || e.diametro) && <span className="block text-xs text-gray-400 mt-0.5">{[e.dn && `DN ${e.dn}`, e.diametro && `Ø ${e.diametro}`].filter(Boolean).join(" · ")}</span>}
-                        {e.fase && <span className="block text-xs text-gray-400 mt-0.5">{e.fase}</span>}
+                      <td className="text-xs whitespace-nowrap">
+                        {!e.iniziataAt ? (
+                          <button className="btn btn-sm btn-secondary gap-1" disabled={stepMut.isPending} onClick={() => step(e._id, "start")}>
+                            <Play size={12}/> Inizia
+                          </button>
+                        ) : (
+                          <div className="space-y-1">
+                            <div title={fmtTime(e.iniziataAt)}><span className="text-gray-400">Inizio:</span> {e.firmaInizio}</div>
+                            {e.finitaAt
+                              ? <div title={fmtTime(e.finitaAt)}><span className="text-gray-400">Fine:</span> {e.firmaFine}</div>
+                              : <button className="btn btn-sm btn-primary gap-1" disabled={stepMut.isPending} onClick={() => step(e._id, "finish")}>
+                                  <CheckCircle2 size={12}/> Finisci
+                                </button>}
+                            {isSupervisor && (
+                              <button className="block text-gray-400 hover:text-red-500 underline" disabled={stepMut.isPending}
+                                onClick={() => { if (confirm(e.finitaAt ? "Annullare la firma di fine?" : "Annullare la firma di inizio?")) step(e._id, "undo"); }}>
+                                <Undo2 size={11} className="inline mr-0.5"/>annulla
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
+                      <td className="text-gray-500">{e.posizione || "—"}</td>
+                      <td className="text-sm truncate max-w-48" title={e.cliente}>{e.cliente || "—"}</td>
                       <td className="tabular-nums">{e.quantita}</td>
+                      {/* Righe inserite a mano non hanno tipologia/grandezza separate: si mostra l'etichetta custodia */}
+                      <td><span className="badge badge-blue">{e.tipologia || e.custodiaLabel}</span></td>
+                      <td className="text-gray-500 tabular-nums">{e.dn || "—"}</td>
+                      <td className="text-gray-500 tabular-nums">{e.diametro || "—"}</td>
+                      <td className="text-gray-500">{e.dimensione || "—"}</td>
                       <td className="tabular-nums text-gray-500">{fmtMinutes(e.tempoStdMinuti)}</td>
-                      <td className="tabular-nums">{fmtMinutes(e.tempoAttesoMinuti)}</td>
+                      <td className="tabular-nums">{fmtMinutes(atteso)}</td>
                       <td className="tabular-nums font-semibold">{fmtMinutes(e.tempoImpiegatoMinuti)}</td>
                       <td><span className={clsx("badge", badge.cls)}>{badge.text}</span></td>
                       <td className="whitespace-nowrap">
