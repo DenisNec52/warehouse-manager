@@ -25,12 +25,12 @@ function Step({ n, label, active, done }) {
   return (
     <div className={clsx("flex items-center gap-2 text-xs font-medium transition-colors",
       done  ? "text-green-600 dark:text-green-400" :
-      active ? "text-[var(--brand-500)]" :
+      active ? "text-(--brand-500)" :
                "text-gray-400")}>
       <div className={clsx(
         "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
         done  ? "bg-green-500 text-white" :
-        active ? "bg-[var(--brand-500)] text-white" :
+        active ? "bg-(--brand-500) text-white" :
                  "bg-gray-200 dark:bg-gray-700 text-gray-500"
       )}>
         {done ? "✓" : n}
@@ -203,7 +203,7 @@ export default function VisionScanner() {
         className={clsx(
           "fixed bottom-6 right-6 z-50",
           "w-14 h-14 rounded-full shadow-xl",
-          "bg-[var(--brand-500)] hover:bg-[var(--brand-600)]",
+          "bg-(--brand-500) hover:bg-(--brand-600)",
           "flex items-center justify-center text-white",
           "transition-colors duration-200"
         )}
@@ -223,7 +223,7 @@ export default function VisionScanner() {
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 z-50 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/50 z-50 backdrop-blur-xs"
               onClick={handleClose}
             />
 
@@ -245,7 +245,7 @@ export default function VisionScanner() {
             >
               {/* Header */}
               <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
-                <div className="w-8 h-8 rounded-[var(--radius-sm)] bg-[var(--brand-500)] flex items-center justify-center">
+                <div className="w-8 h-8 rounded-sm bg-(--brand-500) flex items-center justify-center">
                   <Sparkles size={15} className="text-white" />
                 </div>
                 <div className="flex-1">
@@ -278,9 +278,9 @@ export default function VisionScanner() {
                         onDragOver={(e) => e.preventDefault()}
                         className={clsx(
                           "border-2 border-dashed border-gray-300 dark:border-gray-600",
-                          "rounded-[var(--radius-lg)] p-8 text-center cursor-pointer",
-                          "hover:border-[var(--brand-500)] hover:bg-[var(--brand-50)]",
-                          "dark:hover:border-[var(--brand-500)] dark:hover:bg-gray-800",
+                          "rounded-lg p-8 text-center cursor-pointer",
+                          "hover:border-(--brand-500) hover:bg-(--brand-50)",
+                          "dark:hover:border-(--brand-500) dark:hover:bg-gray-800",
                           "transition-colors duration-200"
                         )}
                         onClick={() => fileRef.current?.click()}
@@ -302,7 +302,7 @@ export default function VisionScanner() {
                       <div className="relative">
                         <img
                           src={preview} alt="Preview"
-                          className="w-full max-h-64 object-contain rounded-[var(--radius)] border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
+                          className="w-full max-h-64 object-contain rounded-(--radius) border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
                         />
                         <button
                           onClick={() => { setPreview(null); setBase64(null); }}
@@ -314,14 +314,14 @@ export default function VisionScanner() {
                     )}
 
                     {aiError && (
-                      <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-[var(--radius)] text-sm text-red-600 dark:text-red-400">
+                      <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-(--radius) text-sm text-red-600 dark:text-red-400">
                         <AlertCircle size={15} className="shrink-0" />
                         {aiError}
                       </div>
                     )}
 
                     <button
-                      className="btn btn-lg btn-primary w-full gap-2 bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white"
+                      className="btn btn-lg btn-primary w-full gap-2 bg-(--brand-500) hover:bg-(--brand-600) text-white"
                       disabled={!base64 || scanning}
                       onClick={scanImage}
                     >
@@ -338,8 +338,8 @@ export default function VisionScanner() {
                 {step === 2 && (
                   <div className="flex flex-col items-center justify-center py-10 gap-4">
                     <div className="relative">
-                      <div className="w-16 h-16 rounded-full border-4 border-[var(--brand-100)] border-t-[var(--brand-500)] animate-spin" />
-                      <Sparkles size={20} className="absolute inset-0 m-auto text-[var(--brand-500)]" />
+                      <div className="w-16 h-16 rounded-full border-4 border-(--brand-100) border-t-(--brand-500) animate-spin" />
+                      <Sparkles size={20} className="absolute inset-0 m-auto text-(--brand-500)" />
                     </div>
                     <div className="text-center">
                       <p className="text-sm font-semibold text-gray-900 dark:text-white">Analisi IA in corso</p>
@@ -352,9 +352,9 @@ export default function VisionScanner() {
                 {step === 3 && aiResult && (
                   <>
                     {/* AI result summary */}
-                    <div className="p-3 bg-[var(--brand-50)] dark:bg-gray-800 rounded-[var(--radius)] border border-[var(--brand-100)] dark:border-gray-700">
+                    <div className="p-3 bg-(--brand-50) dark:bg-gray-800 rounded-(--radius) border border-(--brand-100) dark:border-gray-700">
                       <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-semibold text-[var(--brand-500)] flex items-center gap-1">
+                        <p className="text-xs font-semibold text-(--brand-500) flex items-center gap-1">
                           <Sparkles size={12} /> Rilevato dall'IA
                         </p>
                         <ConfBadge level={aiResult.confidenza} />
@@ -375,11 +375,11 @@ export default function VisionScanner() {
                     <div>
                       <label className="form-label">Prodotto in magazzino</label>
                       {searching ? (
-                        <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-[var(--radius)] text-sm text-gray-400">
+                        <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-(--radius) text-sm text-gray-400">
                           <Loader2 size={14} className="animate-spin" /> Ricerca prodotto...
                         </div>
                       ) : matchedProduct ? (
-                        <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-[var(--radius)] border border-green-200 dark:border-green-800 flex items-start gap-3">
+                        <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-(--radius) border border-green-200 dark:border-green-800 flex items-start gap-3">
                           <CheckCircle2 size={16} className="text-green-600 shrink-0 mt-0.5" />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-gray-900 dark:text-white">{matchedProduct.name}</p>
@@ -398,7 +398,7 @@ export default function VisionScanner() {
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-[var(--radius)] border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-700 dark:text-yellow-400">
+                          <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-(--radius) border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-700 dark:text-yellow-400">
                             <AlertCircle size={14} className="shrink-0" />
                             Prodotto non trovato automaticamente — cerca manualmente
                           </div>
@@ -427,7 +427,7 @@ export default function VisionScanner() {
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           onClick={() => setTipo("IN")}
-                          className={clsx("py-3 rounded-[var(--radius)] text-sm font-bold flex items-center justify-center gap-2 border-2 transition-all",
+                          className={clsx("py-3 rounded-(--radius) text-sm font-bold flex items-center justify-center gap-2 border-2 transition-all",
                             tipo === "IN"
                               ? "border-green-500 bg-green-500 text-white"
                               : "border-gray-200 dark:border-gray-700 text-gray-500 hover:border-green-300"
@@ -437,7 +437,7 @@ export default function VisionScanner() {
                         </button>
                         <button
                           onClick={() => setTipo("OUT")}
-                          className={clsx("py-3 rounded-[var(--radius)] text-sm font-bold flex items-center justify-center gap-2 border-2 transition-all",
+                          className={clsx("py-3 rounded-(--radius) text-sm font-bold flex items-center justify-center gap-2 border-2 transition-all",
                             tipo === "OUT"
                               ? "border-red-500 bg-red-500 text-white"
                               : "border-gray-200 dark:border-gray-700 text-gray-500 hover:border-red-300"

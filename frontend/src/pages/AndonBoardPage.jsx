@@ -108,9 +108,9 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose}/>
       <motion.div initial={{opacity:0,scale:.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.95}}
-        className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-900 rounded-[var(--radius-lg)] shadow-modal">
+        className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-900 rounded-lg shadow-modal">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <div>
             <h2 className="font-semibold text-gray-900 dark:text-white">{entry ? "Modifica riga" : "Nuova riga produzione"}</h2>
@@ -178,7 +178,7 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
           </div>
 
           {atteso && (
-            <div className="rounded-[var(--radius-md)] bg-gray-50 dark:bg-gray-800/60 px-4 py-3 text-sm flex flex-wrap items-center gap-x-4 gap-y-1">
+            <div className="rounded-md bg-gray-50 dark:bg-gray-800/60 px-4 py-3 text-sm flex flex-wrap items-center gap-x-4 gap-y-1">
               <span className="text-gray-500">STD <strong className="text-gray-900 dark:text-white tabular-nums">{fmtMinutes(stdMinuti)}</strong>/pz</span>
               <span className="text-gray-500">Atteso <strong className="text-gray-900 dark:text-white tabular-nums">{fmtMinutes(atteso)}</strong></span>
               {preview && <span className={clsx("badge", preview.cls)}>Efficienza {preview.text}</span>}
@@ -187,7 +187,7 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
 
           {/* Scarico magazzino (solo nuove righe): fase + materiali dalla distinta, confermabili */}
           {isNew && phases.length > 0 && (
-            <div className="rounded-[var(--radius-md)] border border-gray-100 dark:border-gray-800 p-3 space-y-3">
+            <div className="rounded-md border border-gray-100 dark:border-gray-800 p-3 space-y-3">
               <div className="flex items-end gap-2">
                 <div className="flex-1">
                   <label className="form-label">Fase lavorazione (scarico magazzino)</label>
@@ -247,35 +247,46 @@ function AndonImportModal({ department, operators, onClose }) {
   const [preview, setPreview] = useState(null);
   const [operatore, setOperatore] = useState("");
   const [data, setData] = useState(toIsoDay(new Date()));
+  // Ogni import appartiene a UNA lavorazione: le righe non si mischiano con le altre fasi.
+  const phases = useAuthStore(st => st.settings?.workPhases) || [];
+  const [fase, setFase] = useState(phases[0] || "");
 
+  // L'anteprima si ricalcola su file/fase/data: i duplicati dipendono da tutti e tre.
   const previewMut = useMutation({
-    mutationFn: (f) => productionAPI.importEntries(department._id, f, { commit: false }).then(r => r.data),
-    onSuccess: setPreview,
+    mutationFn: ({ f, fase, data }) => productionAPI.importEntries(department._id, f, { commit: false, fase, data }).then(r => r.data),
+    onSuccess: (d) => { setPreview(d); if (d.data) setData(d.data); if (d.fase) setFase(d.fase); },
     onError: e => toast.error(e.response?.data?.message || "File non valido"),
   });
   const commitMut = useMutation({
-    mutationFn: () => productionAPI.importEntries(department._id, file, { commit: true, operatore: operatore || undefined, data }).then(r => r.data),
-    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["production"] }); toast.success(`Importate ${d.summary?.created || 0} righe`); onClose(); },
+    mutationFn: () => productionAPI.importEntries(department._id, file, { commit: true, operatore: operatore || undefined, data, fase }).then(r => r.data),
+    onSuccess: (d) => {
+      qc.invalidateQueries({ queryKey: ["production"] });
+      const dup = d.summary?.duplicates ? ` (${d.summary.duplicates} già presenti, saltate)` : "";
+      toast.success(`Importate ${d.summary?.created || 0} righe in ${d.fase}${dup}`);
+      onClose();
+    },
     onError: e => toast.error(e.response?.data?.message || "Errore"),
   });
-  const onPick = (e) => { const f = e.target.files?.[0]; setPreview(null); setFile(f || null); if (f) previewMut.mutate(f); };
+  // Primo caricamento: data non inviata → il server usa quella scritta sul foglio.
+  const onPick = (e) => { const f = e.target.files?.[0]; setPreview(null); setFile(f || null); if (f) previewMut.mutate({ f, fase }); };
+  const refresh = (next) => { if (file) previewMut.mutate({ f: file, fase, data, ...next }); };
   const s = preview?.summary;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose}/>
       <motion.div initial={{opacity:0,scale:.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.95}}
-        className="relative z-10 w-full max-w-3xl max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 rounded-[var(--radius-lg)] shadow-modal">
+        className="relative z-10 w-full max-w-3xl max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 rounded-lg shadow-modal">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <div>
             <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2"><FileSpreadsheet size={18}/> Importa foglio saldatura</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Reparto: {department.name} — .xlsx (Comm., Pos., Cliente, Q.tà, Tipologia, DN, Ø, Dimensione, Temp standard)</p>
+            <p className="text-xs text-gray-500 mt-0.5">Reparto: {department.name} — .xlsx (Firma inizio, Comm., Pos., Cliente, Q.tà, Tipologia, DN, Ø, Dimensione, Temp standard, Firma fine)</p>
           </div>
           <button className="btn btn-ghost btn-sm p-1.5" onClick={onClose}><X size={16}/></button>
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto">
-          <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-[var(--radius-md)] py-6 cursor-pointer hover:border-[var(--brand-500)] transition-colors">
+          <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-md py-6 cursor-pointer hover:border-(--brand-500) transition-colors">
             <Upload size={22} className="text-gray-400"/>
             <span className="text-sm text-gray-600 dark:text-gray-300">{file ? file.name : "Scegli il file .xlsx"}</span>
             <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={onPick}/>
@@ -286,15 +297,22 @@ function AndonImportModal({ department, operators, onClose }) {
           {preview && (
             <>
               <div className="flex flex-wrap gap-3 text-sm">
-                <span className="inline-flex items-center gap-1.5 text-green-600"><CheckCircle2 size={15}/> {s.valid} righe valide</span>
+                <span className="inline-flex items-center gap-1.5 text-green-600"><CheckCircle2 size={15}/> {s.valid} capi letti</span>
+                {s.duplicates > 0 && <span className="inline-flex items-center gap-1.5 text-gray-500">{s.duplicates} già importati (saltati)</span>}
                 {s.errors > 0 && <span className="inline-flex items-center gap-1.5 text-amber-600"><AlertTriangle size={15}/> {s.errors} scartate</span>}
                 {s.truncated && <span className="text-amber-600">⚠ troncato al limite righe</span>}
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-3">
+              <div className="grid sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="form-label">Data da assegnare</label>
-                  <input type="date" className="form-input" value={data} onChange={e => setData(e.target.value)}/>
+                  <label className="form-label">Lavorazione *</label>
+                  <select className="form-input" value={fase} onChange={e => { setFase(e.target.value); refresh({ fase: e.target.value }); }}>
+                    {phases.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Data {preview.sheetDate === data && <span className="text-gray-400 font-normal">(dal foglio)</span>}</label>
+                  <input type="date" className="form-input" value={data} onChange={e => { setData(e.target.value); if (e.target.value) refresh({ data: e.target.value }); }}/>
                 </div>
                 {operators && (
                   <div>
@@ -308,20 +326,23 @@ function AndonImportModal({ department, operators, onClose }) {
               </div>
 
               {s.valid > 0 && (
-                <div className="table-wrap max-h-64 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-[var(--radius-md)]">
+                <div className="table-wrap max-h-64 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-md">
                   <table className="data-table text-sm">
-                    <thead><tr><th>Comm.</th><th>Pos.</th><th>Cliente</th><th>Q.tà</th><th>Custodia</th><th>DN</th><th>Ø</th><th>Tempo STD</th></tr></thead>
+                    <thead><tr><th>Riga</th><th>Comm.</th><th>Pos.</th><th>Cliente</th><th>Q.tà</th><th>Tipologia</th><th>DN</th><th>Ø</th><th>Dimensione</th><th>Tempo STD</th><th>Firme</th></tr></thead>
                     <tbody>
                       {preview.rows.map((r, i) => (
-                        <tr key={i}>
+                        <tr key={i} className={clsx(r.duplicate && "opacity-50")} title={r.duplicate ? "Già importato: verrà saltato" : undefined}>
+                          <td className="text-gray-400 tabular-nums">{r.row}</td>
                           <td className="font-medium">{r.commessa}</td>
                           <td className="text-gray-500">{r.posizione || "—"}</td>
-                          <td className="truncate max-w-[10rem]">{r.cliente || "—"}</td>
+                          <td className="truncate max-w-40">{r.cliente || "—"}</td>
                           <td className="tabular-nums">{r.quantita}</td>
-                          <td><span className="badge badge-blue">{r.custodiaLabel}</span></td>
+                          <td><span className="badge badge-blue">{r.tipologia || "—"}</span></td>
                           <td className="text-gray-500">{r.dn || "—"}</td>
                           <td className="text-gray-500">{r.diametro || "—"}</td>
+                          <td className="text-gray-500">{r.dimensione || "—"}</td>
                           <td className="tabular-nums">{fmtMinutes(r.tempoStdMinuti)}</td>
+                          <td className="text-xs text-gray-500">{[r.firmaInizio, r.firmaFine].filter(Boolean).join(" → ") || "—"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -340,8 +361,8 @@ function AndonImportModal({ department, operators, onClose }) {
 
         <div className="flex gap-3 px-5 py-4 border-t border-gray-100 dark:border-gray-800">
           <button className="btn btn-md btn-secondary flex-1" onClick={onClose}>Annulla</button>
-          <button className="btn btn-md btn-primary flex-1" disabled={!preview || !s?.valid || commitMut.isPending} onClick={() => commitMut.mutate()}>
-            {commitMut.isPending ? "Importazione…" : `Importa ${s?.valid || 0} righe`}
+          <button className="btn btn-md btn-primary flex-1" disabled={!preview || !s?.toImport || !fase || !data || previewMut.isPending || commitMut.isPending} onClick={() => commitMut.mutate()}>
+            {commitMut.isPending ? "Importazione…" : `Importa ${s?.toImport || 0} righe${fase ? ` in ${fase}` : ""}`}
           </button>
         </div>
       </motion.div>
@@ -430,7 +451,7 @@ export default function AndonBoardPage() {
 
       <DepartmentSelector departments={departments} value={departmentId} onChange={select} className="mb-4"/>
       {department && !standardTimes.length && (
-        <p className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-[var(--radius)] px-4 py-3 mb-4">
+        <p className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-(--radius) px-4 py-3 mb-4">
           {department.name} non ha ancora tempi standard: aggiungili in <Link to="/production/standard-times" className="underline font-medium">Tempi standard</Link> per poter registrare righe.
         </p>
       )}
@@ -478,7 +499,7 @@ export default function AndonBoardPage() {
                   <span className="truncate font-medium text-gray-900 dark:text-white">{o.nome}</span>
                   <div className="space-y-1" aria-label={`Atteso ${fmtMinutes(o.attesoMinuti)}, impiegato ${fmtMinutes(o.impiegatoMinuti)}`}>
                     <div className="h-2 rounded-full bg-gray-300 dark:bg-gray-600" style={{ width: `${(o.attesoMinuti / maxOperatoreMinuti) * 100}%` }}/>
-                    <div className="h-2 rounded-full bg-[var(--brand-500)]" style={{ width: `${(o.impiegatoMinuti / maxOperatoreMinuti) * 100}%` }}/>
+                    <div className="h-2 rounded-full bg-(--brand-500)" style={{ width: `${(o.impiegatoMinuti / maxOperatoreMinuti) * 100}%` }}/>
                   </div>
                   <span className="whitespace-nowrap text-xs text-gray-500 tabular-nums">
                     {fmtMinutes(o.impiegatoMinuti)} / {fmtMinutes(o.attesoMinuti)} <span className={clsx("badge ml-1", badge.cls)}>{badge.text}</span>
@@ -489,14 +510,14 @@ export default function AndonBoardPage() {
           </div>
           <p className="text-xs text-gray-400 mt-3 flex gap-4">
             <span className="inline-flex items-center gap-1.5"><span className="w-3 h-2 rounded-full bg-gray-300 dark:bg-gray-600"/> Atteso</span>
-            <span className="inline-flex items-center gap-1.5"><span className="w-3 h-2 rounded-full bg-[var(--brand-500)]"/> Impiegato</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-3 h-2 rounded-full bg-(--brand-500)"/> Impiegato</span>
           </p>
         </div>
       )}
 
       <div className="card overflow-hidden">
         {isLoading ? (
-          <div className="p-8 flex justify-center"><div className="w-6 h-6 border-2 border-[var(--brand-500)] border-t-transparent rounded-full animate-spin"/></div>
+          <div className="p-8 flex justify-center"><div className="w-6 h-6 border-2 border-(--brand-500) border-t-transparent rounded-full animate-spin"/></div>
         ) : (
           <div className="table-wrap">
             <table className="data-table">
@@ -513,11 +534,12 @@ export default function AndonBoardPage() {
                       <td className="text-sm">{e.operatoreNome}</td>
                       <td className="font-medium text-gray-900 dark:text-white whitespace-nowrap">
                         {e.commessa}{e.posizione && <span className="text-gray-400 font-normal"> / pos. {e.posizione}</span>}
-                        {e.cliente && <span className="block text-xs text-gray-400 font-normal truncate max-w-[12rem]">{e.cliente}</span>}
+                        {e.cliente && <span className="block text-xs text-gray-400 font-normal truncate max-w-48">{e.cliente}</span>}
                       </td>
                       <td>
                         <span className="badge badge-blue">{e.custodiaLabel}</span>
                         {(e.dn || e.diametro) && <span className="block text-xs text-gray-400 mt-0.5">{[e.dn && `DN ${e.dn}`, e.diametro && `Ø ${e.diametro}`].filter(Boolean).join(" · ")}</span>}
+                        {e.fase && <span className="block text-xs text-gray-400 mt-0.5">{e.fase}</span>}
                       </td>
                       <td className="tabular-nums">{e.quantita}</td>
                       <td className="tabular-nums text-gray-500">{fmtMinutes(e.tempoStdMinuti)}</td>

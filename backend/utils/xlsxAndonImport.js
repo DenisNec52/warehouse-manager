@@ -4,7 +4,11 @@
  * Legge (in SOLA LETTURA) un foglio di lavorazione saldatura .xlsx — già
  * validato da middleware/secureUpload — ed estrae TUTTE le colonne utili per
  * creare righe dell'Andon Board:
- *   Comm. | Pos. | Cliente | Q.tà | Tipologia | DN | Ø Elem. (mm) | Dimensione | Temp standard
+ *   Firma inizio | Comm. | Pos. | Cliente | Q.tà | Tipologia | DN | Ø Elem. (mm) |
+ *   Dimensione | Temp standard | Firma fine
+ * più la data del foglio (cella sopra l'intestazione, anche se unita).
+ * Ogni campo resta SEPARATO (tipologia e dimensione non vengono fuse: l'etichetta
+ * custodia è solo una comodità di visualizzazione).
  *
  * Robustezza: intestazioni riconosciute per nome (ordine colonne libero, header
  * non per forza in riga 1), righe vuote intermedie saltate, tempo letto sia come
@@ -22,6 +26,7 @@ const norm = (s) => String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 /** Associa un'intestazione (normalizzata) a un campo, per token robusti. */
 function headerField(h) {
   if (!h) return null;
+  if (h.includes("firma")) return h.includes("fine") ? "firmaFine" : "firmaInizio";
   if (h.includes("comm")) return "commessa";
   if (h.startsWith("pos")) return "posizione";
   if (h.includes("client")) return "cliente";
@@ -60,6 +65,18 @@ function parseMinutes(cell) {
   return Number.isNaN(d.getTime()) ? NaN : d.getUTCHours() * 60 + d.getUTCMinutes();
 }
 
+/** Data del foglio: prima cella data nelle righe sopra l'intestazione (es. C2 unita). */
+function detectSheetDate(ws, headerRow) {
+  for (let r = 1; r < headerRow; r++) {
+    const row = ws.getRow(r);
+    for (let c = 1; c <= (ws.columnCount || 30); c++) {
+      const v = row.getCell(c).value;
+      if (v instanceof Date && v.getUTCFullYear() > 2000) return v.toISOString().slice(0, 10);
+    }
+  }
+  return null;
+}
+
 /** Trova la riga intestazione (entro le prime 8) e la mappa colonna→campo. */
 function detectColumns(ws) {
   const maxScan = Math.min(8, ws.rowCount || 8);
@@ -95,13 +112,14 @@ async function parseAndonXlsx(buffer) {
   } finally { clearTimeout(timer); }
 
   const ws = workbook.worksheets[0];
-  if (!ws) return { rows: [], errors: [{ row: 0, message: "Il file non contiene alcun foglio." }], truncated: false };
+  if (!ws) return { rows: [], errors: [{ row: 0, message: "Il file non contiene alcun foglio." }], truncated: false, sheetDate: null };
 
   const detected = detectColumns(ws);
   if (!detected)
-    return { rows: [], errors: [{ row: 0, message: "Intestazioni non trovate. Servono almeno 'Comm.' e 'Temp standard'." }], truncated: false };
+    return { rows: [], errors: [{ row: 0, message: "Intestazioni non trovate. Servono almeno 'Comm.' e 'Temp standard'." }], truncated: false, sheetDate: null };
 
   const { headerRow, map } = detected;
+  const sheetDate = detectSheetDate(ws, headerRow);
   const col = (name, r) => (map[name] != null ? r.getCell(map[name]) : null);
   const rows = [], errors = [];
   let processed = 0, truncated = false;
@@ -119,6 +137,8 @@ async function parseAndonXlsx(buffer) {
     const diametro   = cleanOpt(cellText(col("diametro", row)));
     const dimensione = clean(cellText(col("dimensione", row)));
     const qRaw       = clean(cellText(col("quantita", row)));
+    const firmaInizio = cleanOpt(cellText(col("firmaInizio", row)));
+    const firmaFine   = cleanOpt(cellText(col("firmaFine", row)));
     const tempoStdMinuti = map.tempoStd != null ? parseMinutes(row.getCell(map.tempoStd)) : null;
 
     // Riga del tutto vuota → salta senza errore
@@ -128,7 +148,7 @@ async function parseAndonXlsx(buffer) {
     const err = (message) => errors.push({ row: r, message, data: { commessa, cliente, tipologia } });
 
     if (!commessa) { err("Commessa mancante."); continue; }
-    if ([commessa, posizione, cliente, tipologia, dn, diametro, dimensione].some(v => FORMULA_LEAD.test(v))) {
+    if ([commessa, posizione, cliente, tipologia, dn, diametro, dimensione, firmaInizio, firmaFine].some(v => FORMULA_LEAD.test(v))) {
       err("Cella con carattere non ammesso all'inizio (= + - @). Riga ignorata per sicurezza."); continue;
     }
     let quantita = parseInt(qRaw, 10);
@@ -139,10 +159,10 @@ async function parseAndonXlsx(buffer) {
     }
 
     const custodiaLabel = [tipologia, dimensione].filter(Boolean).join(" ").trim() || tipologia || "Custodia";
-    rows.push({ commessa, posizione, cliente, quantita, tipologia, dn, diametro, dimensione, custodiaLabel, tempoStdMinuti });
+    rows.push({ row: r, commessa, posizione, cliente, quantita, tipologia, dn, diametro, dimensione, custodiaLabel, tempoStdMinuti, firmaInizio, firmaFine });
   }
 
-  return { rows, errors, truncated };
+  return { rows, errors, truncated, sheetDate };
 }
 
 module.exports = { parseAndonXlsx, LIMITS };

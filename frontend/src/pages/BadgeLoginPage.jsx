@@ -37,7 +37,7 @@ export default function BadgeLoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-gray-50 dark:bg-gray-950 text-gray-500">
-      <Loader2 className="animate-spin text-[var(--brand-500)]" size={28}/>
+      <Loader2 className="animate-spin text-(--brand-500)" size={28}/>
       <p className="text-sm">Accesso con badge in corso…</p>
     </div>
   );

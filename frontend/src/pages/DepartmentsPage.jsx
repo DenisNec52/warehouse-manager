@@ -32,9 +32,9 @@ function DepartmentModal({ dept, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose}/>
       <motion.div initial={{opacity:0,scale:.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.95}}
-        className="relative z-10 w-full max-w-sm bg-white dark:bg-gray-900 rounded-[var(--radius-lg)] shadow-modal">
+        className="relative z-10 w-full max-w-sm bg-white dark:bg-gray-900 rounded-lg shadow-modal">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <h2 className="font-semibold text-gray-900 dark:text-white">{dept ? "Modifica reparto" : "Nuovo reparto"}</h2>
           <button className="btn btn-ghost btn-sm p-1.5" onClick={onClose} aria-label="Chiudi"><X size={16}/></button>
@@ -95,7 +95,7 @@ export default function DepartmentsPage() {
       </div>
 
       {isLoading ? (
-        <div className="p-8 flex justify-center"><div className="w-6 h-6 border-2 border-[var(--brand-500)] border-t-transparent rounded-full animate-spin"/></div>
+        <div className="p-8 flex justify-center"><div className="w-6 h-6 border-2 border-(--brand-500) border-t-transparent rounded-full animate-spin"/></div>
       ) : (
         <div className="card divide-y divide-gray-100 dark:divide-gray-800">
           {departments.map((d, i) => (

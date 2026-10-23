@@ -28,6 +28,10 @@ const productionEntrySchema = new mongoose.Schema({
   custodiaLabel:  { type: String, required: true, trim: true },           // snapshot, es. "T.F. PICCOLA"
   dn:             { type: String, trim: true, default: "" },              // da foglio: DN
   diametro:       { type: String, trim: true, default: "" },              // da foglio: Ø Elem. (mm)
+  tipologia:      { type: String, trim: true, default: "" },              // da foglio: Tipologia (separata, es. "T.F.")
+  dimensione:     { type: String, trim: true, default: "" },              // da foglio: Dimensione (separata, es. "PICCOLA")
+  firmaInizio:    { type: String, trim: true, default: "" },              // da foglio: Firma (inizio lavorazione)
+  firmaFine:      { type: String, trim: true, default: "" },              // da foglio: Firma (fine lavorazione)
   tempoStdMinuti: { type: Number, required: true, min: 1 },               // snapshot, per pezzo
 
   tempoImpiegatoMinuti: { type: Number, required: true, min: 1 },         // totale della riga

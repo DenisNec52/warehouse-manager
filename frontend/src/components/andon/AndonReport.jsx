@@ -183,10 +183,10 @@ function ExportModal({ initial, departmentId, departmentName, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose}/>
       <motion.div initial={{ opacity: 0, scale: .95 }} animate={{ opacity: 1, scale: 1 }}
         role="dialog" aria-modal="true" aria-labelledby="export-title"
-        className="relative z-10 w-full max-w-md bg-white dark:bg-gray-900 rounded-[var(--radius-lg)] shadow-modal">
+        className="relative z-10 w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow-modal">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <h2 id="export-title" className="font-semibold text-gray-900 dark:text-white">Scarica Excel</h2>
           <button className="btn btn-ghost btn-sm p-1.5" onClick={onClose} aria-label="Chiudi"><X size={16}/></button>
@@ -201,9 +201,9 @@ function ExportModal({ initial, departmentId, departmentName, onClose }) {
             <legend className="form-label">Contenuto del file</legend>
             <div className="grid gap-2">
               {[[false, "Solo dati", "Riepilogo e tabella con tutte le righe"], [true, "Dati + grafici", "In più barre, torta e andamento come grafici di Excel"]].map(([v, l, d]) => (
-                <label key={l} className={clsx("flex gap-3 p-3 rounded-[var(--radius)] border cursor-pointer",
-                  withCharts === v ? "border-[var(--brand-500)] bg-[var(--brand-50)] dark:bg-[var(--brand-500)]/15" : "border-gray-200 dark:border-gray-700")}>
-                  <input type="radio" name="contenuto" className="mt-1 accent-[var(--brand-500)]" checked={withCharts === v} onChange={() => setWithCharts(v)}/>
+                <label key={l} className={clsx("flex gap-3 p-3 rounded-(--radius) border cursor-pointer",
+                  withCharts === v ? "border-(--brand-500) bg-(--brand-50) dark:bg-(--brand-500)/15" : "border-gray-200 dark:border-gray-700")}>
+                  <input type="radio" name="contenuto" className="mt-1 accent-(--brand-500)" checked={withCharts === v} onChange={() => setWithCharts(v)}/>
                   <span>
                     <span className="block text-sm font-medium text-gray-900 dark:text-white">{l}</span>
                     <span className="block text-xs text-gray-500">{d}</span>

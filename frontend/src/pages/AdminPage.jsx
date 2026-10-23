@@ -60,12 +60,12 @@ export default function AdminPage() {
         {AREAS.map((a, i) => (
           <motion.div key={a.to} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 * i }}>
             <Link to={a.to} className="card p-5 flex gap-4 items-start h-full hover:shadow-lg hover:-translate-y-0.5 transition-all group">
-              <div className="w-10 h-10 rounded-[var(--radius)] bg-[var(--brand-50)] dark:bg-[var(--brand-500)]/15 text-[var(--brand-500)] flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-(--radius) bg-(--brand-50) dark:bg-(--brand-500)/15 text-(--brand-500) flex items-center justify-center shrink-0">
                 <a.icon size={18}/>
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline justify-between gap-2">
-                  <h2 className="font-semibold text-gray-900 dark:text-white group-hover:text-[var(--brand-500)] transition-colors">{a.title}</h2>
+                  <h2 className="font-semibold text-gray-900 dark:text-white group-hover:text-(--brand-500) transition-colors">{a.title}</h2>
                   {a.countKey && counts[a.countKey] != null && (
                     <span className="text-xs font-semibold text-gray-400 tabular-nums whitespace-nowrap">{counts[a.countKey]}</span>
                   )}

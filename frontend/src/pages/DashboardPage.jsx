@@ -73,7 +73,7 @@ function FormMovimento() {
       </div>
       <div className="p-5 space-y-3">
         {selected ? (
-          <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded flex items-center justify-between">
+          <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-(--radius) flex items-center justify-between">
             <div>
               <p className="font-semibold text-gray-900 dark:text-white text-sm">{selected.name}</p>
               <p className="text-xs text-gray-400">{selected.code} · Stock: <strong>{selected.quantity} {selected.unit}</strong></p>
@@ -91,7 +91,7 @@ function FormMovimento() {
                 onFocus={() => setShowResults(true)}
                 onBlur={() => setTimeout(() => setShowResults(false), 150)}/>
               {showResults && search.length > 1 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-[var(--radius)] shadow-modal z-30 max-h-52 overflow-y-auto">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-(--radius) shadow-modal z-30 max-h-52 overflow-y-auto">
                   {searchData?.products?.length > 0 ? searchData.products.map(p => (
                     <div key={p._id} className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
                       onMouseDown={() => { setSelected(p); setShowResults(false); setSearch(""); }}>
@@ -149,7 +149,7 @@ function StatCard({ label, value, icon: Icon, color, sub }) {
           <p className="text-3xl font-bold text-gray-900 dark:text-white tabular-nums">{value ?? "—"}</p>
           {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
         </div>
-        <div className="w-10 h-10 rounded-[var(--radius-sm)] flex items-center justify-center" style={{ background: color + "20" }}>
+        <div className="w-10 h-10 rounded-sm flex items-center justify-center" style={{ background: color + "20" }}>
           <Icon size={18} style={{ color }}/>
         </div>
       </div>
@@ -191,7 +191,7 @@ function UserActivity() {
   return (
     <div className="card">
       <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-        <Activity size={15} className="text-[var(--brand-500)]"/>
+        <Activity size={15} className="text-(--brand-500)"/>
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Utilizzo per utente</h3>
         <span className="text-xs text-gray-400 ml-auto">ultimi 200 movimenti</span>
       </div>
@@ -200,7 +200,7 @@ function UserActivity() {
           <div key={a.name}>
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-[var(--brand-500)] flex items-center justify-center text-white text-xs font-bold shrink-0">
+                <div className="w-7 h-7 rounded-full bg-(--brand-500) flex items-center justify-center text-white text-xs font-bold shrink-0">
                   {a.name.charAt(0).toUpperCase()}
                 </div>
                 <span className="text-sm font-medium text-gray-900 dark:text-white">{a.name}</span>
@@ -213,7 +213,7 @@ function UserActivity() {
             </div>
             {/* Barra utilizzo */}
             <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div className="h-full rounded-full bg-[var(--brand-500)] transition-all duration-500"
+              <div className="h-full rounded-full bg-(--brand-500) transition-all duration-500"
                 style={{ width: `${Math.round((a.total / maxTotal) * 100)}%` }}/>
             </div>
             <p className="text-xs text-gray-400 mt-0.5">{a.total} movimenti totali</p>
@@ -314,7 +314,7 @@ export default function DashboardPage() {
       <div className="card mt-6">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Movimenti recenti</h3>
-          <Link to="/movements" className="text-xs text-[var(--brand-500)] hover:underline">Vedi tutti →</Link>
+          <Link to="/movements" className="text-xs text-(--brand-500) hover:underline">Vedi tutti →</Link>
         </div>
         <div className="table-wrap">
           <table className="data-table">

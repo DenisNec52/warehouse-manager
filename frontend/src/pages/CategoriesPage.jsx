@@ -21,9 +21,9 @@ function CategoryModal({ cat, onClose }) {
   });
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose}/>
       <motion.div initial={{opacity:0,scale:.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.95}}
-        className="relative z-10 w-full max-w-sm bg-white dark:bg-gray-900 rounded-[var(--radius-lg)] shadow-modal">
+        className="relative z-10 w-full max-w-sm bg-white dark:bg-gray-900 rounded-lg shadow-modal">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <h2 className="font-semibold text-gray-900 dark:text-white">{cat ? "Modifica categoria" : "Nuova categoria"}</h2>
           <button className="btn btn-ghost btn-sm p-1.5" onClick={onClose}><X size={16}/></button>
@@ -37,7 +37,7 @@ function CategoryModal({ cat, onClose }) {
             <label className="form-label">Icona</label>
             <div className="flex flex-wrap gap-2 mt-1">
               {ICONS.map(ic => <button key={ic} type="button" onClick={() => setForm(f=>({...f,icon:ic}))}
-                className={`w-9 h-9 rounded text-lg flex items-center justify-center transition-all ${form.icon===ic?"ring-2 ring-[var(--brand-500)] bg-[var(--brand-50)] dark:bg-[var(--brand-500)]/20 scale-110":"hover:bg-gray-100 dark:hover:bg-gray-700"}`}>{ic}</button>)}
+                className={`w-9 h-9 rounded-(--radius) text-lg flex items-center justify-center transition-all ${form.icon===ic?"ring-2 ring-(--brand-500) bg-(--brand-50) dark:bg-(--brand-500)/20 scale-110":"hover:bg-gray-100 dark:hover:bg-gray-700"}`}>{ic}</button>)}
             </div>
           </div>
           <div>
@@ -76,7 +76,7 @@ export default function CategoriesPage() {
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {(data||[]).map(c => (
           <div key={c._id} className="card p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[var(--radius-sm)] flex items-center justify-center text-xl shrink-0" style={{background:c.color+"20"}}>{c.icon}</div>
+            <div className="w-10 h-10 rounded-sm flex items-center justify-center text-xl shrink-0" style={{background:c.color+"20"}}>{c.icon}</div>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-gray-900 dark:text-white truncate">{c.name}</p>
               {c.description && <p className="text-xs text-gray-400 truncate mt-0.5">{c.description}</p>}

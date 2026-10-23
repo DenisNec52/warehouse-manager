@@ -25,7 +25,7 @@ function BadgeModal({ user, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+        className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose}/>
       <motion.div initial={{ opacity: 0, scale: .95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .95 }}
         className="relative z-10 w-full max-w-md">
         <div className="flex items-center justify-between px-1 pb-2">
@@ -51,9 +51,9 @@ function DepartmentChecks({ departments, value, onChange }) {
   return (
     <div className="grid grid-cols-2 gap-1.5">
       {departments.map(d => (
-        <label key={d._id} className={clsx("flex items-center gap-2 px-2.5 py-1.5 rounded-[var(--radius-sm)] border text-sm cursor-pointer transition-colors",
-          value.includes(d._id) ? "border-[var(--brand-500)] bg-[var(--brand-50)] dark:bg-[var(--brand-500)]/15 text-gray-900 dark:text-white" : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300")}>
-          <input type="checkbox" className="accent-[var(--brand-500)]" checked={value.includes(d._id)} onChange={() => toggle(d._id)}/>
+        <label key={d._id} className={clsx("flex items-center gap-2 px-2.5 py-1.5 rounded-sm border text-sm cursor-pointer transition-colors",
+          value.includes(d._id) ? "border-(--brand-500) bg-(--brand-50) dark:bg-(--brand-500)/15 text-gray-900 dark:text-white" : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300")}>
+          <input type="checkbox" className="accent-(--brand-500)" checked={value.includes(d._id)} onChange={() => toggle(d._id)}/>
           {d.name}
         </label>
       ))}
@@ -134,9 +134,9 @@ function UserModal({ user, me, departments, users = [], onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+        className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose}/>
       <motion.div initial={{ opacity: 0, scale: .95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .95 }}
-        className="relative z-10 w-full max-w-md max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-900 rounded-[var(--radius-lg)] shadow-modal">
+        className="relative z-10 w-full max-w-md max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-900 rounded-lg shadow-modal">
 
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <h2 className="font-semibold text-gray-900 dark:text-white">{isEdit ? "Modifica utente" : "Nuovo utente"}</h2>
@@ -244,9 +244,9 @@ function UserModal({ user, me, departments, users = [], onClose }) {
           )}
 
           {isOperator && (
-            <div className="rounded-[var(--radius)] border border-gray-200 dark:border-gray-700 p-3 space-y-2">
+            <div className="rounded-(--radius) border border-gray-200 dark:border-gray-700 p-3 space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
-                <input type="checkbox" className="accent-[var(--brand-500)]" checked={customVisible}
+                <input type="checkbox" className="accent-(--brand-500)" checked={customVisible}
                   onChange={e => { setCustomVisible(e.target.checked); if (e.target.checked && !visible.length) setVisible(form.departments); }}/>
                 Visibilità personalizzata
               </label>
@@ -327,7 +327,7 @@ export default function UsersPage() {
         </div>
         <div className="flex items-center gap-2">
           {/* Selettore vista: Elenco / Gerarchia */}
-          <div className="inline-flex rounded-[var(--radius)] border border-gray-200 dark:border-gray-700 overflow-hidden" role="tablist">
+          <div className="inline-flex rounded-(--radius) border border-gray-200 dark:border-gray-700 overflow-hidden" role="tablist">
             <button role="tab" aria-selected={view === "list"} onClick={() => setView("list")}
               className={clsx("btn btn-sm gap-1.5 rounded-none border-0", view === "list" ? "btn-primary" : "btn-ghost")}>
               <List size={15}/> Elenco
@@ -394,7 +394,7 @@ export default function UsersPage() {
                     </div>
                   </td>
                   <td>
-                    <code className="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">
+                    <code className="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded-(--radius)">
                       {u.username}
                     </code>
                   </td>
@@ -429,7 +429,7 @@ export default function UsersPage() {
                   <td className="text-gray-400 text-xs">
                     {u.lastLoginIP ? (
                       <>
-                        <code className="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">{u.lastLoginIP}</code>
+                        <code className="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded-(--radius)">{u.lastLoginIP}</code>
                         {u.lastLoginLocation && (
                           <span className="flex items-center gap-1 mt-0.5">
                             <MapPin size={10}/> {u.lastLoginLocation}

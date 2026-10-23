@@ -212,7 +212,7 @@ export default function ChecklistPage() {
       <div className="flex items-start justify-between mb-5">
         <div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <ClipboardList size={20} className="text-[var(--brand-500)]"/> Autovalutazione 5S
+            <ClipboardList size={20} className="text-(--brand-500)"/> Autovalutazione 5S
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">{department?.name || cl?.workArea} · {cl?.description}</p>
         </div>
@@ -264,17 +264,17 @@ export default function ChecklistPage() {
               <button key={shift._id} disabled={done}
                 onClick={() => setSelectedShift(shift.name)}
                 className={clsx(
-                  "flex items-center justify-between px-4 py-3 rounded-[var(--radius)] border-2 text-left transition-all",
+                  "flex items-center justify-between px-4 py-3 rounded-(--radius) border-2 text-left transition-all",
                   done ? "border-green-300 bg-green-50 dark:bg-green-900/20 cursor-not-allowed opacity-70"
-                  : sel ? "border-[var(--brand-500)] bg-[var(--brand-50)] dark:bg-gray-800"
-                  : "border-gray-200 dark:border-gray-700 hover:border-[var(--brand-400)]"
+                  : sel ? "border-(--brand-500) bg-(--brand-50) dark:bg-gray-800"
+                  : "border-gray-200 dark:border-gray-700 hover:border-(--brand-400)"
                 )}>
                 <div>
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">{shift.name}</p>
                   <p className="text-xs text-gray-400">{shift.startTime} — {shift.endTime}</p>
                 </div>
                 {done ? <CheckCircle size={16} className="text-green-500 shrink-0"/>
-                 : sel  ? <CheckCircle size={16} className="text-[var(--brand-500)] shrink-0"/>
+                 : sel  ? <CheckCircle size={16} className="text-(--brand-500) shrink-0"/>
                  : <div className="w-4 h-4 rounded-full border-2 border-gray-300 shrink-0"/>}
               </button>
             );
@@ -291,9 +291,9 @@ export default function ChecklistPage() {
             return (
               <button key={i} onClick={() => setCleaningType(ct.label)}
                 className={clsx(
-                  "px-3 py-2.5 rounded-[var(--radius)] border-2 text-left text-sm transition-all",
-                  sel ? "border-[var(--brand-500)] bg-[var(--brand-50)] dark:bg-gray-800 font-medium text-[var(--brand-500)]"
-                  : "border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-[var(--brand-400)]"
+                  "px-3 py-2.5 rounded-(--radius) border-2 text-left text-sm transition-all",
+                  sel ? "border-(--brand-500) bg-(--brand-50) dark:bg-gray-800 font-medium text-(--brand-500)"
+                  : "border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-(--brand-400)"
                 )}>
                 {ct.default && <Star size={10} className="inline mr-1 opacity-50"/>}
                 {ct.label}
@@ -349,7 +349,7 @@ export default function ChecklistPage() {
                       return (
                         <motion.button key={item._id} whileTap={{ scale: 0.98 }}
                           className={clsx(
-                            "w-full flex items-start gap-3 p-3 rounded-[var(--radius)] border text-left transition-all",
+                            "w-full flex items-start gap-3 p-3 rounded-(--radius) border text-left transition-all",
                             checked
                               ? "bg-white dark:bg-gray-800 border-green-300 dark:border-green-700"
                               : item.required
@@ -395,7 +395,7 @@ export default function ChecklistPage() {
 
         <button
           className={clsx("btn btn-lg w-full gap-2 text-white transition-all",
-            progress === 100 ? "bg-green-500 hover:bg-green-600" : "bg-[var(--brand-500)] hover:bg-[var(--brand-600)]",
+            progress === 100 ? "bg-green-500 hover:bg-green-600" : "bg-(--brand-500) hover:bg-(--brand-600)",
             (mutation.isPending || !departmentId || !selectedShift || !cleaningType) && "opacity-50 cursor-not-allowed"
           )}
           disabled={mutation.isPending || !departmentId || !selectedShift || !cleaningType}

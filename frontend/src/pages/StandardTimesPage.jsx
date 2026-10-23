@@ -34,9 +34,9 @@ function StandardTimeModal({ item, department, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose}/>
       <motion.div initial={{opacity:0,scale:.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.95}}
-        className="relative z-10 w-full max-w-md bg-white dark:bg-gray-900 rounded-[var(--radius-lg)] shadow-modal">
+        className="relative z-10 w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow-modal">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <div>
             <h2 className="font-semibold text-gray-900 dark:text-white">{item ? "Modifica tempo standard" : "Nuovo tempo standard"}</h2>
@@ -113,9 +113,9 @@ function ImportModal({ department, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose}/>
       <motion.div initial={{opacity:0,scale:.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.95}}
-        className="relative z-10 w-full max-w-2xl bg-white dark:bg-gray-900 rounded-[var(--radius-lg)] shadow-modal max-h-[90vh] flex flex-col">
+        className="relative z-10 w-full max-w-2xl bg-white dark:bg-gray-900 rounded-lg shadow-modal max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <div>
             <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2"><FileSpreadsheet size={18}/> Importa da Excel</h2>
@@ -125,7 +125,7 @@ function ImportModal({ department, onClose }) {
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto">
-          <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-[var(--radius-md)] py-8 cursor-pointer hover:border-[var(--brand-500)] transition-colors">
+          <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-md py-8 cursor-pointer hover:border-(--brand-500) transition-colors">
             <Upload size={22} className="text-gray-400"/>
             <span className="text-sm text-gray-600 dark:text-gray-300">{file ? file.name : "Scegli un file .xlsx"}</span>
             <span className="text-xs text-gray-400">Colonne attese: Tipologia, Dimensione, Nome breve, Minuti (o Tempo)</span>
@@ -143,7 +143,7 @@ function ImportModal({ department, onClose }) {
               </div>
 
               {s.valid > 0 && (
-                <div className="table-wrap max-h-56 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-[var(--radius-md)]">
+                <div className="table-wrap max-h-56 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-md">
                   <table className="data-table">
                     <thead><tr><th>Tipologia</th><th>Dimensione</th><th>Nome breve</th><th>Tempo</th></tr></thead>
                     <tbody>
@@ -228,9 +228,9 @@ function BomEditorModal({ item, department, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose}/>
       <motion.div initial={{opacity:0,scale:.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.95}}
-        className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-900 rounded-[var(--radius-lg)] shadow-modal">
+        className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-900 rounded-lg shadow-modal">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <div>
             <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2"><Boxes size={18}/> Distinta base — {item.label}</h2>
@@ -322,7 +322,7 @@ export default function StandardTimesPage() {
 
       <div className="card overflow-hidden">
         {isLoading ? (
-          <div className="p-8 flex justify-center"><div className="w-6 h-6 border-2 border-[var(--brand-500)] border-t-transparent rounded-full animate-spin"/></div>
+          <div className="p-8 flex justify-center"><div className="w-6 h-6 border-2 border-(--brand-500) border-t-transparent rounded-full animate-spin"/></div>
         ) : (
           <div className="table-wrap">
             <table className="data-table">

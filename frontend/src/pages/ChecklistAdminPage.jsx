@@ -52,7 +52,7 @@ function TabMonthly() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-[var(--brand-500)] border-t-transparent rounded-full animate-spin"/></div>
+        <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-(--brand-500) border-t-transparent rounded-full animate-spin"/></div>
       ) : (
         <>
           {/* KPI cards */}
@@ -94,7 +94,7 @@ function TabMonthly() {
                     <tr key={u.user._id} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50/50 dark:hover:bg-gray-700/20">
                       <td className="px-4 py-2.5 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800 z-10">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-[var(--brand-500)] flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+                          <div className="w-6 h-6 rounded-full bg-(--brand-500) flex items-center justify-center text-white text-[10px] font-bold shrink-0">
                             {u.user.name?.charAt(0).toUpperCase()}
                           </div>
                           <span className="truncate max-w-[100px]">{u.user.name}</span>
@@ -248,7 +248,7 @@ function SubmissionEditor({ sub, config, onDone }) {
       <div className="grid sm:grid-cols-2 gap-1.5">
         {responses.map((r, i) => (
           <button key={i} type="button" onClick={() => toggle(i)}
-            className={clsx("flex items-start gap-2 p-2 rounded text-xs text-left border transition-colors",
+            className={clsx("flex items-start gap-2 p-2 rounded-(--radius) text-xs text-left border transition-colors",
               r.checked
                 ? "text-green-700 dark:text-green-400 border-green-200 dark:border-green-900 bg-green-50/50 dark:bg-green-900/10"
                 : "text-red-500 dark:text-red-400 border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-900/10")}>
@@ -361,7 +361,7 @@ function TabSubmissions() {
                 )}
                 <div className="grid sm:grid-cols-2 gap-1.5 mt-3">
                   {sub.responses.map((r, i) => (
-                    <div key={i} className={clsx("flex items-start gap-2 p-2 rounded text-xs",
+                    <div key={i} className={clsx("flex items-start gap-2 p-2 rounded-(--radius) text-xs",
                       r.checked ? "text-green-700 dark:text-green-400" : "text-red-500 dark:text-red-400")}>
                       {r.checked ? <CheckCircle size={13} className="shrink-0 mt-0.5"/> : <XCircle size={13} className="shrink-0 mt-0.5"/>}
                       <span>{r.label}</span>
@@ -369,7 +369,7 @@ function TabSubmissions() {
                   ))}
                 </div>
                 {sub.generalNote && (
-                  <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded text-sm text-gray-600 dark:text-gray-300">
+                  <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-(--radius) text-sm text-gray-600 dark:text-gray-300">
                     <span className="font-medium">Note: </span>{sub.generalNote}
                   </div>
                 )}
@@ -472,11 +472,11 @@ export default function ChecklistAdminPage() {
         <h1 className="text-xl font-bold text-gray-900 dark:text-white">🧹 Gestione 5S</h1>
         <p className="text-sm text-gray-500 mt-0.5">Monitoraggio compilazioni{isAdmin ? " e configurazione checklist" : ""}</p>
       </div>
-      <div className="flex gap-1 mb-6 bg-gray-100 dark:bg-gray-800 p-1 rounded-[var(--radius)] w-fit flex-wrap">
+      <div className="flex gap-1 mb-6 bg-gray-100 dark:bg-gray-800 p-1 rounded-(--radius) w-fit flex-wrap">
         {tabs.map(([id,label]) => (
           <button key={id} onClick={()=>setTab(id)}
-            className={clsx("px-4 py-2 text-sm font-medium rounded transition-all",
-              tab===id ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300")}>
+            className={clsx("px-4 py-2 text-sm font-medium rounded-(--radius) transition-all",
+              tab===id ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300")}>
             {label}
           </button>
         ))}

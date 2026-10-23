@@ -65,9 +65,9 @@ export function ProductModal({ product, categories, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+        className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose}/>
       <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
-        className="relative z-10 w-full sm:max-w-md bg-white dark:bg-gray-900 rounded-t-[var(--radius-lg)] sm:rounded-[var(--radius-lg)] shadow-modal">
+        className="relative z-10 w-full sm:max-w-md bg-white dark:bg-gray-900 rounded-t-lg sm:rounded-lg shadow-modal">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <h2 className="font-semibold text-gray-900 dark:text-white">
             {isEdit ? "Modifica prodotto" : "Nuovo prodotto"}
@@ -181,15 +181,15 @@ export function MovementModal({ product, onClose, defaultType = "IN" }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+        className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose}/>
       <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
-        className="relative z-10 w-full sm:max-w-sm bg-white dark:bg-gray-900 rounded-t-[var(--radius-lg)] sm:rounded-[var(--radius-lg)] shadow-modal">
+        className="relative z-10 w-full sm:max-w-sm bg-white dark:bg-gray-900 rounded-t-lg sm:rounded-lg shadow-modal">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <h2 className="font-semibold text-gray-900 dark:text-white">Registra movimento</h2>
           <button className="btn btn-ghost btn-sm p-1.5" onClick={onClose}><X size={16}/></button>
         </div>
         <div className="p-5 space-y-4">
-          <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded">
+          <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-(--radius)">
             <p className="font-medium text-gray-900 dark:text-white text-sm">{product.name}</p>
             <p className="text-xs text-gray-400">
               {product.code} · Stock: <strong>{product.quantity} {product.unit}</strong>
@@ -241,7 +241,7 @@ const ProductRow = memo(function ProductRow({ p, isAdmin, onMove, onEdit, onDele
   return (
     <tr>
       <td>
-        <code className="text-sm font-bold bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+        <code className="text-sm font-bold bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-(--radius)">
           {p.code}
         </code>
         {p.isLowStock && (
@@ -377,7 +377,7 @@ export default function ProductsPage() {
       <div className="card overflow-hidden">
         {isLoading ? (
           <div className="p-8 flex justify-center">
-            <div className="w-6 h-6 border-2 border-[var(--brand-500)] border-t-transparent rounded-full animate-spin"/>
+            <div className="w-6 h-6 border-2 border-(--brand-500) border-t-transparent rounded-full animate-spin"/>
           </div>
         ) : (
           <div className="table-wrap">

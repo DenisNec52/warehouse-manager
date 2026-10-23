@@ -50,7 +50,7 @@ export default function ThemePanel({ onClose }) {
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-end">
       <motion.div
         initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
-        className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/30 backdrop-blur-xs"
         onClick={onClose}
       />
       <motion.div
@@ -76,9 +76,9 @@ export default function ThemePanel({ onClose }) {
                 <button key={m.id}
                   onClick={() => handleMode(m.id)}
                   className={clsx(
-                    "flex flex-col items-center gap-1.5 py-3 rounded border-2 text-xs font-medium transition-all",
+                    "flex flex-col items-center gap-1.5 py-3 rounded-(--radius) border-2 text-xs font-medium transition-all",
                     mode === m.id
-                      ? "border-[var(--brand-500)] bg-[var(--brand-50)] text-[var(--brand-600)] dark:bg-[var(--brand-500)]/10"
+                      ? "border-(--brand-500) bg-(--brand-50) text-(--brand-600) dark:bg-(--brand-500)/10"
                       : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"
                   )}
                 >
@@ -112,7 +112,7 @@ export default function ThemePanel({ onClose }) {
               <input type="color"
                 defaultValue={customAccent || "#3b82f6"}
                 onChange={(e) => handleAccent("custom", e.target.value)}
-                className="w-10 h-8 cursor-pointer border border-gray-200 dark:border-gray-700 rounded p-0.5 bg-white dark:bg-gray-800"
+                className="w-10 h-8 cursor-pointer border border-gray-200 dark:border-gray-700 rounded-(--radius) p-0.5 bg-white dark:bg-gray-800"
               />
             </div>
           </div>
@@ -127,7 +127,7 @@ export default function ThemePanel({ onClose }) {
                     "py-2 text-xs font-medium transition-all border-2",
                     `rounded-${r.id === "none" ? "none" : r.id}`,
                     radius === r.id
-                      ? "border-[var(--brand-500)] bg-[var(--brand-50)] text-[var(--brand-600)] dark:bg-[var(--brand-500)]/10"
+                      ? "border-(--brand-500) bg-(--brand-50) text-(--brand-600) dark:bg-(--brand-500)/10"
                       : "border-gray-200 dark:border-gray-700 text-gray-500 hover:border-gray-300"
                   )}
                 >
@@ -138,7 +138,7 @@ export default function ThemePanel({ onClose }) {
           </div>
 
           {/* Preview */}
-          <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded border border-gray-100 dark:border-gray-700">
+          <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-(--radius) border border-gray-100 dark:border-gray-700">
             <p className="text-xs text-gray-400 mb-3">Anteprima</p>
             <div className="card p-3 mb-2">
               <p className="text-sm font-medium text-gray-900 dark:text-white">Card esempio</p>

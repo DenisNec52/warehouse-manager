@@ -46,11 +46,11 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-gray-50 via-white to-gray-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-4">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .4 }}
         className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-[var(--brand-500)] rounded-[var(--radius)] flex items-center justify-center mx-auto mb-4 shadow-lg shadow-[var(--brand-500)]/20">
+          <div className="w-14 h-14 bg-(--brand-500) rounded-(--radius) flex items-center justify-center mx-auto mb-4 shadow-lg shadow-(--brand-500)/20">
             <Package size={28} className="text-white"/>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Nuova password</h1>
@@ -59,13 +59,13 @@ export default function ResetPasswordPage() {
 
         <div className="card p-6 shadow-card">
           {!linkValid ? (
-            <div className="flex items-center gap-2 p-3 rounded bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+            <div className="flex items-center gap-2 p-3 rounded-(--radius) bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
               <AlertCircle size={15} className="shrink-0"/> Link non valido: apri di nuovo il link dall'email ricevuta.
             </div>
           ) : (
             <>
               {error && (
-                <div className="flex items-center gap-2 p-3 rounded bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm mb-4">
+                <div className="flex items-center gap-2 p-3 rounded-(--radius) bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm mb-4">
                   <AlertCircle size={15} className="shrink-0"/> {error}
                 </div>
               )}
