@@ -69,7 +69,8 @@ describe("Import foglio saldatura → righe Andon", () => {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("Foglio 94");
     ws.getCell("C2").value = 46315;                     // = 20/10/2026, senza formato data
-    ws.getRow(3).values = [, "Firma\n(inizio lavorazione)", "Comm.", "Pos.", "Cliente", "Q.tà (n°)", "Tipologia", "DN",
+    // row.values[1] = colonna A: Firma in B e Comm. in C, come nel foglio reale
+    ws.getRow(3).values = [null, null, "Firma\n(inizio lavorazione)", "Comm.", "Pos.", "Cliente", "Q.tà (n°)", "Tipologia", "DN",
       "Ø Elem.  (mm)", "Dimensione", "Temp standard\n(a pezzo)", "Firma\n(fine lavorazione)"];
     const data = [
       [2630, 1, "ENON BV", 1, "T.F.", 95, "10 inc.", "PICCOLA", 0.041666666666666664],
@@ -83,7 +84,7 @@ describe("Import foglio saldatura → righe Andon", () => {
       [2446, 3, "NUOVO PIGNONE SRL", 1, "T.C.", 145, 16, "PICCOLA", 0.03125],
       [1703, 17, "NUOVO PIGNONE SRL", 1, "T.C.", 195, 16, "MEDIA", 0.041666666666666664],
     ];
-    data.forEach((d, i) => { ws.getRow(5 + i * 2).values = [, , ...d]; });   // da colonna C, una riga vuota tra i capi
+    data.forEach((d, i) => { ws.getRow(5 + i * 2).values = [null, null, null, ...d]; });   // Comm. in colonna C, una riga vuota tra i capi
 
     const raw = await parseAndonXlsx(Buffer.from(await wb.xlsx.writeBuffer()));
     const real = await parseAndonXlsx(fs.readFileSync(FILE));
