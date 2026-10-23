@@ -44,6 +44,20 @@ const HEADER_ALIASES = {
 
 const norm = (s) => String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 
+/**
+ * Campo di un'intestazione: prima l'alias esatto, poi una regola per parole chiave
+ * per i nomi "reali" dei fogli di reparto (es. "Temp standard (a pezzo)" del foglio
+ * saldatura). Le note tra parentesi e la punteggiatura finale non contano.
+ */
+function headerField(h) {
+  for (const [field, aliases] of Object.entries(HEADER_ALIASES)) if (aliases.includes(h)) return field;
+  const k = h.replace(/\(.*?\)/g, "").replace(/[.:]+$/, "").trim();
+  if (k.startsWith("tipolog")) return "tipologia";
+  if (k.startsWith("dimens")) return "dimensione";
+  if (/^(temp|minut|durata)/.test(k)) return "minuti";
+  return null;
+}
+
 /** Testo "pulito" di una cella (gestisce rich text / hyperlink di exceljs). */
 function cellText(cell) {
   const v = cell?.value;
@@ -90,9 +104,8 @@ function detectColumns(worksheet) {
     for (let c = 1; c <= Math.min(LIMITS.maxCols, row.cellCount || LIMITS.maxCols); c++) {
       const h = norm(cellText(row.getCell(c)));
       if (!h) continue;
-      for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
-        if (map[field] == null && aliases.includes(h)) { map[field] = c; break; }
-      }
+      const field = headerField(h);
+      if (field && map[field] == null) map[field] = c;
     }
     if (map.tipologia != null && map.minuti != null) return { headerRow: r, map };
   }
@@ -134,7 +147,7 @@ async function parseStandardTimesXlsx(buffer) {
 
   const detected = detectColumns(worksheet);
   if (!detected)
-    return { rows: [], errors: [{ row: 0, message: "Intestazioni non trovate. Servono almeno le colonne 'Tipologia' e 'Minuti' (o 'Tempo')." }], truncated: false };
+    return { rows: [], errors: [{ row: 0, message: "Intestazioni non trovate. Servono almeno le colonne 'Tipologia' e 'Minuti' (o 'Tempo' / 'Temp standard')." }], truncated: false };
 
   const { headerRow, map } = detected;
   const rows = [];
