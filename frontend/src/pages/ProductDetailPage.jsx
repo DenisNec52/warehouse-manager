@@ -41,7 +41,7 @@ function CoverImageCard({ product }) {
       {product.coverImage?.url ? (
         <div className="relative group">
           <img src={product.coverImage.url} alt={product.coverImage.alt || product.name}
-            className="w-full aspect-square object-cover rounded-[var(--radius)] border border-gray-100 dark:border-gray-800"/>
+            className="w-full aspect-square object-cover rounded-(--radius) border border-gray-100 dark:border-gray-800"/>
           <button type="button" title="Rimuovi foto" disabled={removeMut.isPending}
             onClick={() => { if (confirm("Rimuovere la foto di questo prodotto?")) removeMut.mutate(); }}
             className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-red-500 transition-colors">
@@ -49,7 +49,7 @@ function CoverImageCard({ product }) {
           </button>
         </div>
       ) : (
-        <div className="w-full aspect-square rounded-[var(--radius)] border-2 border-dashed border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center gap-1.5 text-gray-400">
+        <div className="w-full aspect-square rounded-(--radius) border-2 border-dashed border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center gap-1.5 text-gray-400">
           <ImageOff size={22}/>
           <span className="text-xs">Nessuna foto</span>
         </div>
@@ -73,7 +73,7 @@ export default function ProductDetailPage() {
   const product = pd?.product;
 
   if (!product) return (
-    <div className="p-8 flex justify-center"><div className="w-6 h-6 border-2 border-[var(--brand-500)] border-t-transparent rounded-full animate-spin"/></div>
+    <div className="p-8 flex justify-center"><div className="w-6 h-6 border-2 border-(--brand-500) border-t-transparent rounded-full animate-spin"/></div>
   );
 
   return (
@@ -92,7 +92,7 @@ export default function ProductDetailPage() {
           <div className="card p-5">
             <div className="grid grid-cols-2 gap-4">
               {[
-                ["Codice", <code key="code" className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">{product.code}</code>],
+                ["Codice", <code key="code" className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-(--radius)">{product.code}</code>],
                 ["Unità", product.unit],
                 ["Categoria", product.category ? `${product.category.icon} ${product.category.name}` : "—"],
                 ["Posizione", product.location || "—"],
@@ -179,7 +179,7 @@ export default function ProductDetailPage() {
             </p>
             <p className="text-gray-400 text-sm mt-1">{product.unit}</p>
             {product.isLowStock && (
-              <div className="flex items-center gap-2 mt-3 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded text-yellow-700 dark:text-yellow-400 text-xs">
+              <div className="flex items-center gap-2 mt-3 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-(--radius) text-yellow-700 dark:text-yellow-400 text-xs">
                 <AlertTriangle size={13}/> Sotto la soglia minima ({product.minQuantity} {product.unit})
               </div>
             )}

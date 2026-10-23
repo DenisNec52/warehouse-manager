@@ -20,7 +20,7 @@ function QuickTiles({ tiles }) {
           onClick={() => nav(tile.to)}
           className="card p-5 text-left hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 group cursor-pointer">
           <div className="flex items-start justify-between mb-3">
-            <div className={`w-11 h-11 rounded-[var(--radius)] ${tile.iconBg} flex items-center justify-center text-2xl group-hover:scale-110 transition-transform`}>
+            <div className={`w-11 h-11 rounded-(--radius) ${tile.iconBg} flex items-center justify-center text-2xl group-hover:scale-110 transition-transform`}>
               {tile.emoji}
             </div>
             <ArrowRight size={16} className={`text-gray-300 ${tile.hoverText} group-hover:translate-x-0.5 transition-all mt-1`}/>
@@ -68,7 +68,7 @@ export default function HomePage() {
     {
       to: "/movements", emoji: "🔄", title: "Movimenti",
       desc: "Storico di entrate e uscite di magazzino",
-      iconBg: "bg-blue-50 dark:bg-blue-900/20", hoverText: "group-hover:text-[var(--brand-500)]",
+      iconBg: "bg-blue-50 dark:bg-blue-900/20", hoverText: "group-hover:text-(--brand-500)",
       info: stats.todayMovements != null ? `${stats.todayMovements} movimenti oggi` : null,
       infoClass: "text-blue-500",
     },
@@ -152,7 +152,7 @@ export default function HomePage() {
           className="card overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
             <span className="text-sm font-semibold text-gray-900 dark:text-white">Ultimi movimenti</span>
-            <button onClick={() => nav("/movements")} className="text-xs text-[var(--brand-500)] hover:underline">Vedi tutti →</button>
+            <button onClick={() => nav("/movements")} className="text-xs text-(--brand-500) hover:underline">Vedi tutti →</button>
           </div>
           {recent.map(m => {
             const info = movementInfo(m);

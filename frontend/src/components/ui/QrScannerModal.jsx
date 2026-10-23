@@ -65,9 +65,9 @@ export default function QrScannerModal({ onDetected, onClose, busy }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}/>
+        className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={onClose}/>
       <motion.div initial={{ opacity: 0, scale: .95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .95 }}
-        className="relative z-10 w-full max-w-sm bg-white dark:bg-gray-900 rounded-[var(--radius-lg)] shadow-modal">
+        className="relative z-10 w-full max-w-sm bg-white dark:bg-gray-900 rounded-lg shadow-modal">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <h2 className="font-semibold text-gray-900 dark:text-white">Scansiona il badge</h2>
           <button className="btn btn-ghost btn-sm p-1.5" aria-label="Chiudi" onClick={onClose}><X size={16}/></button>
@@ -75,16 +75,16 @@ export default function QrScannerModal({ onDetected, onClose, busy }) {
 
         <div className="p-5 space-y-3">
           {error && (
-            <div className="aspect-square flex flex-col items-center justify-center gap-3 text-center text-sm text-gray-500 bg-gray-50 dark:bg-gray-800 rounded-[var(--radius)] p-6">
+            <div className="aspect-square flex flex-col items-center justify-center gap-3 text-center text-sm text-gray-500 bg-gray-50 dark:bg-gray-800 rounded-(--radius) p-6">
               <CameraOff size={32}/>
               <p>{error}</p>
             </div>
           )}
           {/* Un solo <video>, sempre montato: il ref deve restare quello a cui lo scanner è collegato */}
           <div className={error ? "hidden" : "relative"}>
-            <video ref={videoRef} className="w-full aspect-square object-cover bg-black rounded-[var(--radius)]" playsInline muted/>
+            <video ref={videoRef} className="w-full aspect-square object-cover bg-black rounded-(--radius)" playsInline muted/>
             {busy && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-[var(--radius)] text-white gap-2">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-(--radius) text-white gap-2">
                 <Loader2 className="animate-spin" size={18}/> Accesso in corso…
               </div>
             )}

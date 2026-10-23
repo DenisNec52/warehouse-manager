@@ -92,7 +92,7 @@ export default function SuperAdminPage() {
         <p className="text-xs text-gray-500 mb-3">Usate dalla registrazione produzione e dalla deduzione automatica del magazzino.</p>
         <div className="space-y-2 mb-3">
           {phases.map(p => (
-            <div key={p} className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-[var(--radius-sm)] px-3 py-2">
+            <div key={p} className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-sm px-3 py-2">
               <GripVertical size={14} className="text-gray-300"/>
               <span className="flex-1 text-sm text-gray-800 dark:text-gray-200">{p}</span>
               <button className="btn btn-ghost btn-sm p-1 text-red-400" onClick={() => removePhase(p)} aria-label="Rimuovi"><X size={14}/></button>
@@ -120,7 +120,7 @@ export default function SuperAdminPage() {
                   <td className="font-medium text-gray-800 dark:text-gray-200">{label}</td>
                   {ROLES.map(([r]) => (
                     <td key={r} className="text-center">
-                      <input type="checkbox" className="accent-[var(--brand-500)] w-4 h-4" checked={vis[key][r]} onChange={() => toggle(key, r)} />
+                      <input type="checkbox" className="accent-(--brand-500) w-4 h-4" checked={vis[key][r]} onChange={() => toggle(key, r)} />
                     </td>
                   ))}
                 </tr>

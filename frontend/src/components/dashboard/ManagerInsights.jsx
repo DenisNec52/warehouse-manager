@@ -63,13 +63,13 @@ export default function ManagerInsights({ criticalProducts = [] }) {
       <div className="card p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Scorte critiche</h3>
-          <Link to="/products?lowStock=true" className="text-xs text-[var(--brand-500)] hover:underline">Vedi tutti</Link>
+          <Link to="/products?lowStock=true" className="text-xs text-(--brand-500) hover:underline">Vedi tutti</Link>
         </div>
         <div className="space-y-3">
           {criticalProducts.map(p => (
             <Link to={`/products/${p._id}`} key={p._id}
-              className="flex items-center gap-3 p-2 rounded-[var(--radius-sm)] hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-              <div className="w-8 h-8 rounded-[var(--radius-sm)] flex items-center justify-center text-sm shrink-0"
+              className="flex items-center gap-3 p-2 rounded-sm hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+              <div className="w-8 h-8 rounded-sm flex items-center justify-center text-sm shrink-0"
                 style={{ background: (p.category?.color || "#3b82f6") + "20", color: p.category?.color || "#3b82f6" }}>
                 {p.category?.icon || "📦"}
               </div>

@@ -3,7 +3,7 @@
 import { Crown } from "lucide-react";
 
 const UserCard = ({ user, extraClass = "" }) => (
-  <div className={`rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 text-center min-w-[9rem] ${extraClass}`}>
+  <div className={`rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 text-center min-w-36 ${extraClass}`}>
     <p className="font-semibold text-gray-900 dark:text-white">{user.name}</p>
     <p className="text-xs text-gray-400">{user.role}</p>
   </div>
@@ -37,7 +37,7 @@ export default function UserHierarchy({ users = [] }) {
 
         {superAdmin && (
           <div className="mb-10">
-            <div className="rounded-lg border-2 border-amber-500 bg-white dark:bg-gray-800 p-3 text-center min-w-[9rem]">
+            <div className="rounded-lg border-2 border-amber-500 bg-white dark:bg-gray-800 p-3 text-center min-w-36">
               <div className="flex justify-center mb-1"><Crown size={14} className="text-amber-500" /></div>
               <p className="font-semibold text-gray-900 dark:text-white">{superAdmin.name}</p>
               <p className="text-xs text-gray-400">{superAdmin.role}</p>

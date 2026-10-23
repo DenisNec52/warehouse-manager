@@ -18,6 +18,7 @@ const { buildReport } = require("../utils/andonReport");
 const { buildAndonWorkbook } = require("../utils/andonExcel");
 const { secureUpload } = require("../middleware/secureUpload");
 const { parseStandardTimesXlsx } = require("../utils/xlsxImport");
+const { parseAndonXlsx } = require("../utils/xlsxAndonImport");
 const BomRecipe   = require("../models/BomRecipe");
 const Product     = require("../models/Product");
 const Movement    = require("../models/Movement");
@@ -296,6 +297,7 @@ function periodFilter(q) {
   }
   if (q.operatore && mongoose.isValidObjectId(q.operatore)) filter.operatore = new mongoose.Types.ObjectId(q.operatore);
   if (q.commessa) filter.commessa = String(q.commessa).trim();
+  if (q.fase) filter.fase = String(q.fase).trim();          // una lavorazione alla volta, senza mischiare
   return filter;
 }
 
@@ -460,6 +462,101 @@ router.post("/entries", entryRules, validate, async (req, res) => {
   } finally {
     session.endSession();
   }
+});
+
+// ── Import righe Andon da foglio Excel (.xlsx) ─────────────────
+// Importa TUTTE le colonne del foglio saldatura (commessa, posizione, cliente,
+// quantità, tipologia, DN, Ø, dimensione, temp standard, firme) tenendo ogni campo
+// separato. Ogni riga viene marcata con la FASE scelta (default la prima, es.
+// "Prima saldatura"): i dati di una lavorazione non si mischiano con le altre.
+// Data = quella scelta, altrimenti la data scritta sul foglio. Reimportare lo
+// stesso foglio non duplica: i capi già presenti (stessa fase/reparto/data/campi)
+// vengono saltati. commit assente/false → ANTEPRIMA (non salva); commit="true" →
+// crea le righe nel reparto scelto. Nessuno scarico magazzino qui (quello avviene registrando
+// una riga con i consumi confermati). Catena sicura: importLimiter → requireSupervisor
+// → uploadXlsx (solo .xlsx vero, in memoria) → parser in sola lettura.
+router.post("/entries/import", importLimiter, requireSupervisor, uploadXlsx, async (req, res) => {
+  const check = await checkDepartment(req.user, req.body.department, { forWrite: true });
+  if (check.status) return res.status(check.status).json({ message: check.message });
+
+  let parsed;
+  try { parsed = await parseAndonXlsx(req.file.buffer); }
+  catch (err) { return res.status(err.status || 400).json({ message: err.message || "File Excel non leggibile." }); }
+
+  // Operatore (saldatore) da attribuire a tutte le righe: facoltativo.
+  let operatore = null, operatoreNome = "";
+  if (req.body.operatore && mongoose.isValidObjectId(req.body.operatore)) {
+    const u = await User.findById(req.body.operatore).select("name username");
+    if (u) { operatore = u._id; operatoreNome = u.name || u.username; }
+  }
+  const dataIso = isoDate(req.body.data) ? req.body.data : (parsed.sheetDate || new Date().toISOString().slice(0, 10));
+
+  const settings = await AppSettings.getSettings();
+  const fase = typeof req.body.fase === "string" && req.body.fase.trim() ? req.body.fase.trim() : settings.workPhases[0];
+  if (!fase || !settings.workPhases.includes(fase))
+    return res.status(400).json({ message: "Fase di lavorazione non valida." });
+
+  // Capi già importati in questa fase/reparto/giorno, contati per chiave: due capi
+  // identici nello stesso foglio entrano entrambi, ma un reimport non duplica.
+  const keyOf = (r) => [r.commessa, r.posizione, r.cliente, r.quantita, r.tipologia, r.dimensione, r.dn, r.diametro, r.tempoStdMinuti].join("|");
+  const existing = await ProductionEntry.find({ department: check.department._id, fase, data: dayStart(dataIso) })
+    .select("commessa posizione cliente quantita tipologia dimensione dn diametro tempoStdMinuti").lean();
+  const already = new Map();
+  existing.forEach(e => { const k = keyOf(e); already.set(k, (already.get(k) || 0) + 1); });
+  const toImport = [], duplicates = new Set();
+  for (const r of parsed.rows) {
+    const k = keyOf(r), n = already.get(k) || 0;
+    if (n > 0) { already.set(k, n - 1); duplicates.add(r); } else toImport.push(r);
+  }
+
+  const commit = req.body.commit === "true" || req.body.commit === true;
+  if (!commit) {
+    return res.json({
+      preview: true,
+      department: check.department._id,
+      fase, data: dataIso, sheetDate: parsed.sheetDate,
+      summary: { valid: parsed.rows.length, toImport: toImport.length, duplicates: duplicates.size, errors: parsed.errors.length, truncated: parsed.truncated },
+      rows: parsed.rows.map(r => ({ ...r, duplicate: duplicates.has(r) })),
+      errors: parsed.errors,
+    });
+  }
+
+  const docs = toImport.map(r => ({
+    data: dayStart(dataIso),
+    department: check.department._id,
+    departmentName: check.department.name,
+    operatore, operatoreNome,
+    commessa: r.commessa, posizione: r.posizione, cliente: r.cliente,
+    quantita: r.quantita,
+    standardTime: null,
+    custodiaLabel: r.custodiaLabel, dn: r.dn, diametro: r.diametro,
+    tipologia: r.tipologia, dimensione: r.dimensione,
+    firmaInizio: r.firmaInizio, firmaFine: r.firmaFine,
+    fase,
+    tempoStdMinuti: r.tempoStdMinuti,
+    tempoImpiegatoMinuti: r.tempoStdMinuti * r.quantita,   // default = al tempo standard (eff. 100%), poi correggibile
+    createdBy: req.user._id,
+  }));
+
+  let created = 0, failed = 0;
+  if (docs.length) {
+    try {
+      const inserted = await ProductionEntry.insertMany(docs, { ordered: false });
+      created = inserted.length;
+    } catch (err) {
+      console.error("[production/entries/import]", err?.message);
+      created = err?.insertedDocs?.length || 0;
+      failed = docs.length - created;
+    }
+  }
+
+  res.json({
+    preview: false,
+    department: check.department._id,
+    fase, data: dataIso,
+    summary: { created, failed, duplicates: duplicates.size, skipped: parsed.errors.length, truncated: parsed.truncated },
+    errors: parsed.errors,
+  });
 });
 
 async function loadEditableEntry(req, res) {

@@ -85,7 +85,7 @@ export default function AppLayout() {
         {sidebarOpen && (
           <motion.div
             initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
-            className="fixed inset-0 bg-black/40 z-30 lg:hidden backdrop-blur-sm"
+            className="fixed inset-0 bg-black/40 z-30 lg:hidden backdrop-blur-xs"
             onClick={() => setSidebarOpen(false)}
           />
         )}
@@ -101,7 +101,7 @@ export default function AppLayout() {
         {/* Brand */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-[var(--brand-500)] rounded-[var(--radius-sm)] flex items-center justify-center">
+            <div className="w-8 h-8 bg-(--brand-500) rounded-sm flex items-center justify-center">
               <Package size={16} className="text-white"/>
             </div>
             <div>
@@ -184,8 +184,8 @@ export default function AppLayout() {
 
         {/* User block */}
         <div className="px-3 py-3 border-t border-gray-100 dark:border-gray-800">
-          <div className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-sm)] bg-gray-50 dark:bg-gray-800">
-            <div className="w-8 h-8 rounded-full bg-[var(--brand-500)] flex items-center justify-center text-white text-xs font-bold shrink-0">
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-sm bg-gray-50 dark:bg-gray-800">
+            <div className="w-8 h-8 rounded-full bg-(--brand-500) flex items-center justify-center text-white text-xs font-bold shrink-0">
               {user?.name?.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
@@ -211,11 +211,11 @@ export default function AppLayout() {
           <div className="flex-1"/>
           <div className="flex items-center gap-1">
             {/* Dark mode toggle */}
-            <button className="btn btn-ghost btn-sm p-2 rounded-[var(--radius-sm)]" onClick={toggleDark} title="Cambia tema">
+            <button className="btn btn-ghost btn-sm p-2 rounded-sm" onClick={toggleDark} title="Cambia tema">
               {mode === "dark" ? <Sun size={16}/> : <Moon size={16}/>}
             </button>
             {/* Theme panel */}
-            <button className="btn btn-ghost btn-sm p-2 rounded-[var(--radius-sm)]" onClick={() => setThemeOpen(true)} title="Personalizza">
+            <button className="btn btn-ghost btn-sm p-2 rounded-sm" onClick={() => setThemeOpen(true)} title="Personalizza">
               <Palette size={16}/>
             </button>
             {/* Notifiche */}

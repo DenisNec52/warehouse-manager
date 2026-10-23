@@ -71,7 +71,7 @@ export default function SettingsPage() {
         <div className="card p-5">
           <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Profilo</h3>
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-[var(--brand-500)] flex items-center justify-center text-white text-lg font-bold">{user?.name?.charAt(0)}</div>
+            <div className="w-12 h-12 rounded-full bg-(--brand-500) flex items-center justify-center text-white text-lg font-bold">{user?.name?.charAt(0)}</div>
             <div><p className="font-medium text-gray-900 dark:text-white">{user?.name}</p><p className="text-sm text-gray-500">{user?.username} · {user?.role}</p></div>
           </div>
           <EmailField user={user} setUser={setUser}/>

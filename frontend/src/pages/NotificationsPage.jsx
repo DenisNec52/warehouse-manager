@@ -35,7 +35,7 @@ export default function NotificationsPage() {
               {clearOpen && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setClearOpen(false)}/>
-                  <div className="absolute right-0 mt-1 z-20 w-56 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[var(--radius-md)] shadow-modal py-1 text-sm">
+                  <div className="absolute right-0 mt-1 z-20 w-56 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-md shadow-modal py-1 text-sm">
                     <button className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800" onClick={() => doClear({ type:"login" }, "tutte le notifiche di accesso")}>🔐 Solo accessi</button>
                     <button className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800" onClick={() => doClear({ onlyRead:true }, "tutte le notifiche già lette")}>✓ Solo già lette</button>
                     <button className="w-full text-left px-4 py-2 text-red-500 hover:bg-gray-50 dark:hover:bg-gray-800" onClick={() => doClear({ type:"all" }, "TUTTE le notifiche")}>🗑 Tutte</button>
@@ -48,7 +48,7 @@ export default function NotificationsPage() {
       </div>
       <div className="space-y-2">
         {(data?.notifications||[]).map(n => (
-          <div key={n._id} className={clsx("card p-4 flex items-start gap-3", !n.read && "border-l-2 border-l-[var(--brand-500)]")}>
+          <div key={n._id} className={clsx("card p-4 flex items-start gap-3", !n.read && "border-l-2 border-l-(--brand-500)")}>
             <span className="text-xl shrink-0 mt-0.5">{TYPE_ICON[n.type]||"📢"}</span>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-gray-900 dark:text-white text-sm">{n.title}</p>

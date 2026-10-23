@@ -13,7 +13,7 @@ export default function NotificationBell() {
   const nav = useNavigate();
 
   return (
-    <button className="btn btn-ghost btn-sm p-2 relative rounded-[var(--radius-sm)]"
+    <button className="btn btn-ghost btn-sm p-2 relative rounded-sm"
       onClick={() => nav("/notifications")} title="Notifiche">
       <Bell size={16}/>
       {unread > 0 && (

@@ -13,14 +13,25 @@ const productionEntrySchema = new mongoose.Schema({
   data:           { type: Date, required: true, index: true },            // giorno di lavoro
   department:     { type: mongoose.Schema.Types.ObjectId, ref: "Department", required: true, index: true },
   departmentName: { type: String, trim: true, default: "" },              // snapshot per report e storico
-  operatore:      { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
-  operatoreNome:  { type: String, required: true, trim: true },           // snapshot per report e storico
+  // Operatore (saldatore): opzionale, perché le righe importate da foglio Excel
+  // possono non avere ancora la firma. null = "non assegnato".
+  operatore:      { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true },
+  operatoreNome:  { type: String, trim: true, default: "" },              // snapshot per report e storico
   commessa:       { type: String, required: true, trim: true, index: true },
   posizione:      { type: String, trim: true, default: "" },
+  cliente:        { type: String, trim: true, default: "" },              // da foglio saldatura
   quantita:       { type: Number, required: true, min: 1 },
 
-  standardTime:   { type: mongoose.Schema.Types.ObjectId, ref: "StandardTime", required: true },
-  custodiaLabel:  { type: String, required: true, trim: true },           // snapshot, es. "IP65 Piccola"
+  // Riferimento al catalogo Tempi standard: opzionale (le righe importate portano
+  // i propri snapshot custodiaLabel/tempoStdMinuti senza per forza una voce a catalogo).
+  standardTime:   { type: mongoose.Schema.Types.ObjectId, ref: "StandardTime", default: null },
+  custodiaLabel:  { type: String, required: true, trim: true },           // snapshot, es. "T.F. PICCOLA"
+  dn:             { type: String, trim: true, default: "" },              // da foglio: DN
+  diametro:       { type: String, trim: true, default: "" },              // da foglio: Ø Elem. (mm)
+  tipologia:      { type: String, trim: true, default: "" },              // da foglio: Tipologia (separata, es. "T.F.")
+  dimensione:     { type: String, trim: true, default: "" },              // da foglio: Dimensione (separata, es. "PICCOLA")
+  firmaInizio:    { type: String, trim: true, default: "" },              // da foglio: Firma (inizio lavorazione)
+  firmaFine:      { type: String, trim: true, default: "" },              // da foglio: Firma (fine lavorazione)
   tempoStdMinuti: { type: Number, required: true, min: 1 },               // snapshot, per pezzo
 
   tempoImpiegatoMinuti: { type: Number, required: true, min: 1 },         // totale della riga

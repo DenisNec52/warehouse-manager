@@ -38,11 +38,11 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-gray-50 via-white to-gray-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-4">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .4 }}
         className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-[var(--brand-500)] rounded-[var(--radius)] flex items-center justify-center mx-auto mb-4 shadow-lg shadow-[var(--brand-500)]/20">
+          <div className="w-14 h-14 bg-(--brand-500) rounded-(--radius) flex items-center justify-center mx-auto mb-4 shadow-lg shadow-(--brand-500)/20">
             <Package size={28} className="text-white"/>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Password dimenticata</h1>

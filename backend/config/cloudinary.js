@@ -20,25 +20,35 @@
  *  (tutti e tre si trovano nella Dashboard di Cloudinary dopo la registrazione,
  *   gratuita, su https://cloudinary.com)
  */
-// NOTA: il pacchetto "cloudinary" è volutamente fissato alla v1.x in
-// package.json (non l'ultima v2 dell'SDK): multer-storage-cloudinary
-// richiede come peer dependency cloudinary "^1.21.0" per usarne l'export
-// .v2 (l'API a promise, non quella a callback). Aggiornare "cloudinary"
-// alla v2 rompe l'installazione (ERESOLVE) finché quel pacchetto non
-// verrà aggiornato a sua volta.
-// AVVISO SICUREZZA: cloudinary 1.x ha una CVE di argument injection (GHSA-g4mf-96x5-5m2c,
-// risolta in 2.7.0). Non possiamo aggiornare finché usiamo multer-storage-cloudinary@4
-// (richiede cloudinary ^1.21). Mitigazione: Cloudinary è disattivato di default
-// (ENABLE_CLOUDINARY=false) e l'upload è riservato ad admin. Migrazione futura: passare
-// a cloudinary 2.x con un motore di storage per multer mantenuto.
+// cloudinary 2.x (la 1.x aveva la CVE di argument injection GHSA-g4mf-96x5-5m2c).
+// Il vecchio multer-storage-cloudinary (fermo a cloudinary ^1) è sostituito da un
+// piccolo StorageEngine multer qui sotto: stessa interfaccia (_handleFile/_removeFile),
+// il file va in streaming a Cloudinary senza passare dal disco del server.
 const cloudinary = require("cloudinary").v2;
-// multer è fissato alla v2.x in package.json (non la v1 usata nei test di
-// multer-storage-cloudinary) per via di alcune CVE note sulla v1: è comunque
-// compatibile perché multer-storage-cloudinary non dipende da multer a
-// runtime, implementa solo l'interfaccia StorageEngine (_handleFile/
-// _removeFile), stabile identica tra le due major.
-const multer      = require("multer");
-const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const multer     = require("multer");
+
+const UPLOAD_PARAMS = {
+  folder:          "warehouse-pro/products",
+  allowed_formats: ["jpg", "jpeg", "png", "webp"],
+  // Ridimensiona/ottimizza in upload: evita di salvare foto da 12MB
+  // scattate con lo smartphone e riduce il consumo di crediti/banda.
+  transformation:  [{ width: 1600, height: 1600, crop: "limit", quality: "auto", fetch_format: "auto" }],
+};
+
+/** req.file.path = URL https, req.file.filename = public_id (come col pacchetto precedente). */
+const cloudinaryStorage = {
+  _handleFile(_req, file, cb) {
+    const upload = cloudinary.uploader.upload_stream(UPLOAD_PARAMS, (err, result) => {
+      if (err) return cb(err);
+      cb(null, { path: result.secure_url, filename: result.public_id, size: result.bytes });
+    });
+    file.stream.on("error", cb);
+    file.stream.pipe(upload);
+  },
+  _removeFile(_req, file, cb) {
+    cloudinary.uploader.destroy(file.filename).then(() => cb(null), cb);
+  },
+};
 
 const ENABLED = process.env.ENABLE_CLOUDINARY === "true";
 
@@ -59,17 +69,7 @@ function makeUploader() {
       message: "Upload immagini non configurato: imposta ENABLE_CLOUDINARY=true e le variabili CLOUDINARY_* nel .env del backend.",
     });
   }
-  const storage = new CloudinaryStorage({
-    cloudinary,
-    params: {
-      folder:          "warehouse-pro/products",
-      allowed_formats: ["jpg", "jpeg", "png", "webp"],
-      // Ridimensiona/ottimizza in upload: evita di salvare foto da 12MB
-      // scattate con lo smartphone e riduce il consumo di crediti/banda.
-      transformation:  [{ width: 1600, height: 1600, crop: "limit", quality: "auto", fetch_format: "auto" }],
-    },
-  });
-  return multer({ storage, limits: { fileSize: 8 * 1024 * 1024 } }).single("image");
+  return multer({ storage: cloudinaryStorage, limits: { fileSize: 8 * 1024 * 1024 } }).single("image");
 }
 
 module.exports = { cloudinary, makeUploader, ENABLED };

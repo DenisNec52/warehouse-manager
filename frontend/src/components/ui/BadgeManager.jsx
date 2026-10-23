@@ -93,7 +93,7 @@ export default function BadgeManager({
       </p>
 
       {showInfo && (
-        <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/60 rounded p-3 mb-4 space-y-1.5">
+        <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/60 rounded-(--radius) p-3 mb-4 space-y-1.5">
           <p>• Chiunque possieda il QR o il tag accede con questo account: trattali come una chiave fisica.</p>
           <p>• "Rigenera" crea un nuovo codice e disattiva subito quello vecchio (utile se un badge è perso o rubato).</p>
           <p>• "Disattiva" blocca temporaneamente il login da badge senza cancellare il codice generato.</p>
@@ -134,13 +134,13 @@ export default function BadgeManager({
       </div>
 
       {freshBadge && (
-        <div className="mt-4 p-4 rounded border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40">
+        <div className="mt-4 p-4 rounded-(--radius) border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40">
           <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">
             Questo QR e questo link vengono mostrati una sola volta: scaricalo/programmalo ora.
             Se li perdi, dovrai rigenerare il badge.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 items-start">
-            <img src={freshBadge.qrImage} alt="QR code di accesso" className="w-36 h-36 rounded bg-white p-2 border border-gray-200 shrink-0"/>
+            <img src={freshBadge.qrImage} alt="QR code di accesso" className="w-36 h-36 rounded-(--radius) bg-white p-2 border border-gray-200 shrink-0"/>
             <div className="flex-1 min-w-0 space-y-3">
               <button type="button" className="btn btn-sm btn-secondary gap-1.5" onClick={handleDownload}>
                 <Download size={13}/> Scarica immagine QR
