@@ -30,8 +30,15 @@ const productionEntrySchema = new mongoose.Schema({
   diametro:       { type: String, trim: true, default: "" },              // da foglio: Ø Elem. (mm)
   tipologia:      { type: String, trim: true, default: "" },              // da foglio: Tipologia (separata, es. "T.F.")
   dimensione:     { type: String, trim: true, default: "" },              // da foglio: Dimensione (separata, es. "PICCOLA")
-  firmaInizio:    { type: String, trim: true, default: "" },              // da foglio: Firma (inizio lavorazione)
-  firmaFine:      { type: String, trim: true, default: "" },              // da foglio: Firma (fine lavorazione)
+  // Firme: NON vengono dal foglio. Si compilano da sole quando un utente preme
+  // "Inizia" / "Finisci" sulla riga (chi finisce può essere un altro). firmaInizio/
+  // firmaFine sono lo snapshot del nome, come operatoreNome.
+  firmaInizio:    { type: String, trim: true, default: "" },
+  firmaFine:      { type: String, trim: true, default: "" },
+  iniziataDa:     { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  iniziataAt:     { type: Date, default: null },
+  finitaDa:       { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  finitaAt:       { type: Date, default: null },
   tempoStdMinuti: { type: Number, required: true, min: 1 },               // snapshot, per pezzo
 
   tempoImpiegatoMinuti: { type: Number, required: true, min: 1 },         // totale della riga

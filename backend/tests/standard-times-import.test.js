@@ -5,6 +5,8 @@
  * anti-malware: solo .xlsx veri (magic bytes), formula injection scartata,
  * estensioni/MIME non ammessi respinti, anteprima che non salva.
  */
+const fs = require("fs");
+const path = require("path");
 const request = require("supertest");
 const ExcelJS = require("exceljs");
 const app  = require("../app");
@@ -101,6 +103,27 @@ describe("Import tempi standard da Excel", () => {
       .attach("file", Buffer.from("a,b,c"), { filename: "dati.csv", contentType: "text/csv" });
 
     expect(r.status).toBe(400);
+  });
+
+  test("foglio saldatura reale: riconosce 'Temp standard (a pezzo)' e salva una custodia per tipologia×dimensione", async () => {
+    const a = await adminAgent();
+    const dep = await Department.create({ name: "Saldatura", isActive: true });
+    const buf = fs.readFileSync(path.join(__dirname, "..", "samples", "standard-times", "TEST FOGLIO SALD.xlsx"));
+    const r = await a.post("/api/production/standard-times/import")
+      .field("department", String(dep._id))
+      .field("commit", "true")
+      .attach("file", buf, { filename: "foglio.xlsx", contentType: XLSX_MIME });
+
+    expect(r.status).toBe(200);
+    expect(r.body.errors).toEqual([]);
+    const saved = await StandardTime.find({ department: dep._id }).sort({ tipologia: 1, dimensione: 1 }).lean();
+    expect(saved.map(s => [s.tipologia, s.dimensione, s.minuti])).toEqual([
+      ["Speciale", "PICCOLA", 60],
+      ["T.C.", "MEDIA", 60],
+      ["T.C.", "PICCOLA", 45],
+      ["T.F.", "PICCOLA", 60],
+      ["T.I.", "PICCOLA", 30],
+    ]);
   });
 
   test("un operatore non può importare (serve supervisore/admin)", async () => {
