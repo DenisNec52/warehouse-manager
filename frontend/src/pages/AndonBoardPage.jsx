@@ -37,9 +37,13 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
   const { user, settings } = useAuthStore();
   const [form, setForm] = useState({
     data:         isoFromDate(entry?.data) || toIsoDay(new Date()),
-    operatore:    entry?.operatore || user?.id || "",
+    // Riga esistente senza operatore (importata, non ancora presa): resta "non assegnato"
+    operatore:    entry ? (entry.operatore || "") : (user?.id || ""),
     commessa:     entry?.commessa || "",
     posizione:    entry?.posizione || "",
+    cliente:      entry?.cliente || "",
+    dn:           entry?.dn || "",
+    diametro:     entry?.diametro || "",
     quantita:     entry?.quantita ? String(entry.quantita) : "",
     standardTime: entry?.standardTime || "",
     tempo:        entry ? fmtMinutes(entry.tempoImpiegatoMinuti) : "",
@@ -69,8 +73,10 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
   const removeConsumo = (i) => setConsumi(cs => cs.filter((_, idx) => idx !== i));
 
   // In modifica, se la tipologia resta quella, vale lo snapshot della riga (non il valore attuale in tabella).
+  // Riga importata dal foglio: non ha una voce in tabella e tiene tipologia/grandezza/tempo del foglio.
+  const fromSheet = !!entry && !entry.standardTime;
   const std = standardTimes.find(t => t._id === form.standardTime);
-  const stdMinuti = entry && entry.standardTime === form.standardTime ? entry.tempoStdMinuti : std?.minuti;
+  const stdMinuti = entry && (entry.standardTime || "") === form.standardTime ? entry.tempoStdMinuti : std?.minuti;
   const quantita = Number(form.quantita);
   const impiegato = parseDuration(form.tempo);
   const atteso = stdMinuti && quantita > 0 ? stdMinuti * quantita : null;
@@ -86,7 +92,7 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
     onError: e => toast.error(e.response?.data?.errors?.[0]?.message || e.response?.data?.message || "Errore"),
   });
 
-  const valid = form.data && form.commessa.trim() && quantita >= 1 && form.standardTime && impiegato > 0;
+  const valid = form.data && form.commessa.trim() && quantita >= 1 && (form.standardTime || fromSheet) && impiegato > 0;
   const consumiPayload = isNew && Array.isArray(consumi)
     ? consumi.filter(c => c.quantita > 0).map(c => ({ product: c.product, quantita: c.quantita }))
     : null;
@@ -96,6 +102,9 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
     operatore: form.operatore || undefined,
     commessa: form.commessa,
     posizione: form.posizione,
+    cliente: form.cliente,
+    dn: form.dn,
+    diametro: form.diametro,
     quantita,
     standardTime: form.standardTime,
     tempoImpiegatoMinuti: impiegato,
@@ -128,6 +137,7 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
               <div>
                 <label className="form-label">Operatore *</label>
                 <select className="form-input" value={form.operatore} onChange={set("operatore")}>
+                  {entry && !entry.operatore && <option value="">— non assegnato —</option>}
                   {operators.map(o => <option key={o._id} value={o._id}>{o.name || o.username}</option>)}
                 </select>
               </div>
@@ -141,12 +151,28 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
 
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
-              <label className="form-label">N. commessa *</label>
+              <label className="form-label">Comm. *</label>
               <input className="form-input" value={form.commessa} onChange={set("commessa")} placeholder="es. 2631"/>
             </div>
             <div>
-              <label className="form-label">Posizione</label>
+              <label className="form-label">Pos.</label>
               <input className="form-input" value={form.posizione} onChange={set("posizione")} placeholder="es. 1"/>
+            </div>
+          </div>
+
+          <div>
+            <label className="form-label">Cliente</label>
+            <input className="form-input" value={form.cliente} onChange={set("cliente")} placeholder="es. NUOVO PIGNONE SRL"/>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="form-label">DN</label>
+              <input className="form-input" value={form.dn} onChange={set("dn")} placeholder="es. 145"/>
+            </div>
+            <div>
+              <label className="form-label">Ø Elem. (mm)</label>
+              <input className="form-input" value={form.diametro} onChange={set("diametro")} placeholder="es. 16"/>
             </div>
           </div>
 
@@ -154,13 +180,13 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
             <div className="col-span-2">
               <label className="form-label">Tipologia custodia *</label>
               <select className="form-input" value={form.standardTime} onChange={set("standardTime")}>
-                <option value="">Seleziona…</option>
+                <option value="">{fromSheet ? `${entry.custodiaLabel} — dal foglio (${fmtMinutes(entry.tempoStdMinuti)}/pz)` : "Seleziona…"}</option>
                 {entry && !std && <option value={entry.standardTime}>{entry.custodiaLabel} (non più in tabella)</option>}
                 {standardTimes.map(t => <option key={t._id} value={t._id}>{t.label} — {fmtMinutes(t.minuti)}/pz</option>)}
               </select>
             </div>
             <div>
-              <label className="form-label">Q.tà pezzi *</label>
+              <label className="form-label">Q.tà (n°) *</label>
               <input type="number" min="1" className="form-input" value={form.quantita} onChange={set("quantita")}/>
             </div>
           </div>
@@ -328,7 +354,7 @@ function AndonImportModal({ department, operators, onClose }) {
               {s.valid > 0 && (
                 <div className="table-wrap max-h-64 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-md">
                   <table className="data-table text-sm">
-                    <thead><tr><th>Riga</th><th>Comm.</th><th>Pos.</th><th>Cliente</th><th>Q.tà</th><th>Tipologia</th><th>DN</th><th>Ø Elem.</th><th>Grandezza</th><th>Tempo STD</th></tr></thead>
+                    <thead><tr><th>Riga</th><th>Comm.</th><th>Pos.</th><th>Cliente</th><th>Q.tà (n°)</th><th>Tipologia</th><th>DN</th><th>Ø Elem. (mm)</th><th>Grandezza</th><th>Temp standard</th></tr></thead>
                     <tbody>
                       {preview.rows.map((r, i) => (
                         <tr key={i} className={clsx(r.duplicate && "opacity-50")} title={r.duplicate ? "Già importato: verrà saltato" : undefined}>
@@ -533,9 +559,9 @@ export default function AndonBoardPage() {
           <div className="table-wrap">
             <table className="data-table">
               <thead><tr>
-                <th>Data</th><th>Operatore</th><th>Commessa</th><th>Inizio / Fine</th><th>Pos.</th><th>Cliente</th><th>Q.tà</th>
-                <th>Tipologia</th><th>DN</th><th>Ø Elem.</th><th>Grandezza</th>
-                <th>STD/pz</th><th>Atteso</th><th>Impiegato</th><th>Eff.</th><th>Stato</th><th/>
+                <th>Data</th><th>Operatore</th><th>Comm.</th><th>Inizio / Fine</th><th>Pos.</th><th>Cliente</th><th>Q.tà (n°)</th>
+                <th>Tipologia</th><th>DN</th><th>Ø Elem. (mm)</th><th>Grandezza</th>
+                <th>Temp standard</th><th>Atteso</th><th>Impiegato</th><th>Eff.</th><th>Stato</th><th/>
               </tr></thead>
               <tbody>
                 {(entries || []).map(e => {

@@ -14,7 +14,7 @@ const { colleagueFilter, hiddenSuperAdminId } = require("../utils/colleagues");
 const Department = require("../models/Department");
 const { PERIODS, resolvePeriod } = require("../utils/reportPeriod");
 const { exportLimiter, importLimiter } = require("../middleware/rateLimiter");
-const { buildReport } = require("../utils/andonReport");
+const { buildReport, maskSuperAdmin } = require("../utils/andonReport");
 const { buildAndonWorkbook } = require("../utils/andonExcel");
 const { secureUpload } = require("../middleware/secureUpload");
 const { parseStandardTimesXlsx } = require("../utils/xlsxImport");
@@ -309,7 +309,7 @@ router.get("/entries", periodRules, validate, async (req, res) => {
     .limit(500)
     .lean();
   const hideId = await hiddenSuperAdminId(req);
-  if (hideId) entries.forEach(e => { if (String(e.operatore) === hideId) e.operatoreNome = "Altro operatore"; });
+  if (hideId) entries.forEach(e => maskSuperAdmin(e, hideId));
   res.json({ entries });
 });
 
@@ -319,7 +319,12 @@ const entryRules = [
   body("commessa").trim().notEmpty().withMessage("Numero commessa obbligatorio"),
   body("posizione").optional().trim(),
   body("quantita").isInt({ min: 1, max: 10000 }).withMessage("Quantità non valida").toInt(),
-  body("standardTime").isMongoId().withMessage("Tipologia custodia obbligatoria"),
+  // Facoltativa solo in modifica di una riga importata dal foglio (che non ha una voce a catalogo):
+  // vedi buildEntryFields
+  body("standardTime").optional({ values: "falsy" }).isMongoId().withMessage("Tipologia custodia non valida"),
+  body("cliente").optional().trim().isLength({ max: 200 }),
+  body("dn").optional().trim().isLength({ max: 50 }),
+  body("diametro").optional().trim().isLength({ max: 50 }),
   body("tempoImpiegatoMinuti").isInt({ min: 1, max: 100000 }).withMessage("Tempo impiegato non valido").toInt(),
   body("dataFine").optional({ values: "falsy" }).custom(isoDate).withMessage("Data fine non valida (YYYY-MM-DD)"),
   body("sospesa").optional().isBoolean().toBoolean(),
@@ -335,15 +340,20 @@ const entryRules = [
  */
 async function buildEntryFields(req, department, existing = null) {
   let snapshot;
+  const keep = (e) => ({ standardTime: e.standardTime, custodiaLabel: e.custodiaLabel, tempoStdMinuti: e.tempoStdMinuti, tipologia: e.tipologia, dimensione: e.dimensione });
   const sameStd = existing && String(existing.standardTime) === String(req.body.standardTime)
     && String(existing.department) === String(department._id);
-  if (sameStd) {
-    snapshot = { standardTime: existing.standardTime, custodiaLabel: existing.custodiaLabel, tempoStdMinuti: existing.tempoStdMinuti };
+  if (!req.body.standardTime) {
+    // Riga importata dal foglio: tiene tipologia, grandezza e tempo standard del foglio
+    if (!existing || existing.standardTime) return { error: "Tipologia custodia obbligatoria." };
+    snapshot = keep(existing);
+  } else if (sameStd) {
+    snapshot = keep(existing);
   } else {
     // La tipologia deve essere un tempo standard attivo dello stesso reparto della riga.
     const std = await StandardTime.findOne({ _id: req.body.standardTime, isActive: true, department: department._id });
     if (!std) return { error: "Tipologia custodia non trovata in questo reparto." };
-    snapshot = { standardTime: std._id, custodiaLabel: std.label, tempoStdMinuti: std.minuti };
+    snapshot = { standardTime: std._id, custodiaLabel: std.label, tempoStdMinuti: std.minuti, tipologia: std.tipologia, dimensione: std.dimensione };
   }
   const b = req.body;
   return {
@@ -353,6 +363,9 @@ async function buildEntryFields(req, department, existing = null) {
       data: dayStart(b.data),
       commessa: b.commessa,
       posizione: b.posizione || "",
+      cliente: b.cliente || "",
+      dn: b.dn || "",
+      diametro: b.diametro || "",
       quantita: b.quantita,
       ...snapshot,
       tempoImpiegatoMinuti: b.tempoImpiegatoMinuti,
@@ -423,6 +436,13 @@ router.post("/entries", entryRules, validate, async (req, res) => {
 
   const operatoreNome = op.user.name || op.user.username;
   const consumiInput = Array.isArray(req.body.consumi) ? req.body.consumi : null;
+  // Riga inserita a mano = lavoro registrato dall'operatore: firmata da lui come
+  // iniziata e, se ha già la data fine, anche come finita (niente "Inizia" da premere).
+  const now = new Date();
+  Object.assign(fields, {
+    iniziataDa: op.user._id, iniziataAt: now, firmaInizio: operatoreNome,
+    ...(fields.dataFine ? { finitaDa: op.user._id, finitaAt: now, firmaFine: operatoreNome } : {}),
+  });
 
   // Senza consumi confermati → comportamento classico (nessuno scarico magazzino).
   if (!consumiInput || !consumiInput.length) {

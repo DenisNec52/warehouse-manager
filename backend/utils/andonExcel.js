@@ -17,6 +17,15 @@ const TREND = {
 const HEADER_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F2937" } };
 const itDate = (iso) => iso.split("-").reverse().join("/");
 const hours = (min) => Math.round((min / 60) * 100) / 100;
+// Excel non ha fusi orari ed ExcelJS scrive le Date in UTC: per le ore di firma si scrive
+// l'ora "da orologio" italiana (Europe/Rome, ora legale inclusa), come la vede l'operatore.
+const ROME = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Rome", hourCycle: "h23",
+  year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+function romeClock(d) {
+  if (!d) return null;
+  const p = Object.fromEntries(ROME.formatToParts(new Date(d)).map(x => [x.type, Number(x.value)]));
+  return new Date(Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second));
+}
 const SHEET = "Riepilogo";
 const ref = (col, from, to) => `'${SHEET}'!$${col}$${from}:$${col}$${to}`;
 
@@ -100,18 +109,29 @@ async function buildAndonWorkbook(report, departmentLabel, withCharts) {
 
   // ── Foglio Dati ──
   const data = wb.addWorksheet("Dati", { views: [{ state: "frozen", ySplit: 1 }] });
+  // Stesse colonne del foglio saldatura (Comm., Pos., Cliente, Q.tà, Tipologia, DN,
+  // Ø Elem., Grandezza, Temp standard) + tempi, efficienza e firme di inizio/fine
   data.columns = [
     { header: "Data", key: "data", width: 12, style: { numFmt: "dd/mm/yyyy" } },
     { header: "Reparto", key: "reparto", width: 18 },
+    { header: "Lavorazione", key: "fase", width: 18 },
     { header: "Operatore", key: "operatore", width: 22 },
-    { header: "Commessa", key: "commessa", width: 12 },
-    { header: "Posizione", key: "posizione", width: 10 },
-    { header: "Tipologia", key: "tipologia", width: 26 },
-    { header: "Pezzi", key: "pezzi", width: 8 },
-    { header: "Tempo std/pezzo (h)", key: "std", width: 18, style: { numFmt: "0.00" } },
-    { header: "Tempo atteso (h)", key: "atteso", width: 16, style: { numFmt: "0.00" } },
-    { header: "Tempo impiegato (h)", key: "impiegato", width: 18, style: { numFmt: "0.00" } },
+    { header: "Comm.", key: "commessa", width: 10 },
+    { header: "Pos.", key: "posizione", width: 7 },
+    { header: "Cliente", key: "cliente", width: 30 },
+    { header: "Q.tà (n°)", key: "pezzi", width: 9 },
+    { header: "Tipologia", key: "tipologia", width: 14 },
+    { header: "DN", key: "dn", width: 8 },
+    { header: "Ø Elem. (mm)", key: "diametro", width: 12 },
+    { header: "Grandezza", key: "grandezza", width: 12 },
+    { header: "Temp standard a pezzo (h)", key: "std", width: 14, style: { numFmt: "0.00" } },
+    { header: "Tempo atteso (h)", key: "atteso", width: 14, style: { numFmt: "0.00" } },
+    { header: "Tempo impiegato (h)", key: "impiegato", width: 16, style: { numFmt: "0.00" } },
     { header: "Efficienza", key: "efficienza", width: 11, style: { numFmt: '0.0"%"' } },
+    { header: "Firma inizio", key: "firmaInizio", width: 20 },
+    { header: "Ora inizio", key: "iniziataAt", width: 16, style: { numFmt: "dd/mm/yyyy hh:mm" } },
+    { header: "Firma fine", key: "firmaFine", width: 20 },
+    { header: "Ora fine", key: "finitaAt", width: 16, style: { numFmt: "dd/mm/yyyy hh:mm" } },
     { header: "Data fine", key: "dataFine", width: 12, style: { numFmt: "dd/mm/yyyy" } },
     { header: "Sospesa", key: "sospesa", width: 9 },
     { header: "Bindello", key: "bindello", width: 9 },
@@ -120,14 +140,18 @@ async function buildAndonWorkbook(report, departmentLabel, withCharts) {
   for (const e of report.righe || []) {
     const atteso = e.tempoStdMinuti * e.quantita;
     data.addRow({
-      data: e.data, reparto: e.departmentName, operatore: e.operatoreNome, commessa: e.commessa, posizione: e.posizione,
-      tipologia: e.custodiaLabel, pezzi: e.quantita, std: hours(e.tempoStdMinuti), atteso: hours(atteso),
+      data: e.data, reparto: e.departmentName, fase: e.fase || "", operatore: e.operatoreNome,
+      commessa: e.commessa, posizione: e.posizione, cliente: e.cliente || "", pezzi: e.quantita,
+      // Righe inserite a mano non hanno tipologia/grandezza separate: si usa l'etichetta custodia
+      tipologia: e.tipologia || e.custodiaLabel, dn: e.dn || "", diametro: e.diametro || "", grandezza: e.dimensione || "",
+      std: hours(e.tempoStdMinuti), atteso: hours(atteso),
       impiegato: hours(e.tempoImpiegatoMinuti), efficienza: Math.round((atteso / e.tempoImpiegatoMinuti) * 1000) / 10,
+      firmaInizio: e.firmaInizio || "", iniziataAt: romeClock(e.iniziataAt), firmaFine: e.firmaFine || "", finitaAt: romeClock(e.finitaAt),
       dataFine: e.dataFine || null, sospesa: e.sospesa ? "Sì" : "", bindello: e.bindello ? "Sì" : "", note: e.note,
     });
   }
   data.getRow(1).eachCell((c) => { c.font = { bold: true, color: { argb: "FFFFFFFF" } }; c.fill = HEADER_FILL; });
-  data.autoFilter = { from: "A1", to: "O1" };
+  data.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: data.columns.length } };
 
   let buffer = await wb.xlsx.writeBuffer();
   if (!withCharts) return Buffer.from(buffer);

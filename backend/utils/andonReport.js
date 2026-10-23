@@ -17,6 +17,17 @@ const SUMS = {
 const efficiency = (r) => (r.impiegatoMinuti > 0 ? Math.round((r.attesoMinuti / r.impiegatoMinuti) * 1000) / 10 : null);
 const clean = ({ _id, ...r }) => ({ ...r, efficienza: efficiency(r) });
 
+// Super-admin invisibile: il suo nome diventa "Altro operatore" ovunque compaia su una
+// riga (operatore e firme di inizio/fine); gli id restano solo come riferimento tecnico
+const HIDDEN = "Altro operatore";
+function maskSuperAdmin(r, hideUserId) {
+  const is = (id) => id && String(id) === String(hideUserId);
+  if (is(r.operatore))  r.operatoreNome = HIDDEN;
+  if (is(r.iniziataDa)) r.firmaInizio = HIDDEN;
+  if (is(r.finitaDa))   r.firmaFine = HIDDEN;
+  return r;
+}
+
 /**
  * @param scope   filtro reparto/visibilità (da departmentFilter)
  * @param range   risultato di resolvePeriod
@@ -45,8 +56,6 @@ async function buildReport(scope, range, { withRows = false, hideUserId = null }
     return { giorno, pezzi: d?.pezzi || 0, efficienza: d ? efficiency(d) : null };
   });
 
-  // Super-admin invisibile: il suo nome diventa "Altro operatore" (l'id resta solo come riferimento tecnico)
-  const HIDDEN = "Altro operatore";
   const perOperatore = agg.perOperatore.map((r) => {
     const c = clean(r);
     if (hideUserId && String(r._id) === String(hideUserId)) c.nome = HIDDEN;
@@ -64,9 +73,9 @@ async function buildReport(scope, range, { withRows = false, hideUserId = null }
   };
   if (withRows) {
     report.righe = await ProductionEntry.find(match).sort({ data: 1, operatoreNome: 1 }).lean();
-    if (hideUserId) report.righe.forEach((r) => { if (String(r.operatore) === String(hideUserId)) r.operatoreNome = HIDDEN; });
+    if (hideUserId) report.righe.forEach((r) => maskSuperAdmin(r, hideUserId));
   }
   return report;
 }
 
-module.exports = { buildReport };
+module.exports = { buildReport, maskSuperAdmin };

@@ -91,6 +91,44 @@ const MIGRATIONS = [
       return { senzaTurno };
     },
   },
+  {
+    // Firme Inizia/Finisci (iniziataAt/finitaAt): le righe già esistenti non devono
+    // mostrare "Inizia" se il lavoro era già registrato.
+    // - Righe inserite a mano (hanno standardTime): firmate dall'operatore, finite se hanno dataFine.
+    // - Righe importate con la firma scritta nel foglio: considerate iniziate/finite.
+    // Idempotente: tocca solo righe con iniziataAt/finitaAt ancora vuoti.
+    name: "2026-10-24-andon-firme",
+    async run() {
+      const notStarted = { $or: [{ iniziataAt: null }, { iniziataAt: { $exists: false } }] };
+      const notFinished = { $or: [{ finitaAt: null }, { finitaAt: { $exists: false } }] };
+      const filled = (f) => ({ [f]: { $exists: true, $nin: [null, ""] } });
+
+      const manualStart = await ProductionEntry.collection.updateMany(
+        { $and: [notStarted, { standardTime: { $ne: null } }, { operatore: { $ne: null } }] },
+        [{ $set: {
+          iniziataDa: "$operatore", iniziataAt: "$createdAt",
+          firmaInizio: { $cond: [{ $gt: [{ $strLenCP: { $ifNull: ["$firmaInizio", ""] } }, 0] }, "$firmaInizio", "$operatoreNome"] },
+        } }],
+      );
+      const manualFinish = await ProductionEntry.collection.updateMany(
+        { $and: [notFinished, { standardTime: { $ne: null } }, { operatore: { $ne: null } }, { dataFine: { $ne: null } }] },
+        [{ $set: {
+          finitaDa: "$operatore", finitaAt: "$dataFine",
+          firmaFine: { $cond: [{ $gt: [{ $strLenCP: { $ifNull: ["$firmaFine", ""] } }, 0] }, "$firmaFine", "$operatoreNome"] },
+        } }],
+      );
+      const sheetStart = await ProductionEntry.collection.updateMany(
+        { $and: [notStarted, filled("firmaInizio")] }, [{ $set: { iniziataAt: "$createdAt" } }]);
+      const sheetFinish = await ProductionEntry.collection.updateMany(
+        { $and: [notFinished, filled("firmaFine")] },
+        [{ $set: { finitaAt: "$createdAt", iniziataAt: { $ifNull: ["$iniziataAt", "$createdAt"] }, dataFine: { $ifNull: ["$dataFine", "$data"] } } }]);
+
+      return {
+        manualiIniziate: manualStart.modifiedCount, manualiFinite: manualFinish.modifiedCount,
+        fogliIniziate: sheetStart.modifiedCount, fogliFinite: sheetFinish.modifiedCount,
+      };
+    },
+  },
 ];
 
 async function runMigrations({ log = console.log } = {}) {
