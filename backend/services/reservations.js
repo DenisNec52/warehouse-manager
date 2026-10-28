@@ -106,6 +106,9 @@ async function releaseReservation(id, session) {
 /**
  * Trasforma la prenotazione in uscite di magazzino: per ogni codice scarica i
  * prodotti in ordine di arrivo (FIFO), creando un movimento per pedana.
+ * Le pedane senza data di arrivo vengono scaricate per prime: in MongoDB il
+ * valore nullo precede le date, e sono di norma gli articoli caricati prima
+ * che la data venisse registrata (inventario iniziale).
  */
 async function consumeReservation(id, { actor, apiKey }, session) {
   const r = await Reservation.findById(id).session(session);

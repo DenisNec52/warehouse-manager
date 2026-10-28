@@ -93,6 +93,11 @@ In produzione il seed crea solo l'admin e **richiede** `SEED_ADMIN_PASSWORD` (mi
 | `notifications` | Notifiche sistema (TTL 90 giorni) |
 | `standardtimes` | Tempi standard di saldatura per tipologia/dimensione custodia |
 | `productionentries` | Righe Andon Board con snapshot del tempo standard |
+| `auditlogs` | Registro modifiche (chi, cosa, quando, prima/dopo) |
+| `apikeys` | Chiavi dell'API di integrazione (solo hash) |
+| `reservations` | Prenotazioni di materiale da sistemi esterni (offerte) |
+| `webhooksubscriptions` / `webhookdeliveries` | Webhook e storico invii (7 giorni) |
+| `idempotencyrecords` | Risposte alle POST dell'API, per i retry (48 ore) |
 
 ---
 
@@ -112,13 +117,31 @@ API: `GET/POST/PUT/DELETE /api/production/standard-times`, `GET/POST/PUT/DELETE 
 
 ## 🔒 Sicurezza
 
-- JWT in **cookie httpOnly** — immune a XSS
-- **bcrypt** salt 12 per le password
-- **Helmet** — header HTTP sicuri
-- **mongoSanitize** — no injection MongoDB
-- **Rate limiting** — 10 login/15min
-- **CORS** — solo frontend autorizzato
-- **Soft delete** — prodotti/utenti non vengono mai cancellati fisicamente
+- JWT in **cookie httpOnly** (SameSite=lax) — non leggibile da JavaScript; solo body JSON contro il CSRF
+- **Sessioni revocabili**: cambio/reset password, disattivazione e "Esci da tutti i dispositivi" invalidano subito i token aperti
+- **bcrypt** costo 12; password di almeno 10 caratteri, senza lo username
+- **Helmet**, **mongoSanitize**, **CORS** solo sul frontend autorizzato
+- **Rate limiting**: login per username e per IP, API per utente, API di integrazione per chiave
+- **Giacenze tracciate**: la quantità cambia solo con movimenti (le rettifiche di admin/supervisori sono movimenti anche loro)
+- **Registro modifiche** consultabile dagli admin (Amministrazione → Registro modifiche)
+- **API di integrazione** con chiavi a permessi, idempotenza e webhook firmati: vedi [`backend/docs/INTEGRAZIONE.md`](backend/docs/INTEGRAZIONE.md)
+- **Soft delete** per i prodotti
+
+### Checklist prima di usarlo con dati reali
+
+Queste cose non dipendono dal codice e vanno verificate nelle dashboard:
+
+- [ ] **Repository privato** su GitHub (contiene la struttura del sistema; i dati reali non vanno mai committati)
+- [ ] **MongoDB Atlas**: piano con **backup automatici** (il piano gratuito M0 non li ha) e restore provato almeno una volta
+- [ ] **Atlas Network Access**: niente `0.0.0.0/0` se il piano Render lo consente (IP in uscita statici sui piani a pagamento)
+- [ ] **Regione UE** per Atlas e Render (GDPR: dati di clienti e dipendenti)
+- [ ] Render: `NODE_ENV=production`, `COOKIE_SECURE=true`, `JWT_SECRET` di 64+ caratteri, `DATA_ENCRYPTION_KEY` impostata
+- [ ] Hosting a pagamento (i piani gratuiti si spengono e non hanno garanzie di disponibilità)
+
+**Limite noto**: il backend su `onrender.com` è raggiungibile anche direttamente, non solo tramite Vercel.
+Chi lo chiama così può falsificare `X-Forwarded-For` e aggirare i limiti *per IP* (quelli per username, per
+utente e per chiave restano validi). Per chiuderlo serve un dominio/proxy davanti al backend che accetti solo
+il traffico di Vercel (es. Cloudflare con regola dedicata) oppure un header segreto aggiunto da una funzione edge.
 
 ---
 

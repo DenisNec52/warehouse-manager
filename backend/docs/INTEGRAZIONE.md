@@ -70,6 +70,10 @@ Offerta persa        POST /reservations/{id}/release → il materiale torna disp
 - Senza `expiresAt` una prenotazione scade dopo 90 giorni (massimo consentito):
   da scaduta non impegna più nulla e non si può consumare.
 - Due prenotazioni contemporanee sullo stesso codice non possono superare il disponibile.
+- Al consumo si scaricano prima le pedane arrivate prima; quelle senza data di arrivo
+  (inventario iniziale) vengono considerate le più vecchie.
+- Il consumo genera uscite con il solo permesso `reservations:write`: chi può prenotare
+  può anche evadere le proprie prenotazioni.
 - Un'uscita fatta a mano dalla UI può far scendere il fisico sotto il prenotato:
   `/stock` lo segnala con `overcommitted: true`.
 

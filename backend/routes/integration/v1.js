@@ -30,12 +30,14 @@ const events = require("../../services/events");
 
 const router = express.Router();
 
+router.use(apiKeyLimiter);
+
 // Documentazione macchina, senza autenticazione (descrive l'API, non contiene dati).
 router.get("/openapi.yaml", (_req, res) => {
   res.type("application/yaml").sendFile(path.join(__dirname, "../../docs/openapi.yaml"));
 });
 
-router.use(apiKeyLimiter, authenticateApiKey);
+router.use(authenticateApiKey);
 
 // Errori di validazione nel formato dell'API.
 const check = (req, res, next) => {
