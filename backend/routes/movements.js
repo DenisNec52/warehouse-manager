@@ -18,30 +18,12 @@ const Product  = require("../models/Product");
 const Notification = require("../models/Notification");
 const { visibleColleagueIds, maskMovements, visibilityContext } = require("../utils/colleagues");
 
-// MongoDB può annullare una transazione con un errore "transitorio" (TransientTransactionError,
-// es. WriteConflict con due movimenti simultanei sullo stesso prodotto): niente è stato scritto
-// e la documentazione MongoDB indica di ripetere l'operazione. Si ripete fino a 8 volte con
-// un'attesa casuale crescente, così le richieste in conflitto non si riscontrano allo stesso istante.
-const isTransient = (err) => typeof err?.hasErrorLabel === "function" && err.hasErrorLabel("TransientTransactionError");
-function retryOnTransient(handler, attempts = 8) {
-  return async (req, res, next) => {
-    for (let attempt = 1; ; attempt++) {
-      try {
-        return await handler(req, res, next);
-      } catch (err) {
-        if (!isTransient(err) || attempt >= attempts || res.headersSent) {
-          console.error(`[movements] ${req.method} non riuscito dopo ${attempt} tentativi`, err.message);
-          if (!res.headersSent) res.status(500).json({ message: "Operazione non riuscita, riprova." });
-          return;
-        }
-        await new Promise((r) => setTimeout(r, (25 + Math.random() * 75) * attempt));
-      }
-    }
-  };
-}
+const { isTransient, retryOnTransient: retry, inTransaction } = require("../utils/transactions");
+const { recordMovement, afterMovement, StockError } = require("../services/stock");
+const { audit } = require("../utils/audit");
+const retryOnTransient = (h) => retry(h, 8, "movements");
 const { protect, requireAdmin } = require("../middleware/auth");
 const validate    = require("../middleware/validate");
-const email       = require("../utils/email");
 
 const router = express.Router();
 router.use(protect);
@@ -124,105 +106,34 @@ router.post("/",
     body("reference").optional().trim(),
   ],
   validate,
-  retryOnTransient(async (req, res) => {
-    // Usa una sessione MongoDB per transazione atomica
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
+  async (req, res) => {
+    const { productId, type, quantity, reason, note, reference } = req.body;
+    if (!mongoose.isValidObjectId(productId)) return res.status(404).json({ message: "Prodotto non trovato." });
     try {
-      const { productId, type, quantity, reason, note, reference } = req.body;
-      const qty = parseInt(quantity);
-
-      // Blocca il prodotto durante l'operazione
-      const product = await Product.findById(productId).session(session);
-      if (!product || !product.isActive) {
-        await session.abortTransaction();
-        return res.status(404).json({ message: "Prodotto non trovato." });
-      }
-
-      // Per le uscite: verifica scorte sufficienti
-      if (type === "OUT" && product.quantity < qty) {
-        await session.abortTransaction();
-        return res.status(400).json({
-          message: `Scorte insufficienti. Disponibili: ${product.quantity} ${product.unit}.`,
-          available: product.quantity,
-        });
-      }
-
-      const qBefore = product.quantity;
-      const qAfter  = type === "IN" ? qBefore + qty : qBefore - qty;
-
-      // Snapshot della categoria per il record storico
-      const catName = product.category
-        ? (await (require("../models/Category")).findById(product.category).lean())?.name || ""
-        : "";
-
-      // Aggiorna quantità prodotto
-      await Product.findByIdAndUpdate(
-        productId,
-        { quantity: qAfter, updatedBy: req.user._id },
-        { session }
-      );
-
-      // Crea il record di movimento
-      const movement = await Movement.create([{
-        product:  productId,
-        productSnapshot: {
-          name:     product.name,
-          code:     product.code,
-          unit:     product.unit,
-          category: catName,
-        },
-        type,
-        quantity:       qty,
-        quantityBefore: qBefore,
-        quantityAfter:  qAfter,
-        reason:         reason || "",
-        note:           note || "",
-        reference:      reference || "",
-        performedBy:    req.user._id,
-        performedByName: req.user.name,
-      }], { session });
-
-      await session.commitTransaction();
-
-      // Notifica scorta bassa dopo uscita
-      const wasOk = qBefore > product.minQuantity;
-      const isNow = qAfter <= product.minQuantity;
-      if (type === "OUT" && wasOk && isNow) {
-        await Notification.create({
-          type:    "low_stock",
-          title:   `Scorta bassa — ${product.name}`,
-          message: `Dopo l'uscita di ${qty} pz, la quantità è ${qAfter} ${product.unit} (soglia: ${product.minQuantity}).`,
-          link:    `/products/${product._id}`,
-        });
-        const updatedProduct = { ...product.toObject(), quantity: qAfter };
-        email.sendLowStockAlert(updatedProduct).catch(() => {});
-      }
-
-      // Movimento importante → notifica
-      await Notification.create({
-        type:    "movement",
-        audience: "managers",
-        title:   `${type === "IN" ? "Entrata" : "Uscita"} — ${product.name}`,
-        message: `${qty} ${product.unit} ${type === "IN" ? "aggiunti" : "rimossi"} da ${req.user.name}.`,
-        link:    `/movements`,
-        meta:    { movementId: movement[0]._id },
+      const result = await inTransaction(async (session) => {
+        const product = await Product.findById(productId).session(session);
+        const r = await recordMovement({
+          product, type, quantity: parseInt(quantity, 10), actor: req.user,
+          extra: { reason, note, reference, source: "ui" },
+        }, session);
+        await audit(req, {
+          action: "movement.create", entityType: "movement", entityId: r.movement._id,
+          entityLabel: `${type} ${r.movement.quantity} ${product.unit} · ${product.code}`,
+          meta: { productId: String(product._id), quantityBefore: r.qBefore, quantityAfter: r.qAfter },
+        }, { session });
+        return r;
       });
 
-      // Popola per la risposta
-      await movement[0].populate("performedBy", "name username");
-
-      res.status(201).json({ movement: movement[0] });
+      await afterMovement(result, { actorName: req.user.name });
+      await result.movement.populate("performedBy", "name username");
+      res.status(201).json({ movement: result.movement });
     } catch (err) {
-      if (session.inTransaction()) await session.abortTransaction();
-      if (isTransient(err)) throw err;   // transazione annullata: retryOnTransient la ripete
+      if (err instanceof StockError)
+        return res.status(err.status).json({ message: err.message, ...err.extra });
       console.error("[movements/post]", err);
       res.status(500).json({ message: "Errore registrazione movimento." });
-    } finally {
-      session.endSession();
     }
-  })
+  }
 );
 
 // ── Correzione / annullamento movimenti (solo admin) ─────────────
@@ -286,6 +197,14 @@ router.put("/:id", requireAdmin,
         correctedAt:     new Date(),
       });
       await movement.save({ session });
+      await audit(req, {
+        action: "movement.correct", entityType: "movement", entityId: movement._id,
+        entityLabel: `${movement.productSnapshot?.code || product.code}`,
+        changes: [
+          { field: "movimento", from: before, to: `${typeLabel(type)} ${quantity} ${product.unit}` },
+          { field: "giacenza", from: product.quantity, to: newStock },
+        ],
+      }, { session });
       await session.commitTransaction();
 
       try {
@@ -333,6 +252,12 @@ router.delete("/:id", requireAdmin, retryOnTransient(async (req, res) => {
 
     await Product.updateOne({ _id: product._id }, { quantity: newStock, updatedBy: req.user._id }, { session });
     await Movement.deleteOne({ _id: movement._id }).session(session);
+    await audit(req, {
+      action: "movement.delete", entityType: "movement", entityId: movement._id,
+      entityLabel: `${movement.productSnapshot?.code || product.code}`,
+      changes: [{ field: "giacenza", from: product.quantity, to: newStock }],
+      meta: { type: movement.type, quantity: movement.quantity, createdAt: movement.createdAt, performedByName: movement.performedByName },
+    }, { session });
     await session.commitTransaction();
 
     // Il movimento sparisce dallo storico: la notifica resta come traccia dell'operazione.

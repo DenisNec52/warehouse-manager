@@ -19,6 +19,12 @@ const validate = require("../middleware/validate");
 const email    = require("../utils/email");
 const { parseCode } = require("../utils/codeParser");
 const { makeUploader, cloudinary, ENABLED: CLOUDINARY_ENABLED } = require("../config/cloudinary");
+const mongoose = require("mongoose");
+const { audit, diff } = require("../utils/audit");
+const { inTransaction } = require("../utils/transactions");
+const { recordMovement, afterMovement, StockError } = require("../services/stock");
+const { serializeProduct } = require("../services/serializers");
+const events = require("../services/events");
 
 const router = express.Router();
 const uploadCover = makeUploader();
@@ -120,54 +126,104 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+// ── Campi modificabili dal client ─────────────────────────────
+// Whitelist esplicita: tutto il resto del body (isActive, createdBy, updatedBy,
+// placementHistory, images, commessa/posizione...) viene ignorato. Senza questa
+// lista un utente qualsiasi poteva disattivare un prodotto (aggirando il DELETE
+// riservato agli admin) o riscriverne lo storico di posizionamento.
+const EDITABLE_FIELDS = [
+  "name", "description", "minQuantity", "unit", "category", "location",
+  "floor", "pallet", "arrivalDate", "supplier", "unitPrice", "notes",
+];
+// Campi confrontati nel registro modifiche.
+const AUDITED_FIELDS = ["code", "quantity", ...EDITABLE_FIELDS];
+
+const pick = (src, keys) => {
+  const out = {};
+  for (const k of keys) if (src[k] !== undefined) out[k] = src[k];
+  return out;
+};
+const isManager = (user) => user.role === "admin" || user.role === "supervisore";
+
+const productRules = [
+  body("name").optional().isString().trim(),
+  body("description").optional().isString().trim(),
+  body("unit").optional().isString().trim().isLength({ max: 20 }),
+  body("location").optional().isString().trim().isLength({ max: 100 }),
+  body("supplier").optional().isString().trim().isLength({ max: 200 }),
+  body("notes").optional().isString().trim().isLength({ max: 2000 }),
+  body("minQuantity").optional().isInt({ min: 0 }).toInt(),
+  body("unitPrice").optional().isFloat({ min: 0 }).toFloat(),
+  body("category").optional({ nullable: true, checkFalsy: true }).isMongoId().withMessage("Categoria non valida"),
+  body("floor").optional({ nullable: true, checkFalsy: true }).isInt({ min: 1, max: 5 }).toInt(),
+  body("pallet").optional({ nullable: true, checkFalsy: true }).isInt({ min: 1, max: 30 }).toInt(),
+  body("arrivalDate").optional({ nullable: true, checkFalsy: true }).isISO8601(),
+];
+
+// "" e null significano "nessun valore" per i riferimenti e i numeri opzionali.
+function normalizeEmpty(data) {
+  for (const k of ["category", "floor", "pallet", "arrivalDate"]) {
+    if (k in data && (data[k] === "" || data[k] === null)) data[k] = null;
+  }
+  return data;
+}
+
 // ── POST /api/products — crea prodotto ────────────────────────
+// La quantità iniziale si imposta qui (resta tracciata nel registro modifiche);
+// da quel momento cambia solo tramite movimenti.
 router.post("/",
   [
-    body("code").trim().notEmpty().withMessage("Codice obbligatorio"),
-    body("quantity").isInt({ min: 0 }).withMessage("Quantità deve essere >= 0"),
-    body("minQuantity").optional().isInt({ min: 0 }),
-    body("unitPrice").optional().isFloat({ min: 0 }),
+    body("code").isString().trim().notEmpty().withMessage("Codice obbligatorio"),
+    body("quantity").isInt({ min: 0 }).withMessage("Quantità deve essere >= 0").toInt(),
+    ...productRules,
   ],
   validate,
   async (req, res) => {
     try {
-      // Converti categoria vuota in null per evitare errore ObjectId
-      if (!req.body.category) req.body.category = null;
+      const data = normalizeEmpty(pick(req.body, EDITABLE_FIELDS));
+      const code = req.body.code.toUpperCase();
 
       // Duplicato solo se stesso codice sulla STESSA pedana/categoria —
       // lo stesso codice può legittimamente comparire su pedane diverse
       const existing = await Product.findOne({
-        code: req.body.code.toUpperCase(),
-        pallet:   req.body.pallet   ?? null,
-        category: req.body.category ?? null,
+        code,
+        pallet:   data.pallet   ?? null,
+        category: data.category ?? null,
       });
       if (existing)
-        return res.status(409).json({ message: `Codice ${req.body.code.toUpperCase()} già presente su questa pedana.` });
+        return res.status(409).json({ message: `Codice ${code} già presente su questa pedana.` });
 
       const { commessa, posizione } = parseCode(req.body.code);
 
       // Prima voce dello storico posizionamento, se pedana/piano/arrivo indicati
-      const placementHistory = (req.body.floor || req.body.pallet || req.body.arrivalDate)
+      const placementHistory = (data.floor || data.pallet || data.arrivalDate)
         ? [{
-            arrivalDate:  req.body.arrivalDate || null,
-            floor:        req.body.floor  || null,
-            pallet:       req.body.pallet || null,
-            note:         req.body.notes || "",
+            arrivalDate:  data.arrivalDate || null,
+            floor:        data.floor  || null,
+            pallet:       data.pallet || null,
+            note:         data.notes || "",
             placedBy:     req.user._id,
             placedByName: req.user.name,
           }]
         : [];
 
       const product = await Product.create({
-        ...req.body,
-        name:      req.body.name || req.body.code.toUpperCase(),
-        code:      req.body.code.toUpperCase(),
+        ...data,
+        name:      data.name || code,
+        code,
+        quantity:  req.body.quantity,
         commessa, posizione,
         placementHistory,
         createdBy: req.user._id,
       });
 
       await product.populate("category", "name color icon");
+
+      await audit(req, {
+        action: "product.create", entityType: "product", entityId: product._id, entityLabel: product.code,
+        changes: diff({}, product.toObject(), AUDITED_FIELDS),
+      });
+      events.emit("product.created", serializeProduct(product));
 
       // Controlla se già sotto soglia al momento della creazione
       if (product.quantity <= product.minQuantity) {
@@ -182,91 +238,136 @@ router.post("/",
       }
 
       res.status(201).json({ product });
-} catch (err) {
+    } catch (err) {
       console.error("[products/post]", err.message, JSON.stringify(err.errors || {}));
       if (err.code === 11000)
         return res.status(409).json({ message: "Codice prodotto già esistente." });
-      res.status(500).json({ message: err.message || "Errore creazione prodotto." });
+      if (err.name === "ValidationError")
+        return res.status(400).json({ message: "Dati prodotto non validi." });
+      res.status(500).json({ message: "Errore creazione prodotto." });
     }
   }
 );
 
 // ── PUT /api/products/:id — aggiorna prodotto ─────────────────
+// La quantità NON si modifica più direttamente: se cambia, admin e supervisori
+// generano una "rettifica inventario" (movimento IN/OUT tracciato, nella stessa
+// transazione); un operatore riceve 403 e deve registrare un movimento.
 router.put("/:id",
   [
-    body("name").optional().trim().notEmpty(),
-    body("quantity").optional().isInt({ min: 0 }),
-    body("minQuantity").optional().isInt({ min: 0 }),
-    body("unitPrice").optional().isFloat({ min: 0 }),
-    body("floor").optional({ nullable: true }).isInt({ min: 1, max: 5 }),
-    body("pallet").optional({ nullable: true }).isInt({ min: 1, max: 30 }),
-    body("arrivalDate").optional({ nullable: true }).isISO8601(),
+    body("code").optional().isString().trim().notEmpty(),
+    body("name").optional().isString().trim().notEmpty(),
+    body("quantity").optional().isInt({ min: 0 }).toInt(),
+    body("placementNote").optional().isString().trim().isLength({ max: 500 }),
+    body("adjustmentReason").optional().isString().trim().isLength({ max: 200 }),
+    ...productRules,
   ],
   validate,
   async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id))
+      return res.status(404).json({ message: "Prodotto non trovato." });
+
     try {
-      const prev = await Product.findById(req.params.id);
-      if (!prev || !prev.isActive)
-        return res.status(404).json({ message: "Prodotto non trovato." });
+      const data = normalizeEmpty(pick(req.body, EDITABLE_FIELDS));
+      const code = typeof req.body.code === "string" ? req.body.code : undefined;
+      const wantedQty = req.body.quantity;
 
-      const { code, ...data } = req.body;
+      const result = await inTransaction(async (session) => {
+        const prev = await Product.findById(req.params.id).session(session);
+        if (!prev || !prev.isActive) return { abort: true, status: 404, message: "Prodotto non trovato." };
+        const before = prev.toObject();
 
-      // Se cambia il codice, duplicato solo se stesso codice sulla STESSA
-      // pedana/categoria di destinazione — mai bloccare per un codice
-      // uguale ma su un'altra pedana (è un articolo fisicamente diverso).
-      if (code) {
-        const effPallet   = data.pallet   !== undefined ? data.pallet   : prev.pallet;
-        const effCategory = data.category !== undefined ? data.category : prev.category;
-        const existing = await Product.findOne({
-          code: code.toUpperCase(), pallet: effPallet ?? null, category: effCategory ?? null,
-          _id: { $ne: req.params.id },
-        });
-        if (existing)
-          return res.status(409).json({ message: `Codice ${code.toUpperCase()} già presente su questa pedana.` });
-        data.code = code.toUpperCase();
-        Object.assign(data, parseCode(code));
+        const qtyChanged = wantedQty !== undefined && wantedQty !== prev.quantity;
+        if (qtyChanged && !isManager(req.user))
+          return { abort: true, status: 403, message: "La quantità si modifica registrando un movimento di entrata o uscita." };
+
+        // Se cambia il codice, duplicato solo se stesso codice sulla STESSA
+        // pedana/categoria di destinazione — mai bloccare per un codice
+        // uguale ma su un'altra pedana (è un articolo fisicamente diverso).
+        if (code) {
+          const effPallet   = data.pallet   !== undefined ? data.pallet   : prev.pallet;
+          const effCategory = data.category !== undefined ? data.category : prev.category;
+          const existing = await Product.findOne({
+            code: code.toUpperCase(), pallet: effPallet ?? null, category: effCategory ?? null,
+            _id: { $ne: prev._id },
+          }).session(session);
+          if (existing)
+            return { abort: true, status: 409, message: `Codice ${code.toUpperCase()} già presente su questa pedana.` };
+          data.code = code.toUpperCase();
+          Object.assign(data, parseCode(code));
+        }
+
+        // Traccia una nuova voce di posizionamento se piano/pedana/data
+        // arrivo cambiano — non sovrascrive mai lo storico precedente
+        const floorChanged   = data.floor       !== undefined && data.floor       != prev.floor;
+        const palletChanged  = data.pallet      !== undefined && data.pallet      != prev.pallet;
+        const arrivalChanged = data.arrivalDate !== undefined && String(data.arrivalDate ? new Date(data.arrivalDate) : "") !== String(prev.arrivalDate || "");
+        const update = { $set: { ...data, updatedBy: req.user._id } };
+        if (floorChanged || palletChanged || arrivalChanged) {
+          update.$push = {
+            placementHistory: {
+              arrivalDate:  data.arrivalDate !== undefined ? data.arrivalDate : prev.arrivalDate,
+              floor:        data.floor       !== undefined ? data.floor      : prev.floor,
+              pallet:       data.pallet      !== undefined ? data.pallet     : prev.pallet,
+              note:         req.body.placementNote || "",
+              placedBy:     req.user._id,
+              placedByName: req.user.name,
+            },
+          };
+        }
+        await Product.updateOne({ _id: prev._id }, update, { session, runValidators: true });
+
+        let adjustment = null;
+        if (qtyChanged) {
+          const fresh = await Product.findById(prev._id).session(session);
+          const delta = wantedQty - fresh.quantity;
+          adjustment = await recordMovement({
+            product: fresh,
+            type: delta > 0 ? "IN" : "OUT",
+            quantity: Math.abs(delta),
+            actor: req.user,
+            extra: { reason: req.body.adjustmentReason || "Rettifica inventario", source: "adjustment" },
+          }, session);
+        }
+
+        const product = await Product.findById(prev._id).session(session);
+        await audit(req, {
+          action: "product.update", entityType: "product", entityId: product._id, entityLabel: product.code,
+          changes: diff(before, product.toObject(), AUDITED_FIELDS),
+          meta: adjustment ? { adjustmentMovementId: String(adjustment.movement._id) } : undefined,
+        }, { session });
+        return { prev: before, product, adjustment };
+      });
+
+      if (result.abort) return res.status(result.status).json({ message: result.message });
+
+      const { prev, adjustment } = result;
+      const product = await Product.findById(result.product._id).populate("category", "name color icon");
+
+      if (adjustment) {
+        await afterMovement(adjustment, { actorName: req.user.name });
+      } else {
+        // Verifica soglia dopo aggiornamento (es. soglia minima alzata)
+        const wasOk = prev.quantity > prev.minQuantity;
+        const isNow = product.quantity <= product.minQuantity;
+        if (wasOk && isNow) {
+          await Notification.create({
+            type:    "low_stock",
+            title:   `Scorta bassa — ${product.name}`,
+            message: `Il prodotto ${product.code} è sceso a ${product.quantity} ${product.unit}.`,
+            link:    `/products/${product._id}`,
+          });
+          email.sendLowStockAlert(product).catch(() => {});
+        }
       }
-
-      // Traccia una nuova voce di posizionamento se piano/pedana/data
-      // arrivo cambiano — non sovrascrive mai lo storico precedente
-      const floorChanged   = data.floor       !== undefined && data.floor       != prev.floor;
-      const palletChanged  = data.pallet      !== undefined && data.pallet      != prev.pallet;
-      const arrivalChanged = data.arrivalDate !== undefined && String(data.arrivalDate) !== String(prev.arrivalDate || "");
-      const update = { $set: { ...data, updatedBy: req.user._id } };
-      if (floorChanged || palletChanged || arrivalChanged) {
-        update.$push = {
-          placementHistory: {
-            arrivalDate:  data.arrivalDate !== undefined ? data.arrivalDate : prev.arrivalDate,
-            floor:        data.floor       !== undefined ? data.floor      : prev.floor,
-            pallet:       data.pallet      !== undefined ? data.pallet     : prev.pallet,
-            note:         data.placementNote || "",
-            placedBy:     req.user._id,
-            placedByName: req.user.name,
-          },
-        };
-      }
-      delete update.$set.placementNote;
-
-      const product = await Product.findByIdAndUpdate(
-        req.params.id, update,
-        { new: true, runValidators: true }
-      ).populate("category", "name color icon");
-
-      // Verifica soglia dopo aggiornamento
-      const wasOk  = prev.quantity > prev.minQuantity;
-      const isNow  = product.quantity <= product.minQuantity;
-      if (wasOk && isNow) {
-        await Notification.create({
-          type:    "low_stock",
-          title:   `Scorta bassa — ${product.name}`,
-          message: `Il prodotto ${product.code} è sceso a ${product.quantity} ${product.unit}.`,
-          link:    `/products/${product._id}`,
-        });
-        email.sendLowStockAlert(product).catch(() => {});
-      }
+      events.emit("product.updated", serializeProduct(product));
 
       res.json({ product });
     } catch (err) {
+      if (err instanceof StockError) return res.status(err.status).json({ message: err.message, ...err.extra });
+      if (err.name === "ValidationError" || err.name === "CastError")
+        return res.status(400).json({ message: "Dati prodotto non validi." });
+      console.error("[products/put]", err.message);
       res.status(500).json({ message: "Errore aggiornamento prodotto." });
     }
   }
@@ -325,6 +426,7 @@ router.delete("/:id/cover", async (req, res) => {
 
 // ── DELETE /api/products/:id — soft delete ────────────────────
 router.delete("/:id", requireAdmin, async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ message: "Prodotto non trovato." });
   try {
     const product = await Product.findByIdAndUpdate(
       req.params.id,
@@ -332,6 +434,12 @@ router.delete("/:id", requireAdmin, async (req, res) => {
       { new: true }
     );
     if (!product) return res.status(404).json({ message: "Prodotto non trovato." });
+    await audit(req, {
+      action: "product.delete", entityType: "product", entityId: product._id, entityLabel: product.code,
+      changes: [{ field: "isActive", from: true, to: false }],
+      meta: { quantityAtDelete: product.quantity },
+    });
+    events.emit("product.updated", serializeProduct(product));
     res.json({ message: "Prodotto eliminato.", id: req.params.id });
   } catch (err) {
     res.status(500).json({ message: "Errore eliminazione." });
