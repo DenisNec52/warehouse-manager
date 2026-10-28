@@ -42,10 +42,14 @@ npm run dev       # avvia su http://localhost:5173
 
 ### 3. Accedi
 
+Solo in sviluppo (`npm run seed` con `NODE_ENV` diverso da `production`):
+
 | Username | Password | Ruolo |
 |---|---|---|
-| admin | Admin123! | Amministratore |
-| operatore | Op123! | Magazziniere |
+| admin | valore di `SEED_ADMIN_PASSWORD`, altrimenti `AdminDemo2026!` | Amministratore |
+| operatore | `OperatoreDemo1!` | Magazziniere |
+
+In produzione il seed crea solo l'admin e **richiede** `SEED_ADMIN_PASSWORD` (minimo 10 caratteri).
 
 ---
 
