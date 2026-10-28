@@ -3,7 +3,7 @@
  *
  * Import del foglio di lavorazione saldatura (.xlsx) come righe Andon:
  * verifica che TUTTE le colonne vengano catturate (commessa, posizione, cliente,
- * quantità, tipologia, DN, Ø, dimensione, temp standard) usando il file reale
+ * quantità, tipologia, DN, Ø, dimensione, temp standard) usando il file d'esempio (anonimizzato)
  * fornito dall'utente, in anteprima e in salvataggio.
  */
 const fs = require("fs");
@@ -21,7 +21,7 @@ beforeAll(async () => { await db.connect(); });
 afterEach(async () => { await db.clearCollections(); });
 afterAll(async () => { await db.disconnect(); });
 
-const FILE = path.join(__dirname, "..", "samples", "standard-times", "TEST FOGLIO SALD.xlsx");
+const FILE = path.join(__dirname, "..", "samples", "standard-times", "foglio-saldatura-esempio.xlsx");
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 async function adminAgent() {
@@ -32,7 +32,7 @@ async function adminAgent() {
 }
 
 describe("Import foglio saldatura → righe Andon", () => {
-  test("il parser cattura TUTTE le colonne del file reale", async () => {
+  test("il parser cattura TUTTE le colonne del file d'esempio", async () => {
     const buf = fs.readFileSync(FILE);
     const r = await parseAndonXlsx(buf);
     expect(r.rows.length).toBe(10);
@@ -40,7 +40,7 @@ describe("Import foglio saldatura → righe Andon", () => {
     expect(r.sheetDate).toBe("2026-10-20");            // data nella cella unita C2:L2
     const first = r.rows[0];
     expect(first).toMatchObject({
-      commessa: "2630", posizione: "1", cliente: "ENON BV",
+      commessa: "2630", posizione: "1", cliente: "CLIENTE ALFA BV",
       quantita: 1, tipologia: "T.F.", dn: "95", diametro: "10 inc.",
       dimensione: "PICCOLA", tempoStdMinuti: 60, firmaInizio: "", firmaFine: "",
     });
@@ -50,16 +50,16 @@ describe("Import foglio saldatura → righe Andon", () => {
     const r = await parseAndonXlsx(fs.readFileSync(FILE));
     const compact = r.rows.map(x => [x.commessa, x.posizione, x.cliente, x.quantita, x.tipologia, x.dn, x.diametro, x.dimensione, x.tempoStdMinuti]);
     expect(compact).toEqual([
-      ["2630", "1",  "ENON BV",                     1, "T.F.",     "95",  "10 inc.", "PICCOLA", 60],
+      ["2630", "1",  "CLIENTE ALFA BV",                     1, "T.F.",     "95",  "10 inc.", "PICCOLA", 60],
       ["2400", "1",  "ABC",                         1, "T.I.",     "",    "10",      "PICCOLA", 30],
-      ["2961", "9",  "NUOVO PIGNONE SRL",           1, "T.C.",     "193", "16",      "MEDIA",   60],
-      ["2975", "1",  "HEATING GROUP INTERNATIONAL", 1, "T.F.",     "75",  "12.5",    "PICCOLA", 60],
+      ["2961", "9",  "CLIENTE BETA SRL",           1, "T.C.",     "193", "16",      "MEDIA",   60],
+      ["2975", "1",  "CLIENTE GAMMA INTERNATIONAL", 1, "T.F.",     "75",  "12.5",    "PICCOLA", 60],
       ["2347", "1",  "ROSSI",                       4, "Speciale", "",    "10",      "PICCOLA", 60],
-      ["2810", "1",  "PEGORARO GAS TECHNOLOGIES",   3, "T.C.",     "145", "16",      "PICCOLA", 45],
+      ["2810", "1",  "CLIENTE DELTA GAS",   3, "T.C.",     "145", "16",      "PICCOLA", 45],
       ["3009", "1",  "ROSSI",                       4, "T.I.",     "",    "10",      "PICCOLA", 30],
-      ["3000", "1",  "NAVALIMPIANTI SPA",           1, "T.I.",     "",    "10",      "PICCOLA", 30],
-      ["2446", "3",  "NUOVO PIGNONE SRL",           1, "T.C.",     "145", "16",      "PICCOLA", 45],
-      ["1703", "17", "NUOVO PIGNONE SRL",           1, "T.C.",     "195", "16",      "MEDIA",   60],
+      ["3000", "1",  "CLIENTE EPSILON SPA",           1, "T.I.",     "",    "10",      "PICCOLA", 30],
+      ["2446", "3",  "CLIENTE BETA SRL",           1, "T.C.",     "145", "16",      "PICCOLA", 45],
+      ["1703", "17", "CLIENTE BETA SRL",           1, "T.C.",     "195", "16",      "MEDIA",   60],
     ]);
     expect(r.rows.map(x => x.row)).toEqual([5, 7, 9, 11, 13, 15, 17, 19, 21, 23]);
   });
@@ -73,16 +73,16 @@ describe("Import foglio saldatura → righe Andon", () => {
     ws.getRow(3).values = [null, null, "Firma\n(inizio lavorazione)", "Comm.", "Pos.", "Cliente", "Q.tà (n°)", "Tipologia", "DN",
       "Ø Elem.  (mm)", "Dimensione", "Temp standard\n(a pezzo)", "Firma\n(fine lavorazione)"];
     const data = [
-      [2630, 1, "ENON BV", 1, "T.F.", 95, "10 inc.", "PICCOLA", 0.041666666666666664],
+      [2630, 1, "CLIENTE ALFA BV", 1, "T.F.", 95, "10 inc.", "PICCOLA", 0.041666666666666664],
       [2400, 1, "ABC", 1, "T.I.", "/", 10, "PICCOLA", 0.020833333333333332],
-      [2961, 9, "NUOVO PIGNONE SRL", 1, "T.C.", 193, 16, "MEDIA", 0.041666666666666664],
-      [2975, 1, "HEATING GROUP INTERNATIONAL", 1, "T.F.", 75, 12.5, "PICCOLA", 0.041666666666666664],
+      [2961, 9, "CLIENTE BETA SRL", 1, "T.C.", 193, 16, "MEDIA", 0.041666666666666664],
+      [2975, 1, "CLIENTE GAMMA INTERNATIONAL", 1, "T.F.", 75, 12.5, "PICCOLA", 0.041666666666666664],
       [2347, 1, "ROSSI", 4, "Speciale", "/", 10, "PICCOLA", 0.041666666666666664],
-      [2810, 1, "PEGORARO GAS TECHNOLOGIES", 3, "T.C.", 145, 16, "PICCOLA", 0.03125],
+      [2810, 1, "CLIENTE DELTA GAS", 3, "T.C.", 145, 16, "PICCOLA", 0.03125],
       [3009, 1, "ROSSI", 4, "T.I.", "/", 10, "PICCOLA", 0.020833333333333332],
-      [3000, 1, "NAVALIMPIANTI SPA", 1, "T.I.", "/", 10, "PICCOLA", 0.020833333333333332],
-      [2446, 3, "NUOVO PIGNONE SRL", 1, "T.C.", 145, 16, "PICCOLA", 0.03125],
-      [1703, 17, "NUOVO PIGNONE SRL", 1, "T.C.", 195, 16, "MEDIA", 0.041666666666666664],
+      [3000, 1, "CLIENTE EPSILON SPA", 1, "T.I.", "/", 10, "PICCOLA", 0.020833333333333332],
+      [2446, 3, "CLIENTE BETA SRL", 1, "T.C.", 145, 16, "PICCOLA", 0.03125],
+      [1703, 17, "CLIENTE BETA SRL", 1, "T.C.", 195, 16, "MEDIA", 0.041666666666666664],
     ];
     data.forEach((d, i) => { ws.getRow(5 + i * 2).values = [null, null, null, ...d]; });   // Comm. in colonna C, una riga vuota tra i capi
 
@@ -119,7 +119,7 @@ describe("Import foglio saldatura → righe Andon", () => {
     expect(r.body.summary.created).toBe(10);
 
     const e = await ProductionEntry.findOne({ commessa: "2630" }).lean();
-    expect(e.cliente).toBe("ENON BV");
+    expect(e.cliente).toBe("CLIENTE ALFA BV");
     expect(e.dn).toBe("95");
     expect(e.diametro).toBe("10 inc.");
     expect(e.custodiaLabel).toBe("T.F. PICCOLA");

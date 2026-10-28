@@ -55,7 +55,7 @@ Convenzioni generali:
 | POST | `/:id/cover` | — | `multipart/form-data`, campo file `image`. Carica/sostituisce la foto copertina su Cloudinary (rimuove la precedente). `503` se Cloudinary non è configurato (`ENABLE_CLOUDINARY=false`). |
 | DELETE | `/:id/cover` | — | Rimuove la copertina (e il file su Cloudinary). |
 | DELETE | `/:id` | solo admin | Soft delete (`isActive: false`). |
-| POST | `/import-legacy` | solo admin | Importa `utils/warehouse_inventory.json` (idempotente). Body opzionale `{ reset: true }` per un reimport pulito. |
+| POST | `/import-legacy` | solo admin | Importa `utils/warehouse_inventory.json` (idempotente). Il file contiene dati reali e NON è nel repository: va copiato sul server a parte. Body opzionale `{ reset: true }` per un reimport pulito. |
 
 ## Movimenti — `/api/movements` (richiede autenticazione)
 
