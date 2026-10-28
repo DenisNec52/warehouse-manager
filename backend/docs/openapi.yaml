@@ -1,0 +1,448 @@
+openapi: 3.1.0
+info:
+  title: Warehouse Pro — API di integrazione
+  version: "1.0.0"
+  description: |
+    API per collegare Warehouse Pro a sistemi esterni (gestionale offerte, ERP, BI).
+    Guida completa con esempi: `backend/docs/INTEGRAZIONE.md`.
+
+    - Autenticazione: `Authorization: Bearer whk_...` (chiavi create da un admin in Integrazioni).
+    - Errori: sempre `{ "error": { "code", "message", "details"? } }`.
+    - Tutte le POST richiedono `Idempotency-Key` (8-128 caratteri, es. un UUID per operazione).
+    - Liste di sincronizzazione: ordinate per `updatedAt`, paginate con `cursor` opaco.
+servers:
+  - url: https://warehouse-manager-gwuc.onrender.com/api/v1
+    description: Produzione (chiamare il backend Render direttamente, non tramite Vercel)
+  - url: http://localhost:5000/api/v1
+    description: Sviluppo locale
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Chiave
+  - name: Prodotti
+  - name: Movimenti
+  - name: Prenotazioni
+  - name: Commesse
+
+paths:
+  /me:
+    get:
+      tags: [Chiave]
+      summary: Informazioni sulla chiave in uso (test di connessione)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      name: { type: string }
+                      prefix: { type: string }
+                      scopes: { type: array, items: { $ref: "#/components/schemas/Scope" } }
+                      expiresAt: { type: [string, "null"], format: date-time }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /products:
+    get:
+      tags: [Prodotti]
+      summary: Anagrafica e giacenza per pedana (feed di sincronizzazione)
+      description: Scope `products:read`. Per la sincronizzazione incrementale passa `updatedSince` (o il `nextCursor` dell'ultima chiamata) e `includeInactive=true` per ricevere anche gli articoli eliminati.
+      parameters:
+        - { $ref: "#/components/parameters/limit" }
+        - { $ref: "#/components/parameters/cursor" }
+        - { $ref: "#/components/parameters/updatedSince" }
+        - { name: code, in: query, schema: { type: string } }
+        - { name: commessa, in: query, schema: { type: string } }
+        - { name: includeInactive, in: query, schema: { type: boolean, default: false } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: "#/components/schemas/Product" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /products/{id}:
+    get:
+      tags: [Prodotti]
+      summary: Singolo prodotto (pedana)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Product" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /stock:
+    get:
+      tags: [Prodotti]
+      summary: Disponibilità per codice (somma di tutte le pedane, meno le prenotazioni)
+      description: Scope `products:read`. È il dato da usare per sapere se un'offerta è evadibile.
+      parameters:
+        - name: codes
+          in: query
+          required: true
+          description: Da 1 a 100 codici separati da virgola
+          schema: { type: string, example: "1534-1,1684-2" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Stock" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /movements:
+    get:
+      tags: [Movimenti]
+      summary: Feed dei movimenti (anche quelli corretti da un admin, tramite updatedAt)
+      description: Scope `movements:read`. Un movimento annullato da un admin sparisce dal feed; la giacenza corretta resta leggibile da /products (il suo updatedAt cambia).
+      parameters:
+        - { $ref: "#/components/parameters/limit" }
+        - { $ref: "#/components/parameters/cursor" }
+        - { $ref: "#/components/parameters/updatedSince" }
+        - { name: externalRef, in: query, schema: { type: string } }
+        - { name: code, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: "#/components/schemas/Movement" } }
+    post:
+      tags: [Movimenti]
+      summary: Registra un'entrata o un'uscita
+      description: Scope `movements:write`. Indica `productId` oppure `code`; se il codice è su più pedane la risposta è 409 `ambiguous_code` con i candidati.
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, quantity]
+              properties:
+                productId: { type: string }
+                code: { type: string }
+                type: { type: string, enum: [IN, OUT] }
+                quantity: { type: integer, minimum: 1 }
+                reason: { type: string, maxLength: 200 }
+                reference: { type: string, maxLength: 120 }
+                externalRef: { type: string, maxLength: 120, description: "Riferimento nel tuo sistema (DDT, ordine...)" }
+                note: { type: string, maxLength: 1000 }
+      responses:
+        "201":
+          description: Creato
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Movement" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/IdempotencyReused" }
+
+  /reservations:
+    get:
+      tags: [Prenotazioni]
+      summary: Elenco prenotazioni (feed di sincronizzazione)
+      parameters:
+        - { $ref: "#/components/parameters/limit" }
+        - { $ref: "#/components/parameters/cursor" }
+        - { $ref: "#/components/parameters/updatedSince" }
+        - { name: externalRef, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [active, released, consumed, expired] } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: "#/components/schemas/Reservation" } }
+    post:
+      tags: [Prenotazioni]
+      summary: Prenota materiale per un'offerta (tutto o niente)
+      description: |
+        Scope `reservations:write`. Le righe con lo stesso codice vengono sommate.
+        Se anche una sola riga non è disponibile risponde 409 `insufficient_stock` con `details`
+        e non prenota niente. Senza `expiresAt` la prenotazione scade dopo 90 giorni (massimo consentito).
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [externalRef, items]
+              properties:
+                externalRef: { type: string, maxLength: 120, example: "OFF-2026-0012" }
+                note: { type: string, maxLength: 500 }
+                expiresAt: { type: string, format: date-time }
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 200
+                  items:
+                    type: object
+                    required: [code, quantity]
+                    properties:
+                      code: { type: string }
+                      quantity: { type: integer, minimum: 1 }
+      responses:
+        "201":
+          description: Creata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Reservation" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /reservations/{id}:
+    get:
+      tags: [Prenotazioni]
+      summary: Singola prenotazione
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Reservation" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /reservations/{id}/release:
+    post:
+      tags: [Prenotazioni]
+      summary: Rilascia la prenotazione (offerta persa o annullata)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: Rilasciata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Reservation" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /reservations/{id}/consume:
+    post:
+      tags: [Prenotazioni]
+      summary: Consuma la prenotazione (offerta accettata) → uscite di magazzino FIFO
+      description: Per ogni codice scarica le pedane in ordine di arrivo, un movimento per pedana, tutti con `externalRef` dell'offerta.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: Consumata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/Reservation"
+                      - type: object
+                        properties:
+                          movements: { type: array, items: { $ref: "#/components/schemas/Movement" } }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /commesse/{commessa}:
+    get:
+      tags: [Commesse]
+      summary: Articoli a magazzino e stato di produzione di una commessa
+      description: Scope `production:read`.
+      parameters:
+        - { name: commessa, in: path, required: true, schema: { type: string, example: "2630" } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      commessa: { type: string }
+                      products: { type: array, items: { $ref: "#/components/schemas/Product" } }
+                      production:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            posizione: { type: string }
+                            cliente: { type: string }
+                            quantita: { type: integer }
+                            tipologia: { type: string }
+                            dimensione: { type: string }
+                            reparto: { type: string }
+                            data: { type: string, format: date-time }
+                            status: { type: string, enum: [da_iniziare, in_lavorazione, sospesa, finita] }
+                            iniziataAt: { type: [string, "null"], format: date-time }
+                            finitaAt: { type: [string, "null"], format: date-time }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Chiave API: whk_<prefisso>_<segreto>. In alternativa header X-API-Key."
+
+  parameters:
+    limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+    cursor: { name: cursor, in: query, description: "nextCursor della pagina precedente", schema: { type: string } }
+    updatedSince: { name: updatedSince, in: query, description: "Solo elementi modificati da questa data (ISO 8601)", schema: { type: string, format: date-time } }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Valore unico per operazione. Ripetere la richiesta con la stessa chiave restituisce la stessa risposta (header Idempotent-Replayed true). Valida 48 ore.
+      schema: { type: string, minLength: 8, maxLength: 128 }
+
+  responses:
+    BadRequest: { description: "Richiesta non valida", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    Unauthorized: { description: "Chiave mancante, errata, revocata o scaduta", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    Forbidden: { description: "Scope mancante o IP non autorizzato", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    NotFound: { description: "Non trovato", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    Conflict: { description: "Conflitto: insufficient_stock, ambiguous_code, invalid_state, idempotency_in_progress", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    IdempotencyReused: { description: "Idempotency-Key già usata con un body diverso", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+
+  schemas:
+    Scope:
+      type: string
+      enum: [products:read, movements:read, movements:write, reservations:read, reservations:write, production:read]
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, example: insufficient_stock }
+            message: { type: string }
+            details: {}
+    Page:
+      type: object
+      properties:
+        nextCursor: { type: [string, "null"] }
+        hasMore: { type: boolean }
+    Product:
+      type: object
+      properties:
+        id: { type: string }
+        code: { type: string }
+        commessa: { type: [string, "null"] }
+        posizione: { type: [integer, "null"] }
+        name: { type: string }
+        description: { type: string }
+        unit: { type: string }
+        quantity: { type: integer, description: Giacenza fisica di QUESTA pedana }
+        minQuantity: { type: integer }
+        isLowStock: { type: boolean }
+        unitPrice: { type: number }
+        supplier: { type: string }
+        category: { type: [object, "null"], properties: { id: { type: string }, name: { type: string } } }
+        location: { type: object, properties: { floor: { type: [integer, "null"] }, pallet: { type: [integer, "null"] }, shelf: { type: string } } }
+        arrivalDate: { type: [string, "null"], format: date-time }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Stock:
+      type: object
+      properties:
+        code: { type: string }
+        unit: { type: [string, "null"] }
+        quantity: { type: integer, description: Giacenza fisica totale (tutte le pedane attive) }
+        reserved: { type: integer, description: Impegnato da prenotazioni attive non scadute }
+        available: { type: integer, description: "max(0, quantity - reserved)" }
+        overcommitted: { type: boolean, description: Il fisico è sceso sotto il prenotato }
+        products:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              quantity: { type: integer }
+              floor: { type: [integer, "null"] }
+              pallet: { type: [integer, "null"] }
+              arrivalDate: { type: [string, "null"], format: date-time }
+    Movement:
+      type: object
+      properties:
+        id: { type: string }
+        productId: { type: string }
+        code: { type: string }
+        name: { type: string }
+        unit: { type: string }
+        type: { type: string, enum: [IN, OUT] }
+        quantity: { type: integer }
+        quantityBefore: { type: integer }
+        quantityAfter: { type: integer }
+        reason: { type: string }
+        reference: { type: string }
+        externalRef: { type: string }
+        source: { type: string, enum: [ui, api, adjustment] }
+        reservationId: { type: [string, "null"] }
+        corrected: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Reservation:
+      type: object
+      properties:
+        id: { type: string }
+        externalRef: { type: string }
+        status: { type: string, enum: [active, released, consumed, expired] }
+        note: { type: string }
+        expiresAt: { type: [string, "null"], format: date-time }
+        items: { type: array, items: { type: object, properties: { code: { type: string }, quantity: { type: integer } } } }
+        consumedMovements: { type: array, items: { type: string } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }

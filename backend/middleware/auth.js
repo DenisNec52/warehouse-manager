@@ -17,10 +17,15 @@ exports.protect = async (req, res, next) => {
     if (!token) return res.status(401).json({ message: "Non autenticato. Effettua il login." });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
-    const user    = await User.findById(decoded.id).select("-password");
+    const user    = await User.findById(decoded.id).select("-password +tokenVersion");
 
     if (!user || !user.isActive)
       return res.status(401).json({ message: "Utente non trovato o disabilitato." });
+
+    // Sessione revocata (password cambiata, "esci ovunque", account disattivato e
+    // riattivato...): il token è firmato bene ma appartiene a una versione vecchia.
+    if ((decoded.tv ?? 0) !== (user.tokenVersion ?? 0))
+      return res.status(401).json({ message: "Sessione non più valida. Effettua di nuovo il login." });
 
     // Aggiorna lastSeen ogni 5 minuti (evita write eccessive)
     const fiveMin = 5 * 60 * 1000;
@@ -36,6 +41,10 @@ exports.protect = async (req, res, next) => {
     return res.status(401).json({ message: "Token non valido." });
   }
 };
+
+/** Invalida tutte le sessioni aperte di un utente (vedi User.tokenVersion). */
+exports.revokeSessions = (userId, session) =>
+  User.updateOne({ _id: userId }, { $inc: { tokenVersion: 1 } }, session ? { session } : undefined);
 
 /**
  * requireAdmin — da usare dopo protect.

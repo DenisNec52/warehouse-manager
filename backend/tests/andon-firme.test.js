@@ -23,7 +23,7 @@ beforeAll(async () => { await db.connect(); });
 afterEach(async () => { await db.clearCollections(); });
 afterAll(async () => { await db.disconnect(); });
 
-const FILE = path.join(__dirname, "..", "samples", "standard-times", "TEST FOGLIO SALD.xlsx");
+const FILE = path.join(__dirname, "..", "samples", "standard-times", "foglio-saldatura-esempio.xlsx");
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const binary = (res, cb) => { const chunks = []; res.on("data", (c) => chunks.push(c)); res.on("end", () => cb(null, Buffer.concat(chunks))); };
 
@@ -59,10 +59,10 @@ describe("Firme automatiche Andon", () => {
     const std = await StandardTime.create({ department: dep._id, tipologia: "T.C.", dimensione: "MEDIA", label: "T.C. MEDIA", minuti: 60 });
     const r = await op.post("/api/production/entries").send({
       department: String(dep._id), data: "2026-10-20", commessa: "2961", posizione: "9", quantita: 1,
-      standardTime: String(std._id), tempoImpiegatoMinuti: 60, cliente: "NUOVO PIGNONE SRL", dn: "193", diametro: "16",
+      standardTime: String(std._id), tempoImpiegatoMinuti: 60, cliente: "CLIENTE BETA SRL", dn: "193", diametro: "16",
     });
     expect(r.status).toBe(201);
-    expect(r.body.entry).toMatchObject({ cliente: "NUOVO PIGNONE SRL", dn: "193", diametro: "16", tipologia: "T.C.", dimensione: "MEDIA" });
+    expect(r.body.entry).toMatchObject({ cliente: "CLIENTE BETA SRL", dn: "193", diametro: "16", tipologia: "T.C.", dimensione: "MEDIA" });
   });
 
   test("riga importata dal foglio: si può modificare (es. tempo impiegato) senza perdere i dati del foglio", async () => {
@@ -78,7 +78,7 @@ describe("Firme automatiche Andon", () => {
     expect(r.status).toBe(200);
     expect(r.body.entry).toMatchObject({
       tempoImpiegatoMinuti: 150, tempoStdMinuti: 45, tipologia: "T.C.", dimensione: "PICCOLA",
-      custodiaLabel: "T.C. PICCOLA", cliente: "PEGORARO GAS TECHNOLOGIES", dn: "145", diametro: "16",
+      custodiaLabel: "T.C. PICCOLA", cliente: "CLIENTE DELTA GAS", dn: "145", diametro: "16",
     });
     // Una riga a catalogo invece deve avere la tipologia
     const std = await StandardTime.create({ department: dep._id, tipologia: "X", dimensione: "", label: "X", minuti: 10 });
@@ -152,7 +152,7 @@ describe("Firme automatiche Andon", () => {
     ws.eachRow((r, n) => { if (n > 1) rows.push(r); });
     expect(rows).toHaveLength(10);
     const r2961 = rows.find(r => String(r.getCell(col("Comm.")).value) === "2961");
-    expect(r2961.getCell(col("Cliente")).value).toBe("NUOVO PIGNONE SRL");
+    expect(r2961.getCell(col("Cliente")).value).toBe("CLIENTE BETA SRL");
     expect(r2961.getCell(col("DN")).value).toBe("193");
     expect(r2961.getCell(col("Ø Elem. (mm)")).value).toBe("16");
     expect(r2961.getCell(col("Grandezza")).value).toBe("MEDIA");

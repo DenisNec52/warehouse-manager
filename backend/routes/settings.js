@@ -15,6 +15,8 @@ const { protect, requireSuperAdmin } = require("../middleware/auth");
 const validate    = require("../middleware/validate");
 const router      = express.Router();
 
+const { audit, diff } = require("../utils/audit");
+
 router.use(protect);
 
 // Moduli di menu su cui il super-admin può regolare la visibilità per ruolo.
@@ -63,9 +65,14 @@ router.put("/", requireSuperAdmin,
     }
 
     $set.updatedBy = req.user._id;
+    const before = publicView(await AppSettings.getSettings());
     const s = await AppSettings.findOneAndUpdate(
       { key: "app" }, { $set }, { new: true, upsert: true, setDefaultsOnInsert: true },
     );
+    await audit(req, {
+      action: "settings.update", entityType: "settings", entityId: s._id, entityLabel: "Impostazioni app",
+      changes: diff(before, publicView(s), ["appName", "workPhases", "moduleVisibility"]),
+    });
     res.json({ settings: publicView(s) });
   },
 );

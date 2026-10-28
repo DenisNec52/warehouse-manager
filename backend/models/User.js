@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema({
   password: {
     type:     String,
     required: [true, "Password obbligatoria"],
-    minlength: [6, "Password minimo 6 caratteri"],
+    minlength: [10, "Password minimo 10 caratteri"],   // vedi utils/passwordPolicy.js
     select:   false,  // mai restituita nelle query di default
   },
   name: {
@@ -66,6 +66,10 @@ const userSchema = new mongoose.Schema({
     default: "operatore",
   },
   isActive:   { type: Boolean, default: true },
+  // Versione delle sessioni: è scritta nel JWT al login e confrontata a ogni
+  // richiesta (middleware/auth.js). Incrementarla invalida subito TUTTE le sessioni
+  // aperte dell'utente (cambio/reset password, disattivazione, "esci ovunque").
+  tokenVersion: { type: Number, default: 0, select: false },
   theme:      { type: themeSchema, default: () => ({}) },
   lastLogin:  Date,
   lastSeen:   Date,

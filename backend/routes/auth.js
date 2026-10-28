@@ -16,9 +16,12 @@ const express  = require("express");
 const crypto   = require("crypto");
 const { body } = require("express-validator");
 const jwt      = require("jsonwebtoken");
+const bcrypt   = require("bcryptjs");
 const User     = require("../models/User");
 const Notification = require("../models/Notification");
-const { protect }  = require("../middleware/auth");
+const { protect, revokeSessions } = require("../middleware/auth");
+const { passwordRule } = require("../utils/passwordPolicy");
+const { audit } = require("../utils/audit");
 const { loginLimiter, loginIpLimiter, badgeLoginLimiter, forgotPasswordLimiter } = require("../middleware/rateLimiter");
 const validate = require("../middleware/validate");
 const email    = require("../utils/email");
@@ -49,13 +52,24 @@ const METHOD_LABELS = { password: "credenziali", qr: "QR code", nfc: "tag NFC" }
 // Usata sia dal login classico sia dal login automatico via badge,
 // così ogni accesso (qualunque sia il metodo) viene registrato allo
 // stesso modo: lastLogin/IP, geolocalizzazione best-effort, notifica.
-async function startSession(req, res, user, method = "password") {
+/** Firma il JWT con la versione di sessione ATTUALE dell'utente e lo mette nel cookie. */
+async function issueToken(res, userId) {
+  const fresh = await User.findById(userId).select("+tokenVersion role").lean();
   const token = jwt.sign(
-    { id: user._id, role: user.role },
+    { id: userId, role: fresh.role, tv: fresh.tokenVersion || 0 },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+    { algorithm: "HS256", expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
   );
   res.cookie("wh_token", token, cookieOpts);
+}
+
+// Hash bcrypt fittizio (costo 12, come quelli veri): se lo username non esiste
+// si esegue comunque un confronto, così il tempo di risposta non rivela quali
+// username sono registrati.
+const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString("hex"), 12);
+
+async function startSession(req, res, user, method = "password") {
+  await issueToken(res, user._id);
 
   const ip = clientIp(req);
   await User.findByIdAndUpdate(user._id, { lastLogin: new Date(), lastLoginIP: ip });
@@ -90,8 +104,10 @@ router.post("/login",
       const { username, password } = req.body;
 
       const user = await User.findOne({ username: username.toLowerCase() }).select("+password");
-      if (!user || !user.isActive)
+      if (!user || !user.isActive) {
+        await bcrypt.compare(String(password), DUMMY_HASH);
         return res.status(401).json({ message: "Credenziali non valide." });
+      }
 
       const ok = await user.comparePassword(password);
       if (!ok) return res.status(401).json({ message: "Credenziali non valide." });
@@ -192,6 +208,16 @@ router.post("/logout", protect, (req, res) => {
   res.json({ message: "Logout effettuato." });
 });
 
+// ── POST /api/auth/logout-all — esci da TUTTI i dispositivi ───
+// Incrementa la versione delle sessioni: ogni token emesso finora smette di
+// funzionare alla richiesta successiva (telefono perso, PC condiviso...).
+router.post("/logout-all", protect, async (req, res) => {
+  await revokeSessions(req.user._id);
+  await audit(req, { action: "auth.logout_all", entityType: "user", entityId: req.user._id, entityLabel: req.user.username });
+  res.clearCookie("wh_token", { httpOnly: true, secure: cookieOpts.secure, sameSite: cookieOpts.sameSite });
+  res.json({ message: "Disconnesso da tutti i dispositivi." });
+});
+
 // ── GET /api/auth/me ──────────────────────────────────────────
 router.get("/me", protect, async (req, res) => {
   // Conta notifiche non lette
@@ -255,7 +281,7 @@ router.post("/reset-password",
   [
     body("userId").isMongoId().withMessage("Richiesta non valida"),
     body("token").isLength({ min: 20, max: 128 }).withMessage("Richiesta non valida"),
-    body("newPassword").isLength({ min: 6 }).withMessage("Nuova password minimo 6 caratteri"),
+    passwordRule("newPassword"),
   ],
   validate,
   async (req, res) => {
@@ -276,6 +302,10 @@ router.post("/reset-password",
       user.resetPasswordTokenHash = null;
       user.resetPasswordExpires   = null;
       await user.save();
+      // Chi aveva rubato la sessione (motivo frequente di un reset) viene buttato fuori.
+      await revokeSessions(user._id);
+      req.user = user;
+      await audit(req, { action: "user.password_reset_self", entityType: "user", entityId: user._id, entityLabel: user.username });
 
       // Login automatico dopo il reset, stessa UX del login da badge.
       await startSession(req, res, user, "password");
@@ -306,7 +336,7 @@ router.put("/theme", protect, async (req, res) => {
 router.put("/password", protect,
   [
     body("currentPassword").notEmpty().withMessage("Password attuale obbligatoria"),
-    body("newPassword").isLength({ min: 6 }).withMessage("Nuova password minimo 6 caratteri"),
+    passwordRule("newPassword"),
   ],
   validate,
   async (req, res) => {
@@ -317,7 +347,12 @@ router.put("/password", protect,
 
       user.password = req.body.newPassword;
       await user.save();
-      res.json({ message: "Password aggiornata con successo." });
+      // Tutte le altre sessioni vengono chiuse; questo dispositivo resta collegato
+      // con un token nuovo.
+      await revokeSessions(user._id);
+      await issueToken(res, user._id);
+      await audit(req, { action: "user.password_change", entityType: "user", entityId: user._id, entityLabel: user.username });
+      res.json({ message: "Password aggiornata con successo. Le altre sessioni sono state chiuse." });
     } catch (err) {
       res.status(500).json({ message: "Errore aggiornamento password." });
     }

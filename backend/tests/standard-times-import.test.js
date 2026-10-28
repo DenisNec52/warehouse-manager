@@ -108,7 +108,7 @@ describe("Import tempi standard da Excel", () => {
   test("foglio saldatura reale: riconosce 'Temp standard (a pezzo)' e salva una custodia per tipologia×dimensione", async () => {
     const a = await adminAgent();
     const dep = await Department.create({ name: "Saldatura", isActive: true });
-    const buf = fs.readFileSync(path.join(__dirname, "..", "samples", "standard-times", "TEST FOGLIO SALD.xlsx"));
+    const buf = fs.readFileSync(path.join(__dirname, "..", "samples", "standard-times", "foglio-saldatura-esempio.xlsx"));
     const r = await a.post("/api/production/standard-times/import")
       .field("department", String(dep._id))
       .field("commit", "true")

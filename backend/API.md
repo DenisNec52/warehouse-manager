@@ -51,11 +51,11 @@ Convenzioni generali:
 | GET | `/low-stock` | — | Fino a 50 prodotti con quantità ≤ soglia minima, ordinati per quantità crescente. |
 | GET | `/:id` | — | Dettaglio prodotto. `404` se non esiste o è stato eliminato (soft delete). |
 | POST | `/` | — | Crea prodotto. Duplicato (`409`) solo se stesso codice sulla stessa pedana/categoria. Genera notifica `low_stock` (+ email) se già sotto soglia alla creazione. |
-| PUT | `/:id` | — | Aggiorna prodotto. Traccia una nuova voce in `placementHistory` se cambiano piano/pedana/data arrivo. Genera notifica `low_stock` (+ email) solo alla transizione sopra→sotto soglia. |
+| PUT | `/:id` | quantità: solo admin/supervisore | Aggiorna prodotto (solo i campi di anagrafica/posizione: il resto del body è ignorato). Se `quantity` cambia, un operatore riceve `403`; admin e supervisori generano una **rettifica inventario** (movimento `source: "adjustment"`, motivo da `adjustmentReason`). Traccia una nuova voce in `placementHistory` se cambiano piano/pedana/data arrivo (`placementNote` opzionale). Genera notifica `low_stock` (+ email) solo alla transizione sopra→sotto soglia. |
 | POST | `/:id/cover` | — | `multipart/form-data`, campo file `image`. Carica/sostituisce la foto copertina su Cloudinary (rimuove la precedente). `503` se Cloudinary non è configurato (`ENABLE_CLOUDINARY=false`). |
 | DELETE | `/:id/cover` | — | Rimuove la copertina (e il file su Cloudinary). |
 | DELETE | `/:id` | solo admin | Soft delete (`isActive: false`). |
-| POST | `/import-legacy` | solo admin | Importa `utils/warehouse_inventory.json` (idempotente). Body opzionale `{ reset: true }` per un reimport pulito. |
+| POST | `/import-legacy` | solo admin | Importa `utils/warehouse_inventory.json` (idempotente). Il file contiene dati reali e NON è nel repository: va copiato sul server a parte. Body opzionale `{ reset: true }` per un reimport pulito. |
 
 ## Movimenti — `/api/movements` (richiede autenticazione)
 
@@ -134,3 +134,31 @@ Valori configurabili via `.env` (`RATE_LIMIT_*`, vedi `.env.example`).
 Ogni utente ha un "badge" opzionale: un segreto casuale di 32 byte, di cui il server conserva solo l'hash HMAC-SHA256 (chiave: `JWT_SECRET`), mai il valore in chiaro. L'URL del badge (`GET /api/auth/badge/:userId/:secret`) è pensato per essere aperto direttamente dal browser dopo una scansione QR o un tap NFC: se il segreto è valido, corrisponde a un utente attivo con badge abilitato, il server crea la sessione (stesso `startSession` del login classico, incluso il tracciamento IP/geolocalizzazione e la notifica di accesso) e reindirizza al frontend — non restituisce mai una risposta JSON, per evitare che chi scansiona il codice veda una pagina "rotta" in caso di errore.
 
 Per la programmazione fisica dei tag NFC: è sufficiente scrivere l'URL restituito in `nfcUrl` come singolo record NDEF di tipo URI, con una qualsiasi app per smartphone che supporti la scrittura NFC (es. "NFC Tools"); non serve hardware o software specifico oltre a un telefono con NFC e un tag NFC riscrivibile (NTAG213/215/216 sono più che sufficienti per un URL di questa lunghezza).
+
+---
+
+## Registro modifiche — `/api/audit` (solo admin)
+
+| Metodo | Path | Note |
+|---|---|---|
+| GET | `/` | Filtri: `entityType` (product, movement, user, settings, apiKey, webhook, reservation), `entityId`, `action` (es. `product.update` o solo `product`), `actorId`, `from`, `to`, `page`, `limit` (max 200). |
+
+## Integrazioni — `/api/integrations` (solo admin)
+
+Gestione di chiavi API e webhook dalla UI: `GET/POST /keys`, `DELETE /keys/:id` (revoca),
+`GET/POST /webhooks`, `PUT/DELETE /webhooks/:id`, `POST /webhooks/:id/test`,
+`GET /webhooks/:id/deliveries`, `GET /meta` (scope ed eventi disponibili).
+
+## API di integrazione — `/api/v1` (chiave API, non cookie)
+
+Per sistemi esterni (gestionale offerte, ERP). Documentata a parte:
+[`docs/INTEGRAZIONE.md`](docs/INTEGRAZIONE.md) e [`docs/openapi.yaml`](docs/openapi.yaml).
+
+## Auth — novità
+
+| Metodo | Path | Note |
+|---|---|---|
+| POST | `/api/auth/logout-all` | Chiude tutte le sessioni dell'utente su tutti i dispositivi. |
+
+Cambio password, reset (anche da admin) e disattivazione chiudono le sessioni aperte.
+Le nuove password devono avere almeno 10 caratteri e non contenere lo username.

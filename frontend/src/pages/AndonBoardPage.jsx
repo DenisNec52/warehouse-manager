@@ -162,7 +162,7 @@ function EntryModal({ entry, department, standardTimes, operators, onClose }) {
 
           <div>
             <label className="form-label">Cliente</label>
-            <input className="form-input" value={form.cliente} onChange={set("cliente")} placeholder="es. NUOVO PIGNONE SRL"/>
+            <input className="form-input" value={form.cliente} onChange={set("cliente")} placeholder="es. Cliente Srl"/>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

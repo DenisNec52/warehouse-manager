@@ -7,7 +7,7 @@
 import { Link } from "react-router-dom";
 import { m as motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { Package, ArrowLeftRight, Tag, Users, ClipboardList, Timer, Clock, Settings, Bell, Factory } from "lucide-react";
+import { Package, ArrowLeftRight, Tag, Users, ClipboardList, Timer, Clock, Settings, Bell, Factory, Plug, ScrollText } from "lucide-react";
 import { dashboardAPI, categoriesAPI, productionAPI } from "@/lib/api";
 import { useDepartmentList } from "@/hooks/useDepartments";
 import { toIsoDay } from "@/lib/duration";
@@ -22,6 +22,8 @@ const AREAS = [
   { to: "/production",                 icon: Timer,          title: "Andon Board",    desc: "Modifica ed elimina qualsiasi riga di produzione", countKey: "production" },
   { to: "/production/standard-times",  icon: Clock,          title: "Tempi standard", desc: "Tempi di saldatura per tipologia di custodia", countKey: "standardTimes" },
   { to: "/notifications",              icon: Bell,           title: "Notifiche",      desc: "Storico eventi, incluse correzioni e annullamenti", countKey: null },
+  { to: "/admin/audit",                icon: ScrollText,     title: "Registro modifiche", desc: "Chi ha cambiato cosa e quando: prodotti, movimenti, utenti, integrazioni", countKey: null },
+  { to: "/admin/integrations",         icon: Plug,           title: "Integrazioni",   desc: "Chiavi API e webhook per collegare il gestionale offerte o un ERP", countKey: null },
   { to: "/settings",                   icon: Settings,       title: "Impostazioni",   desc: "Il tuo profilo, email, tema e badge", countKey: null },
 ];
 

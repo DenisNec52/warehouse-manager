@@ -1,10 +1,38 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Eye, EyeOff, Nfc, Mail, Pencil, Check, X } from "lucide-react";
+import { Eye, EyeOff, Nfc, Mail, Pencil, Check, X, LogOut } from "lucide-react";
 import { authAPI } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
 import BadgeManager from "@/components/ui/BadgeManager";
 import toast from "react-hot-toast";
+import { passwordProblem, MIN_PASSWORD_LENGTH } from "@/lib/passwordPolicy";
+
+/** Chiude la sessione su tutti i dispositivi (telefono perso, PC condiviso...). */
+function LogoutEverywhere() {
+  const { setUser } = useAuthStore();
+  const mut = useMutation({
+    mutationFn: () => authAPI.logoutAll(),
+    onSuccess: () => {
+      toast.success("Disconnesso da tutti i dispositivi");
+      setUser(null);
+      window.location.href = "/login";
+    },
+    onError: e => toast.error(e.response?.data?.message || "Errore"),
+  });
+  return (
+    <div className="card p-5">
+      <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Sessioni</h3>
+      <p className="text-sm text-gray-500 mb-4">
+        Esce da tutti i dispositivi in cui hai effettuato l'accesso, compreso questo.
+        Usalo se hai perso il telefono o hai lasciato l'accesso aperto su un PC condiviso.
+      </p>
+      <button type="button" className="btn btn-md btn-secondary w-full" disabled={mut.isPending}
+        onClick={() => { if (confirm("Uscire da tutti i dispositivi?")) mut.mutate(); }}>
+        <LogOut size={14}/> {mut.isPending ? "Uscita in corso..." : "Esci da tutti i dispositivi"}
+      </button>
+    </div>
+  );
+}
 
 function EmailField({ user, setUser }) {
   const [editing, setEditing] = useState(false);
@@ -56,11 +84,13 @@ export default function SettingsPage() {
   const [show, setShow] = useState(false);
   const mut = useMutation({
     mutationFn: d => authAPI.password(d),
-    onSuccess: () => { toast.success("Password aggiornata"); setForm({currentPassword:"",newPassword:"",confirm:""}); },
+    onSuccess: () => { toast.success("Password aggiornata. Gli altri dispositivi sono stati disconnessi."); setForm({currentPassword:"",newPassword:"",confirm:""}); },
     onError: e => toast.error(e.response?.data?.message || "Errore"),
   });
   const handlePw = e => {
     e.preventDefault();
+    const problem = passwordProblem(form.newPassword, user?.username);
+    if (problem) { toast.error(problem); return; }
     if (form.newPassword !== form.confirm) { toast.error("Le password non coincidono"); return; }
     mut.mutate({ currentPassword: form.currentPassword, newPassword: form.newPassword });
   };
@@ -105,7 +135,8 @@ export default function SettingsPage() {
         </div>
 
         <div className="card p-5">
-          <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Cambia password</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Cambia password</h3>
+          <p className="text-xs text-gray-400 mb-4">Almeno {MIN_PASSWORD_LENGTH} caratteri. Gli altri dispositivi verranno disconnessi.</p>
           <form onSubmit={handlePw} className="space-y-3">
             {[["currentPassword","Password attuale"],["newPassword","Nuova password"],["confirm","Conferma password"]].map(([k,l]) => (
               <div key={k}>
@@ -119,6 +150,8 @@ export default function SettingsPage() {
             <button type="submit" className="btn btn-md btn-primary w-full" disabled={mut.isPending}>{mut.isPending?"Aggiornamento...":"Aggiorna password"}</button>
           </form>
         </div>
+
+        <LogoutEverywhere/>
       </div>
     </div>
   );

@@ -2,3 +2,8 @@ node_modules/
 .env
 *.log
 .DS_Store
+
+# Dati reali del magazzino: mai nel repo (vengono caricati sul server a parte)
+utils/warehouse_inventory.json
+samples/**/*.png
+samples/**/*.jpg

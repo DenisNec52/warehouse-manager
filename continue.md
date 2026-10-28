@@ -57,5 +57,5 @@ Aggiornato: 2026-10-24. Branch: `fix/import-tempi-standard-intestazioni` → **P
 - **Mai eseguire script di `backend/utils/`** (seed/import) né avviare il backend con il `.env`:
   scrivono sul database vero. Test e prove solo su `mongodb-memory-server`
   (`npm test` in `backend/`, che usa `--runInBand`).
-- File di prova: `backend/samples/standard-times/TEST FOGLIO SALD.xlsx` (10 capi, 20/10/2026).
+- File di prova: `backend/samples/standard-times/foglio-saldatura-esempio.xlsx` (10 capi, 20/10/2026, clienti anonimizzati).
 - Test principali: `backend/tests/andon-import.test.js`, `backend/tests/standard-times-import.test.js`.

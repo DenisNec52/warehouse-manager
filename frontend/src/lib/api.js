@@ -37,6 +37,7 @@ export const authAPI = {
   login:    (d)    => api.post("/auth/login",    d),
   badgeLogin: (d)  => api.post("/auth/badge-login", d),   // { userId, secret, src } dal QR/NFC
   logout:   ()     => api.post("/auth/logout"),
+  logoutAll: ()    => api.post("/auth/logout-all"),   // chiude le sessioni su tutti i dispositivi
   me:       ()     => api.get("/auth/me"),
   theme:    (d)    => api.put("/auth/theme",     d),
   password: (d)    => api.put("/auth/password",  d),
@@ -187,6 +188,25 @@ export const departmentsAPI = {
 export const settingsAPI = {
   get:    ()  => api.get("/settings"),
   update: (d) => api.put("/settings", d),
+};
+
+// ── Registro modifiche (solo admin) ───────────────────────────
+export const auditAPI = {
+  list: (p) => api.get("/audit", { params: p }),
+};
+
+// ── Integrazioni: chiavi API e webhook (solo admin) ──────────
+export const integrationsAPI = {
+  meta:          ()     => api.get("/integrations/meta"),
+  keys:          ()     => api.get("/integrations/keys"),
+  createKey:     (d)    => api.post("/integrations/keys", d),
+  revokeKey:     (id)   => api.delete(`/integrations/keys/${id}`),
+  webhooks:      ()     => api.get("/integrations/webhooks"),
+  createWebhook: (d)    => api.post("/integrations/webhooks", d),
+  updateWebhook: (id,d) => api.put(`/integrations/webhooks/${id}`, d),
+  deleteWebhook: (id)   => api.delete(`/integrations/webhooks/${id}`),
+  testWebhook:   (id)   => api.post(`/integrations/webhooks/${id}/test`, null, { timeout: 30_000 }),
+  deliveries:    (id)   => api.get(`/integrations/webhooks/${id}/deliveries`),
 };
 
 export default api;

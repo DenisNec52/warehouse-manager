@@ -34,8 +34,22 @@ const PRODUCTS = [
   { name:"Nastro isolante nero",code:"ELE-NAS-ISO",  quantity:38,  minQuantity:15,  unit:"pz",  location:"B3-S1", categoryIdx:5, supplier:"Elettro SRL",     unitPrice:1.80 },
 ];
 
+const { passwordProblem } = require("./passwordPolicy");
+
+// In produzione nessuna password di default: l'admin iniziale usa SOLO
+// SEED_ADMIN_PASSWORD (che deve rispettare la policy) e non si creano utenti demo.
+const IS_PROD = process.env.NODE_ENV === "production";
+const DEMO_ADMIN_PASSWORD = "AdminDemo2026!";
+const DEMO_OP_PASSWORD    = "OperatoreDemo1!";
+
 async function seed() {
   console.log("🌱  Avvio seed...");
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || (IS_PROD ? null : DEMO_ADMIN_PASSWORD);
+  const problem = passwordProblem(adminPassword);
+  if (problem) {
+    console.error(`❌  SEED_ADMIN_PASSWORD non valida: ${problem}${IS_PROD ? " (obbligatoria in produzione)" : ""}`);
+    process.exit(1);
+  }
   await mongoose.connect(process.env.MONGODB_URI);
   console.log("✅  MongoDB connesso");
 
@@ -44,7 +58,7 @@ async function seed() {
   if (!admin) {
     admin = await User.create({
       username: process.env.SEED_ADMIN_USERNAME || "admin",
-      password: process.env.SEED_ADMIN_PASSWORD || "Admin123!",
+      password: adminPassword,
       name:     process.env.SEED_ADMIN_NAME     || "Amministratore",
       role:     "admin",
     });
@@ -54,10 +68,10 @@ async function seed() {
   }
 
   // ── Operatore di esempio ──────────────────────────────────
-  const opExists = await User.findOne({ username: "operatore" });
+  const opExists = IS_PROD || await User.findOne({ username: "operatore" });
   if (!opExists) {
-    await User.create({ username:"operatore", password:"Op123!", name:"Mario Rossi", role:"operatore" });
-    console.log("👤  Operatore di esempio creato: operatore / Op123!");
+    await User.create({ username:"operatore", password: DEMO_OP_PASSWORD, name:"Mario Rossi", role:"operatore" });
+    console.log("👤  Operatore di esempio creato: operatore (password demo, solo sviluppo)");
   }
 
   // ── Categorie ─────────────────────────────────────────────
@@ -99,8 +113,9 @@ async function seed() {
 
   console.log("\n✅  Seed completato!");
   console.log("─".repeat(50));
-  console.log(`  admin     → ${process.env.SEED_ADMIN_PASSWORD || "Admin123!"}`);
-  console.log("  operatore → Op123!");
+  // Le password non vengono stampate: finirebbero nei log del server/CI.
+  console.log(`  admin     → ${process.env.SEED_ADMIN_USERNAME || "admin"} (password: SEED_ADMIN_PASSWORD${process.env.SEED_ADMIN_PASSWORD ? "" : ", default demo in utils/seed.js"})`);
+  if (!IS_PROD) console.log("  operatore → operatore (password demo in utils/seed.js)");
   console.log("─".repeat(50));
 
   await mongoose.disconnect();

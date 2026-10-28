@@ -29,3 +29,8 @@ nella pagina Tempi Standard.
 
 Quando hai messo i file, dimmelo: leggo il formato e costruisco l'import (Excel + foto)
 con anteprima prima del salvataggio.
+
+## Regola sui dati
+Il repository è pubblico: i file in questa cartella devono essere **anonimizzati**
+(nessun nome cliente reale, nessun autore nei metadati del file). Il file
+`foglio-saldatura-esempio.xlsx` ha la stessa struttura del foglio reale ma clienti fittizi.

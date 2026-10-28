@@ -15,7 +15,12 @@ const mongoose = require("mongoose");
 const { body } = require("express-validator");
 const User       = require("../models/User");
 const Department = require("../models/Department");
-const { protect, requireSupervisor, requireAdmin } = require("../middleware/auth");
+const { protect, requireSupervisor, requireAdmin, revokeSessions } = require("../middleware/auth");
+const { passwordRule } = require("../utils/passwordPolicy");
+const { audit, diff } = require("../utils/audit");
+
+// Campi utente confrontati nel registro modifiche (mai password/hash: vedi utils/audit.js).
+const USER_AUDIT_FIELDS = ["username", "name", "email", "role", "isActive", "departments", "visibleDepartments", "shift", "supervisor"];
 const validate = require("../middleware/validate");
 const badge    = require("../utils/badge");
 const { hideSuperAdmin, supervisorCanManage } = require("../utils/colleagues");
@@ -151,7 +156,7 @@ router.get("/:id", async (req, res) => {
 router.post("/",
   [
     body("username").trim().isLength({ min: 3 }).withMessage("Username min 3 caratteri"),
-    body("password").isLength({ min: 6 }).withMessage("Password min 6 caratteri"),
+    passwordRule("password"),
     body("name").trim().notEmpty().withMessage("Nome obbligatorio"),
     body("role").isIn(ROLES).withMessage("Ruolo non valido"),
     body("email").optional({ checkFalsy: true }).isEmail().withMessage("Email non valida").normalizeEmail(),
@@ -169,6 +174,10 @@ router.post("/",
     try {
       const { username, password, name, role, email } = req.body;
       const user = await User.create({ username, password, name, role, email, ...dept.fields, ...staff.fields });
+      await audit(req, {
+        action: "user.create", entityType: "user", entityId: user._id, entityLabel: user.username,
+        changes: diff({}, user.toObject(), USER_AUDIT_FIELDS),
+      });
       res.status(201).json({ user: user.toPublic() });
     } catch (err) {
       if (err.code === 11000) {
@@ -222,6 +231,10 @@ router.put("/:id",
       else if (email !== undefined) $set.email = email;
 
       const user = await User.findByIdAndUpdate(target._id, update, { new: true, runValidators: true });
+      await audit(req, {
+        action: "user.update", entityType: "user", entityId: user._id, entityLabel: user.username,
+        changes: diff(target.toObject(), user.toObject(), USER_AUDIT_FIELDS),
+      });
       res.json({ user: user.toPublic() });
     } catch (err) {
       if (err.code === 11000) return res.status(409).json({ message: "Email già in uso su un altro account." });
@@ -235,6 +248,10 @@ router.delete("/:id", requireAdmin, loadManageableTarget, async (req, res) => {
   if (String(req.target._id) === String(req.user._id))
     return res.status(400).json({ message: "Non puoi eliminare te stesso." });
   await req.target.deleteOne();
+  await audit(req, {
+    action: "user.delete", entityType: "user", entityId: req.target._id, entityLabel: req.target.username,
+    meta: { name: req.target.name, role: req.target.role },
+  });
   res.json({ message: "Utente eliminato definitivamente." });
 });
 
@@ -246,6 +263,13 @@ router.put("/:id/status", loadManageableTarget,
     if (String(req.target._id) === String(req.user._id))
       return res.status(400).json({ message: "Non puoi disattivare te stesso." });
     const user = await User.findByIdAndUpdate(req.target._id, { isActive: req.body.isActive }, { new: true });
+    // Disattivando, le sessioni aperte vengono revocate: alla riattivazione
+    // serve un nuovo login (un vecchio token non torna valido da solo).
+    if (!req.body.isActive) await revokeSessions(user._id);
+    await audit(req, {
+      action: req.body.isActive ? "user.activate" : "user.deactivate", entityType: "user", entityId: user._id, entityLabel: user.username,
+      changes: [{ field: "isActive", from: req.target.isActive, to: user.isActive }],
+    });
     res.json({ user: user.toPublic() });
   }
 );
@@ -253,13 +277,15 @@ router.put("/:id/status", loadManageableTarget,
 // Reset password utente (il super-admin cambia la propria da /api/auth/password)
 router.put("/:id/password",
   loadManageableTarget,
-  [body("newPassword").isLength({ min: 8 }).withMessage("Password min 8 caratteri")],
+  [passwordRule("newPassword")],
   validate,
   async (req, res) => {
     const user = await User.findById(req.target._id);
     user.password = req.body.newPassword;
     await user.save();
-    res.json({ message: "Password aggiornata." });
+    await revokeSessions(user._id);
+    await audit(req, { action: "user.password_reset", entityType: "user", entityId: user._id, entityLabel: user.username });
+    res.json({ message: "Password aggiornata. Le sessioni aperte dell'utente sono state chiuse." });
   }
 );
 
@@ -277,6 +303,7 @@ router.post("/:id/badge/regenerate", loadManageableTarget, async (req, res) => {
       { new: true },
     );
 
+    await audit(req, { action: "user.badge_regenerate", entityType: "user", entityId: target._id, entityLabel: target.username });
     const qrUrl  = badge.badgeUrl(target._id, secret, "qr");
     const nfcUrl = badge.badgeUrl(target._id, secret, "nfc");
     res.json({
@@ -304,6 +331,7 @@ router.put("/:id/badge/status", loadManageableTarget,
 // Revoca il badge (nessun QR o tag NFC di quell'utente funzionerà più)
 router.delete("/:id/badge", loadManageableTarget, async (req, res) => {
   await User.findByIdAndUpdate(req.target._id, { badgeSecretHash: null, badgeIssuedAt: null });
+  await audit(req, { action: "user.badge_revoke", entityType: "user", entityId: req.target._id, entityLabel: req.target.username });
   res.json({ message: "Badge revocato." });
 });
 

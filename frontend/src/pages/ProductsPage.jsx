@@ -18,6 +18,10 @@ const VisionScanner = lazy(() => import("@/components/ui/VisionScanner"));
 export function ProductModal({ product, categories, onClose }) {
   const qc = useQueryClient();
   const isEdit = !!product;
+  const { user } = useAuthStore();
+  // Dopo la creazione la giacenza cambia solo con i movimenti: gli operatori la vedono
+  // in sola lettura, admin e supervisori possono correggerla con una rettifica tracciata.
+  const canAdjust = ["admin", "supervisore"].includes(user?.role);
   const [form, setForm] = useState({
     code:        product?.code        || "",
     quantity:    product?.quantity    ?? 0,
@@ -27,6 +31,7 @@ export function ProductModal({ product, categories, onClose }) {
     pallet:      product?.pallet ?? "",
     arrivalDate: product?.arrivalDate ? product.arrivalDate.slice(0, 10) : "",
     placementNote: "",
+    adjustmentReason: "",
   });
   const [errors, setErrors] = useState({});
 
@@ -49,12 +54,17 @@ export function ProductModal({ product, categories, onClose }) {
   });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const qtyLocked  = isEdit && !canAdjust;
+  const qtyChanged = isEdit && Number(form.quantity) !== product.quantity;
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setErrors({});
+    const { adjustmentReason, quantity, ...rest } = form;
     mutation.mutate({
-      ...form,
+      ...rest,
+      ...(qtyLocked ? {} : { quantity }),
+      ...(qtyChanged && adjustmentReason.trim() ? { adjustmentReason: adjustmentReason.trim() } : {}),
       category:    form.category || null,
       floor:       form.floor  === "" ? null : Number(form.floor),
       pallet:      form.pallet === "" ? null : Number(form.pallet),
@@ -99,8 +109,27 @@ export function ProductModal({ product, categories, onClose }) {
             <div>
               <label className="form-label">Quantità <span className="text-red-400">*</span></label>
               <input className="form-input" type="number" inputMode="numeric" pattern="[0-9]*" min={0}
+                disabled={qtyLocked}
                 value={form.quantity} onChange={e => set("quantity", Number(e.target.value.replace(/[^0-9]/g,"")))}/>
+              {qtyLocked && (
+                <p className="text-xs text-gray-400 mt-1">Per cambiare la quantità registra un'entrata o un'uscita.</p>
+              )}
+              {isEdit && canAdjust && !qtyChanged && (
+                <p className="text-xs text-gray-400 mt-1">Se la cambi viene registrata una rettifica inventario nei movimenti.</p>
+              )}
             </div>
+            {qtyChanged && canAdjust && (
+              <div>
+                <label className="form-label">
+                  Motivo rettifica <span className="text-gray-400 font-normal text-xs">
+                    ({form.quantity > product.quantity ? "+" : "−"}{Math.abs(form.quantity - product.quantity)} {product.unit})
+                  </span>
+                </label>
+                <input className="form-input" value={form.adjustmentReason} maxLength={200}
+                  onChange={e => set("adjustmentReason", e.target.value)}
+                  placeholder="es. Inventario di fine mese, pezzi danneggiati..."/>
+              </div>
+            )}
             {/* Piano / Pedana */}
             <div className="grid grid-cols-2 gap-3">
               <div>
