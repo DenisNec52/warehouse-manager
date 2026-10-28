@@ -5,7 +5,9 @@
  */
 const id = (v) => (v ? String(v._id || v) : null);
 
-function serializeProduct(p, { reserved = 0 } = {}) {
+// Le quantità prenotate e disponibili sono per CODICE (lo stesso codice può stare su
+// più pedane): si leggono da GET /api/v1/stock, non dal singolo prodotto.
+function serializeProduct(p) {
   const quantity = p.quantity ?? 0;
   return {
     id:          id(p),
@@ -16,8 +18,6 @@ function serializeProduct(p, { reserved = 0 } = {}) {
     description: p.description || "",
     unit:        p.unit || "pz",
     quantity,
-    reserved,
-    available:   Math.max(0, quantity - reserved),
     minQuantity: p.minQuantity ?? 0,
     isLowStock:  quantity <= (p.minQuantity ?? 0),
     unitPrice:   p.unitPrice ?? 0,

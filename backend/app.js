@@ -59,7 +59,7 @@ if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") ap
 // (le suite fanno molte richieste ravvicinate di proposito).
 if (process.env.NODE_ENV !== "test") {
   const { apiLimiter } = require("./middleware/rateLimiter");
-  app.use("/api", apiLimiter);
+  app.use("/api", (req, res, next) => (req.path.startsWith("/v1/") ? next() : apiLimiter(req, res, next)));
 }
 
 // ── Routes ────────────────────────────────────────────────────
@@ -76,6 +76,13 @@ app.use("/api/production",   require("./routes/production"));
 app.use("/api/departments",  require("./routes/departments"));
 app.use("/api/settings",     require("./routes/settings"));
 app.use("/api/audit",        require("./routes/audit"));
+app.use("/api/integrations", require("./routes/integrations"));
+
+// ── API di integrazione per sistemi esterni (chiavi API, non cookie) ──
+// Ha un proprio rate limiter per chiave (middleware/apiKeyAuth.js), per questo
+// il limiter globale la salta (vedi sotto). Documentazione: docs/INTEGRAZIONE.md
+app.use("/api/v1",           require("./routes/integration/v1"));
+require("./services/webhooks").start();
 
 // ── Health check ──────────────────────────────────────────────
 app.get("/api/health", (_req, res) => res.json({
