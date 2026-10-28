@@ -6,14 +6,35 @@
 const rateLimit = require("express-rate-limit");
 const { clientIp } = require("../utils/clientIp");
 
+const jwt = require("jsonwebtoken");
+
 const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
+
+/**
+ * Chiave del limiter globale. Il limiter gira PRIMA di `protect` (è montato su
+ * tutto /api), quindi req.user non esiste ancora: l'utente si ricava qui dal
+ * cookie di sessione, verificandone la firma (solo HMAC, nessuna query al DB).
+ * Così i colleghi dietro lo stesso IP aziendale non si consumano il budget a
+ * vicenda; senza sessione valida si ricade sull'IP.
+ */
+function sessionOrIpKey(req) {
+  const token = req.cookies?.wh_token;
+  if (token) {
+    try {
+      const { id } = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
+      if (id) return `user:${id}`;
+    } catch { /* token scaduto/non valido: chiave per IP */ }
+  }
+  return `ip:${clientIp(req)}`;
+}
+exports.sessionOrIpKey = sessionOrIpKey;
 
 /** Limiter generico per tutte le API: chiave per utente autenticato (più persone possono
  *  stare dietro lo stesso IP aziendale), limite alto perché il frontend fa molte chiamate. */
 exports.apiLimiter = rateLimit({
   windowMs,
   max:     parseInt(process.env.RATE_LIMIT_MAX) || 1000,
-  keyGenerator: (req) => req.user?._id?.toString() || clientIp(req),
+  keyGenerator: sessionOrIpKey,
   message: { message: "Troppe richieste. Riprova tra qualche minuto." },
   standardHeaders: true,
   legacyHeaders:   false,

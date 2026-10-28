@@ -75,6 +75,7 @@ app.use("/api/vision",       require("./routes/vision"));
 app.use("/api/production",   require("./routes/production"));
 app.use("/api/departments",  require("./routes/departments"));
 app.use("/api/settings",     require("./routes/settings"));
+app.use("/api/audit",        require("./routes/audit"));
 
 // ── Health check ──────────────────────────────────────────────
 app.get("/api/health", (_req, res) => res.json({
