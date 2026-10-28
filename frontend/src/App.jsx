@@ -37,6 +37,8 @@ const StandardTimesPage  = lazy(() => import("@/pages/StandardTimesPage"));
 const AdminPage          = lazy(() => import("@/pages/AdminPage"));
 const DepartmentsPage    = lazy(() => import("@/pages/DepartmentsPage"));
 const SuperAdminPage     = lazy(() => import("@/pages/SuperAdminPage"));
+const IntegrationsPage   = lazy(() => import("@/pages/IntegrationsPage"));
+const AuditPage          = lazy(() => import("@/pages/AuditPage"));
 
 // Un solo punto per il fallback di caricamento delle pagine lazy
 const page = (el) => <Suspense fallback={<RouteLoader/>}>{el}</Suspense>;
@@ -182,6 +184,12 @@ export default function App() {
       }/>
       <Route path="admin" element={
         <RequireAdmin>{page(<AdminPage/>)}</RequireAdmin>
+      }/>
+      <Route path="admin/integrations" element={
+        <RequireAdmin>{page(<IntegrationsPage/>)}</RequireAdmin>
+      }/>
+      <Route path="admin/audit" element={
+        <RequireAdmin>{page(<AuditPage/>)}</RequireAdmin>
       }/>
       <Route path="categories" element={
         <RequireAdmin>{page(<CategoriesPage/>)}</RequireAdmin>

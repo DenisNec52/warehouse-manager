@@ -28,7 +28,7 @@ router.get("/", async (req, res) => {
   const actorId = str(req.query.actorId);
   if (mongoose.isValidObjectId(actorId)) filter.actorId = actorId;
   const action = str(req.query.action);
-  if (/^[a-z_]+(\.[a-z_]+)?$/.test(action)) filter.action = action.includes(".") ? action : { $regex: `^${action}\\.` };
+  if (/^[A-Za-z_]+(\.[A-Za-z_]+)?$/.test(action)) filter.action = action.includes(".") ? action : { $regex: `^${action}\\.` };
 
   const from = new Date(str(req.query.from));
   const to   = new Date(str(req.query.to));

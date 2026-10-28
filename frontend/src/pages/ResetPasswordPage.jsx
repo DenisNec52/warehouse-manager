@@ -10,6 +10,7 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { m as motion } from "framer-motion";
 import { Package, Eye, EyeOff, AlertCircle, ArrowLeft } from "lucide-react";
 import { authAPI } from "@/lib/api";
+import { passwordProblem, MIN_PASSWORD_LENGTH } from "@/lib/passwordPolicy";
 import { useAuthStore } from "@/lib/store";
 import toast from "react-hot-toast";
 
@@ -29,7 +30,8 @@ export default function ResetPasswordPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (form.newPassword.length < 6) return setError("La password deve avere almeno 6 caratteri.");
+    const problem = passwordProblem(form.newPassword);
+    if (problem) return setError(problem);
     if (form.newPassword !== form.confirm) return setError("Le password non coincidono.");
 
     setError(""); setLoading(true);
@@ -73,7 +75,7 @@ export default function ResetPasswordPage() {
                 <div>
                   <label className="form-label">Nuova password</label>
                   <div className="relative">
-                    <input className="form-input pr-10" type={showPw ? "text" : "password"} placeholder="Minimo 6 caratteri" autoFocus
+                    <input className="form-input pr-10" type={showPw ? "text" : "password"} placeholder={`Minimo ${MIN_PASSWORD_LENGTH} caratteri`} autoFocus
                       value={form.newPassword} onChange={e => setForm(f => ({ ...f, newPassword: e.target.value }))}/>
                     <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                       onClick={() => setShowPw(v => !v)}>

@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Edit, Trash2, Ban, RotateCcw, X, ShieldCheck, User, Eye, EyeOff, MapPin, QrCode, Crown, List, Network, Search } from "lucide-react";
 import { usersAPI } from "@/lib/api";
+import { passwordProblem, MIN_PASSWORD_LENGTH } from "@/lib/passwordPolicy";
 import { m as motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { useAuthStore } from "@/lib/store";
@@ -121,13 +122,14 @@ function UserModal({ user, me, departments, users = [], onClose }) {
 
   const s = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const isSelf = isEdit && String(user._id) === String(me?.id);
-  const minPw = isEdit ? 8 : 6;   // il reset password lato server richiede 8 caratteri
 
   const handleSubmit = () => {
     if (!form.name.trim())     return toast.error("Nome obbligatorio");
     if (!form.username.trim()) return toast.error("Username obbligatorio");
-    if (!isEdit && form.password.length < 6) return toast.error("Password minimo 6 caratteri");
-    if (changePw && form.password.length < minPw) return toast.error(`Password minimo ${minPw} caratteri`);
+    if (!isEdit || changePw) {
+      const problem = passwordProblem(form.password, form.username);
+      if (problem) return toast.error(problem);
+    }
     mut.mutate(form);
   };
 
@@ -166,7 +168,7 @@ function UserModal({ user, me, departments, users = [], onClose }) {
               <label className="form-label">Password *</label>
               <div className="relative">
                 <input className="form-input pr-10" type={showPw ? "text" : "password"} value={form.password}
-                  onChange={e => s("password", e.target.value)} placeholder="Minimo 6 caratteri"/>
+                  onChange={e => s("password", e.target.value)} placeholder={`Minimo ${MIN_PASSWORD_LENGTH} caratteri`}/>
                 <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" onClick={() => setShowPw(v => !v)}>
                   {showPw ? <EyeOff size={14}/> : <Eye size={14}/>}
                 </button>
@@ -185,7 +187,7 @@ function UserModal({ user, me, departments, users = [], onClose }) {
               {changePw && (
                 <div className="relative">
                   <input className="form-input pr-10" type={showPw ? "text" : "password"} value={form.password}
-                    onChange={e => s("password", e.target.value)} placeholder="Nuova password (min 8 caratteri)"/>
+                    onChange={e => s("password", e.target.value)} placeholder={`Nuova password (min ${MIN_PASSWORD_LENGTH} caratteri)`}/>
                   <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" onClick={() => setShowPw(v => !v)}>
                     {showPw ? <EyeOff size={14}/> : <Eye size={14}/>}
                   </button>
