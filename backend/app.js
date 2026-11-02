@@ -73,6 +73,7 @@ app.use("/api/dashboard",    require("./routes/dashboard"));
 app.use("/api/checklist",    require("./routes/checklist"));
 app.use("/api/vision",       require("./routes/vision"));
 app.use("/api/production",   require("./routes/production"));
+app.use("/api/bolle",        require("./routes/bolle"));
 app.use("/api/departments",  require("./routes/departments"));
 app.use("/api/settings",     require("./routes/settings"));
 

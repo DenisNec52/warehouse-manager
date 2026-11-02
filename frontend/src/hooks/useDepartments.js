@@ -32,6 +32,11 @@ export function useVisibleDepartments() {
 }
 
 const storageKey = (scope) => `wh-department:${scope}`;
+
+/** Preseleziona il reparto di una pagina prima di aprirla (es. dalla Home all'Andon di quel reparto). */
+export function rememberDepartment(scope, id) {
+  try { localStorage.setItem(storageKey(scope), id); } catch { /* storage non disponibile */ }
+}
 function readStored(scope) {
   try { return localStorage.getItem(storageKey(scope)); } catch { return null; }
 }

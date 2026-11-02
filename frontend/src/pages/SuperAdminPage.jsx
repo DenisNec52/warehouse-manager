@@ -23,7 +23,6 @@ const MODULES = [
   { key: "standard-times",  label: "Tempi standard" },
   { key: "users",           label: "Utenti" },
   { key: "admin-checklist", label: "Gestione 5S" },
-  { key: "admin",           label: "Amministrazione" },
   { key: "departments",     label: "Reparti" },
   { key: "categories",      label: "Categorie" },
   { key: "notifications",   label: "Notifiche" },
@@ -37,6 +36,7 @@ export default function SuperAdminPage() {
   const [appName, setAppName] = useState(settings?.appName || "Warehouse Manager");
   const [phases, setPhases]   = useState(settings?.workPhases || []);
   const [newPhase, setNewPhase] = useState("");
+  const [bollaPdf, setBollaPdf] = useState(Boolean(settings?.features?.bollaPdf));
 
   // Griglia visibilità: per ogni modulo, quali ruoli lo vedono (default: tutti).
   const [vis, setVis] = useState(() => {
@@ -67,7 +67,8 @@ export default function SuperAdminPage() {
       for (const { key } of MODULES) {
         moduleVisibility[key] = ROLES.map(([r]) => r).filter(r => vis[key][r]);
       }
-      return settingsAPI.update({ appName: appName.trim(), workPhases: phases, moduleVisibility }).then(r => r.data.settings);
+      return settingsAPI.update({ appName: appName.trim(), workPhases: phases, moduleVisibility, features: { bollaPdf } })
+        .then(r => r.data.settings);
     },
     onSuccess: (s) => { setSettings(s); toast.success("Impostazioni salvate"); },
     onError: (e) => toast.error(e.response?.data?.message || "Errore salvataggio"),
@@ -105,6 +106,26 @@ export default function SuperAdminPage() {
             onChange={e => setNewPhase(e.target.value)} onKeyDown={e => e.key === "Enter" && addPhase()} />
           <button className="btn btn-md btn-secondary gap-1" onClick={addPhase}><Plus size={15}/> Aggiungi</button>
         </div>
+      </div>
+
+      {/* Funzioni facoltative: applicate dal server, non solo nascoste */}
+      <div className="card p-5 mb-4">
+        <h2 className="font-semibold text-gray-900 dark:text-white mb-1">Funzioni facoltative</h2>
+        <p className="text-xs text-gray-500 mb-4">Spente, non sono raggiungibili da nessuno: il server rifiuta le richieste, non solo l'interfaccia le nasconde.</p>
+        <label className="flex items-start gap-4 cursor-pointer">
+          <button type="button" role="switch" aria-checked={bollaPdf} onClick={() => setBollaPdf(v => !v)}
+            className={`relative mt-0.5 shrink-0 w-11 h-6 rounded-full transition-colors ${bollaPdf ? "bg-(--brand-500)" : "bg-gray-300 dark:bg-gray-700"}`}>
+            <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${bollaPdf ? "left-[22px]" : "left-0.5"}`}/>
+          </button>
+          <span>
+            <span className="block text-sm font-medium text-gray-900 dark:text-white">Bolla PDF per posizione</span>
+            <span className="block text-xs text-gray-500 mt-0.5">
+              Nell'Andon Board, accanto a ogni posizione compare un'icona per aprire il PDF della sua bolla
+              (ogni posizione della stessa commessa ha la propria).
+              Supervisori e admin la caricano o sostituiscono; tutti gli utenti possono consultarla. Max 10 MB, solo PDF.
+            </span>
+          </span>
+        </label>
       </div>
 
       {/* Visibilità moduli */}

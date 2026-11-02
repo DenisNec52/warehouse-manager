@@ -4,7 +4,20 @@
 
 @theme {
   --font-sans: Inter, system-ui, sans-serif;
-  --font-mono: JetBrains Mono, monospace;
+  --font-mono: JetBrains Mono, ui-monospace, monospace;
+
+  /* Grigi neutri leggermente freddi: ridisegnano tutte le pagine che usano gray-* */
+  --color-gray-50: #f7f8fa;
+  --color-gray-100: #eef0f4;
+  --color-gray-200: #e2e5eb;
+  --color-gray-300: #cbd0d9;
+  --color-gray-400: #9aa2b1;
+  --color-gray-500: #6b7385;
+  --color-gray-600: #4e5566;
+  --color-gray-700: #363c4a;
+  --color-gray-800: #232834;
+  --color-gray-900: #171a23;
+  --color-gray-950: #0e1017;
 
   --color-brand-50: var(--brand-50);
   --color-brand-100: var(--brand-100);
@@ -12,12 +25,11 @@
   --color-brand-600: var(--brand-600);
   --color-brand-700: var(--brand-700);
 
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.04);
-  --shadow-card-hover:
-    0 4px 12px rgba(0, 0, 0, 0.08), 0 12px 32px rgba(0, 0, 0, 0.06);
-  --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.12);
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 8px rgba(16, 24, 40, 0.04);
+  --shadow-card-hover: 0 4px 12px rgba(16, 24, 40, 0.08), 0 16px 32px -8px rgba(16, 24, 40, 0.10);
+  --shadow-modal: 0 24px 64px -12px rgba(16, 24, 40, 0.28);
 
-  /* --radius, --radius-sm, --radius-lg: definite in :root qui sotto (tema dinamico) */
+  /* --radius, --radius-sm, --radius-lg: definite su body qui sotto (tema dinamico) */
 
   --animate-fade-up: fadeUp 0.4s ease forwards;
   --animate-fade-in: fadeIn 0.3s ease forwards;
@@ -25,43 +37,19 @@
   --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 
   @keyframes fadeUp {
-    from {
-      opacity: 0;
-      transform: translateY(16px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
   }
   @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
   @keyframes slideIn {
-    from {
-      opacity: 0;
-      transform: translateX(-16px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
+    from { opacity: 0; transform: translateX(-16px); }
+    to { opacity: 1; transform: translateX(0); }
   }
 }
 
-/*
-  The default border color has changed to `currentcolor` in Tailwind CSS v4,
-  so we've added these compatibility styles to make sure everything still
-  looks the same as it did with Tailwind CSS v3.
-
-  If we ever want to remove these styles, we need to add an explicit border
-  color utility to any element that depends on these defaults.
-*/
 @layer base {
   *,
   ::after,
@@ -70,10 +58,18 @@
   ::file-selector-button {
     border-color: var(--color-gray-200, currentcolor);
   }
+  .dark *,
+  .dark ::after,
+  .dark ::before {
+    border-color: rgb(255 255 255 / 0.07);
+  }
+  html { -webkit-tap-highlight-color: transparent; }
+  body { font-feature-settings: "cv11", "ss01"; }
+  :focus-visible { outline: 2px solid var(--brand-500); outline-offset: 2px; }
 }
 
 @utility card {
-  @apply bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 shadow-card rounded-(--radius);
+  @apply bg-white dark:bg-gray-900 border border-gray-200/70 dark:border-white/7 shadow-card dark:shadow-none rounded-(--radius-lg);
 }
 
 @utility card-hover {
@@ -81,47 +77,48 @@
 }
 
 @utility btn {
-  @apply inline-flex items-center justify-center gap-2 font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-sm;
+  @apply inline-flex items-center justify-center gap-2 font-medium select-none
+         transition-all duration-150 active:scale-[0.97]
+         disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 rounded-(--radius);
 }
 
 @utility btn-sm {
-  @apply btn text-xs px-3 py-1.5;
+  @apply btn text-xs px-3 h-8;
 }
 
 @utility btn-md {
-  @apply btn text-sm px-4 py-2;
+  @apply btn text-sm px-4 h-10;
 }
 
 @utility btn-lg {
-  @apply btn text-sm px-5 py-2.5;
+  @apply btn text-sm px-5 h-12;
 }
 
 @utility btn-primary {
-  @apply text-white shadow-xs;
+  @apply text-white;
 }
 
 @utility btn-secondary {
-  @apply bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300;
+  @apply bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200;
 }
 
 @utility btn-danger {
-  @apply bg-red-500 hover:bg-red-600 text-white shadow-xs;
+  @apply bg-red-500 hover:bg-red-600 text-white shadow-sm shadow-red-500/25;
 }
 
 @utility btn-ghost {
-  @apply text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/60 hover:text-gray-900 dark:hover:text-gray-100;
+  @apply text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-gray-100;
 }
 
 @utility btn-outline {
-  @apply border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300;
+  @apply border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 bg-white dark:bg-transparent;
 }
 
 @utility form-input {
-  @apply w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600
-           text-gray-900 dark:text-gray-100 placeholder:text-gray-400
-           rounded-sm px-3.5 py-2.5 text-sm outline-hidden
-           focus:ring-2 focus:ring-blue-500/30
-           transition-all duration-200;
+  @apply w-full bg-white dark:bg-gray-950/60 border border-gray-200 dark:border-white/10
+         text-gray-900 dark:text-gray-100 placeholder:text-gray-400
+         rounded-(--radius) px-3.5 h-10 text-sm outline-hidden
+         transition-all duration-150;
 }
 
 @utility form-label {
@@ -137,27 +134,27 @@
 }
 
 @utility badge-blue {
-  @apply badge bg-blue-50   text-blue-700   dark:bg-blue-900/30  dark:text-blue-300;
+  @apply badge bg-blue-50   text-blue-700   dark:bg-blue-500/15   dark:text-blue-300;
 }
 
 @utility badge-green {
-  @apply badge bg-green-50  text-green-700  dark:bg-green-900/30 dark:text-green-300;
+  @apply badge bg-green-50  text-green-700  dark:bg-green-500/15  dark:text-green-300;
 }
 
 @utility badge-red {
-  @apply badge bg-red-50    text-red-700    dark:bg-red-900/30   dark:text-red-300;
+  @apply badge bg-red-50    text-red-700    dark:bg-red-500/15    dark:text-red-300;
 }
 
 @utility badge-yellow {
-  @apply badge bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300;
+  @apply badge bg-yellow-50 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300;
 }
 
 @utility badge-gray {
-  @apply badge bg-gray-100  text-gray-600   dark:bg-gray-700     dark:text-gray-300;
+  @apply badge bg-gray-100  text-gray-600   dark:bg-white/8       dark:text-gray-300;
 }
 
 @utility badge-purple {
-  @apply badge bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300;
+  @apply badge bg-purple-50 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300;
 }
 
 @utility stat-card {
@@ -175,16 +172,16 @@
 @utility data-table {
   @apply w-full text-sm;
   & th {
-    @apply text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 whitespace-nowrap;
+    @apply text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-white/6 bg-gray-50/70 dark:bg-white/2 whitespace-nowrap;
   }
   & td {
-    @apply px-4 py-3.5 border-b border-gray-50 dark:border-gray-700/50 text-gray-700 dark:text-gray-300;
+    @apply px-4 py-3.5 border-b border-gray-100/80 dark:border-white/5 text-gray-700 dark:text-gray-300;
   }
   & tr {
     @apply transition-colors duration-100;
   }
   & tbody tr:hover td {
-    @apply bg-gray-50/80 dark:bg-gray-700/30;
+    @apply bg-gray-50 dark:bg-white/3;
   }
   & tr:last-child td {
     @apply border-b-0;
@@ -192,20 +189,11 @@
 }
 
 @utility nav-item {
-  @apply flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/60 hover:text-gray-900 dark:hover:text-white transition-all duration-150 cursor-pointer;
-  &.active {
-    @apply bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400;
-  }
-}
-
-@utility active {
-  &.nav-item {
-    @apply bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400;
-  }
+  @apply relative flex items-center gap-3 px-3 h-10 rounded-(--radius) text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white transition-colors duration-150 cursor-pointer;
 }
 
 @utility skeleton {
-  @apply animate-pulse bg-gray-200 dark:bg-gray-700 rounded-(--radius);
+  @apply animate-pulse bg-gray-200 dark:bg-white/6 rounded-(--radius);
 }
 
 @utility skeleton-text {
@@ -216,122 +204,66 @@
   @apply skeleton h-6 w-3/4;
 }
 
+@utility kbd {
+  @apply inline-flex items-center justify-center min-w-5 h-5 px-1 text-[10px] font-semibold font-sans
+         text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-white/8 border border-gray-200 dark:border-white/10 rounded;
+}
+
 @layer utilities {
-  /* ── CSS Variables per il tema dinamico ──────────────────────── */
-  :root {
-    --brand-50: #eff6ff;
-    --brand-100: #dbeafe;
+  /* ── Tema dinamico ───────────────────────────────────────────
+     Le classi di tema stanno su <body>: le tonalità derivate vanno dichiarate lì,
+     altrimenti verrebbero calcolate su :root con il colore di base e ignorerebbero
+     l'accento scelto. Si cambia solo --brand-500, il resto si ricava con color-mix. */
+  body {
     --brand-500: #3b82f6;
-    --brand-600: #2563eb;
-    --brand-700: #1d4ed8;
-    --radius: 8px;
+    --brand-50: color-mix(in oklab, var(--brand-500) 9%, white);
+    --brand-100: color-mix(in oklab, var(--brand-500) 18%, white);
+    --brand-600: color-mix(in oklab, var(--brand-500) 86%, black);
+    --brand-700: color-mix(in oklab, var(--brand-500) 72%, black);
+    --brand-glow: color-mix(in oklab, var(--brand-500) 35%, transparent);
+    --radius: 10px;
     --radius-sm: 6px;
-    --radius-lg: 12px;
-    --sidebar-w: 260px;
+    --radius-lg: 14px;
+    --sidebar-w: 248px;
+  }
+  .dark body {
+    --brand-50: color-mix(in oklab, var(--brand-500) 16%, #0e1017);
+    --brand-100: color-mix(in oklab, var(--brand-500) 26%, #0e1017);
+    --brand-600: color-mix(in oklab, var(--brand-500) 80%, white);
   }
 
-  body.theme-green {
-    --brand-500: #10b981;
-    --brand-600: #059669;
-    --brand-700: #047857;
-    --brand-50: #ecfdf5;
-    --brand-100: #d1fae5;
-  }
-  body.theme-purple {
-    --brand-500: #8b5cf6;
-    --brand-600: #7c3aed;
-    --brand-700: #6d28d9;
-    --brand-50: #f5f3ff;
-    --brand-100: #ede9fe;
-  }
-  body.theme-orange {
-    --brand-500: #f97316;
-    --brand-600: #ea580c;
-    --brand-700: #c2410c;
-    --brand-50: #fff7ed;
-    --brand-100: #ffedd5;
-  }
-  body.theme-red {
-    --brand-500: #ef4444;
-    --brand-600: #dc2626;
-    --brand-700: #b91c1c;
-    --brand-50: #fef2f2;
-    --brand-100: #fee2e2;
-  }
-  body.theme-pink {
-    --brand-500: #ec4899;
-    --brand-600: #db2777;
-    --brand-700: #be185d;
-    --brand-50: #fdf2f8;
-    --brand-100: #fce7f3;
-  }
-  body.theme-teal {
-    --brand-500: #14b8a6;
-    --brand-600: #0d9488;
-    --brand-700: #0f766e;
-    --brand-50: #f0fdfa;
-    --brand-100: #ccfbf1;
-  }
-  body.theme-custom {
-    --brand-500: var(--custom-accent);
-    --brand-600: var(--custom-accent-dark);
-    --brand-700: var(--custom-accent-darker);
-  }
+  body.theme-green  { --brand-500: #10b981; }
+  body.theme-purple { --brand-500: #8b5cf6; }
+  body.theme-orange { --brand-500: #f97316; }
+  body.theme-red    { --brand-500: #ef4444; }
+  body.theme-pink   { --brand-500: #ec4899; }
+  body.theme-teal   { --brand-500: #14b8a6; }
+  body.theme-custom { --brand-500: var(--custom-accent); }
 
-  body.radius-none {
-    --radius: 0;
-    --radius-sm: 0;
-    --radius-lg: 0;
-  }
-  body.radius-sm {
-    --radius: 4px;
-    --radius-sm: 2px;
-    --radius-lg: 6px;
-  }
-  body.radius-md {
-    --radius: 8px;
-    --radius-sm: 6px;
-    --radius-lg: 12px;
-  }
-  body.radius-lg {
-    --radius: 12px;
-    --radius-sm: 8px;
-    --radius-lg: 16px;
-  }
-  body.radius-full {
-    --radius: 20px;
-    --radius-sm: 12px;
-    --radius-lg: 28px;
-  }
+  body.radius-none { --radius: 0; --radius-sm: 0; --radius-lg: 0; }
+  body.radius-sm   { --radius: 4px;  --radius-sm: 2px;  --radius-lg: 6px; }
+  body.radius-md   { --radius: 10px; --radius-sm: 6px;  --radius-lg: 14px; }
+  body.radius-lg   { --radius: 14px; --radius-sm: 8px;  --radius-lg: 20px; }
+  body.radius-full { --radius: 22px; --radius-sm: 12px; --radius-lg: 28px; }
 
-  ::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: #d1d5db;
-    border-radius: 99px;
-  }
-  .dark ::-webkit-scrollbar-thumb {
-    background: #374151;
-  }
-  ::selection {
-    background: var(--brand-500);
-    color: white;
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #cbd0d9; border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
+  .dark ::-webkit-scrollbar-thumb { background: #363c4a; border: 2px solid transparent; background-clip: padding-box; }
+  ::selection { background: var(--brand-500); color: white; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   }
 }
 
 .reading-progress { position:fixed;top:0;left:0;height:2px;background:var(--brand-500);z-index:9999;transition:width .1s linear; }
 
 /* Colori dinamici via CSS — non usabili in @apply */
-.btn-primary { background-color: var(--brand-500); }
+.btn-primary { background-color: var(--brand-500); box-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 4px 14px -4px var(--brand-glow); }
 .btn-primary:hover { background-color: var(--brand-600); }
-.btn-outline:hover { border-color: var(--brand-500); }
-.form-input:focus { border-color: var(--brand-500); }
+.btn-outline:hover { border-color: var(--brand-500); color: var(--brand-600); }
+.form-input:focus { border-color: var(--brand-500); box-shadow: 0 0 0 4px var(--brand-glow); }
 .nav-item.active { background-color: var(--brand-50); color: var(--brand-600); }
-/* Tailwind 4: le regole fuori @layer battono sempre le utility; senza questa il tema
-   scuro perderebbe lo sfondo della voce attiva (in v3 vinceva dark:bg-blue-900/20). */
-.dark .nav-item.active { background-color: color-mix(in oklab, var(--color-blue-900) 20%, transparent); color: var(--color-blue-400); }
+/* Tailwind 4: le regole fuori @layer battono le utility. In scuro usa lo stesso accento (prima era blu fisso). */
+.dark .nav-item.active { background-color: var(--brand-50); color: var(--brand-600); }

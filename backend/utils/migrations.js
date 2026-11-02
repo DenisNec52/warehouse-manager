@@ -12,6 +12,7 @@ const StandardTime    = require("../models/StandardTime");
 const ProductionEntry = require("../models/ProductionEntry");
 const User            = require("../models/User");
 const Notification    = require("../models/Notification");
+const Bolla           = require("../models/Bolla");
 
 const DEFAULT_DEPARTMENTS = ["Prima Saldatura", "Seconda Saldatura", "Finitura", "Prova Idraulica", "Riempimento"];
 
@@ -127,6 +128,46 @@ const MIGRATIONS = [
         manualiIniziate: manualStart.modifiedCount, manualiFinite: manualFinish.modifiedCount,
         fogliIniziate: sheetStart.modifiedCount, fogliFinite: sheetFinish.modifiedCount,
       };
+    },
+  },
+  {
+    // Tempi standard per pezzo (foglio di lavorazione della Prima Saldatura: una riga = un pezzo
+    // con commessa, posizione, cliente, quantità, DN, Ø). Il vecchio indice unico
+    // reparto+tipologia+dimensione impedirebbe due pezzi con la stessa tipologia, quindi va tolto.
+    // I tempi esistenti NON si spostano di reparto: ricevono solo i campi nuovi vuoti
+    // (= tempo generico per tipologia, come prima). Idempotente.
+    name: "2026-11-01-tempi-per-pezzo",
+    async run() {
+      try {
+        await StandardTime.collection.dropIndex("department_1_tipologia_1_dimensione_1");
+      } catch (err) {
+        if (!["IndexNotFound", "NamespaceNotFound"].includes(err.codeName)) throw err;
+      }
+      let filled = 0;
+      for (const field of ["commessa", "posizione", "cliente", "dn", "diametro"]) {
+        const r = await StandardTime.collection.updateMany({ [field]: { $exists: false } }, { $set: { [field]: "" } });
+        filled += r.modifiedCount;
+      }
+      await StandardTime.collection.updateMany({ quantita: { $exists: false } }, { $set: { quantita: null } });
+      await StandardTime.syncIndexes();
+      return { campiCompletati: filled, tempiTotali: await StandardTime.countDocuments() };
+    },
+  },
+  {
+    // Bolle PDF per POSIZIONE (prima erano per commessa): il vecchio indice unico su
+    // "commessa" impedirebbe una seconda posizione della stessa commessa. Idempotente.
+    name: "2026-11-02-bolle-per-posizione",
+    async run() {
+      let dropped = false;
+      try {
+        await Bolla.collection.dropIndex("commessa_1");
+        dropped = true;
+      } catch (err) {
+        if (!["IndexNotFound", "NamespaceNotFound"].includes(err.codeName)) throw err;
+      }
+      await Bolla.collection.updateMany({ posizione: { $exists: false } }, { $set: { posizione: "" } });
+      await Bolla.syncIndexes();
+      return { vecchioIndiceRimosso: dropped };
     },
   },
 ];

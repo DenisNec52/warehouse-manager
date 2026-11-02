@@ -11,8 +11,9 @@ import { Plus, Edit, Trash2, X, Timer, PauseCircle, Flag, CheckCircle2, Package,
 import { m as motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import clsx from "clsx";
-import { productionAPI, usersAPI } from "@/lib/api";
+import { productionAPI, usersAPI, bolleAPI, bollaKey } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
+import BollaButton from "@/components/andon/BollaButton";
 import { fmtMinutes, parseDuration, efficiencyBadge, toIsoDay } from "@/lib/duration";
 
 // Report con grafici ed export Excel: recharts si scarica solo quando si apre questa pagina
@@ -407,8 +408,10 @@ function StatCard({ label, value, hint }) {
 }
 
 export default function AndonBoardPage() {
-  const { user } = useAuthStore();
+  const { user, settings } = useAuthStore();
   const isSupervisor = ["admin", "supervisore"].includes(user?.role);
+  // Bolle PDF: accese solo dal super-admin (il server risponde 404 se spente)
+  const bolleOn = Boolean(settings?.features?.bollaPdf);
   const { departments, department, departmentId, select } = useSelectedDepartment("production");
   const [preset, setPreset] = useState("week");
   const [range, setRange] = useState(() => presetRange("week"));
@@ -440,6 +443,11 @@ export default function AndonBoardPage() {
     queryKey: ["production", "stats", range, departmentId],
     queryFn: () => productionAPI.stats({ ...range, department: departmentId }).then(r => r.data),
     enabled: !!departmentId,
+  });
+  const { data: bolle } = useQuery({
+    queryKey: ["bolle"],
+    queryFn: () => bolleAPI.list().then(r => new Map(r.data.bolle.map(b => [bollaKey(b.commessa, b.posizione), b]))),
+    enabled: bolleOn,
   });
 
   const delMut = useMutation({
@@ -598,7 +606,14 @@ export default function AndonBoardPage() {
                           </div>
                         )}
                       </td>
-                      <td className="text-gray-500">{e.posizione || "—"}</td>
+                      <td className="text-gray-500 whitespace-nowrap">
+                        {/* La bolla è della posizione: ogni posizione della stessa commessa ha la sua */}
+                        <span className="inline-flex items-center gap-2">
+                          {e.posizione || "—"}
+                          {bolleOn && <BollaButton commessa={e.commessa} posizione={e.posizione || ""}
+                            bolla={bolle?.get(bollaKey(e.commessa, e.posizione))} canManage={isSupervisor}/>}
+                        </span>
+                      </td>
                       <td className="text-sm truncate max-w-48" title={e.cliente}>{e.cliente || "—"}</td>
                       <td className="tabular-nums">{e.quantita}</td>
                       {/* Righe inserite a mano non hanno tipologia/grandezza separate: si mostra l'etichetta custodia */}

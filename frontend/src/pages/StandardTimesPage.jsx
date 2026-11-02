@@ -6,7 +6,7 @@
  */
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, X, Clock, Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, Boxes } from "lucide-react";
+import { Plus, Edit, Trash2, X, Clock, Upload, FileSpreadsheet, AlertTriangle, Boxes, Search } from "lucide-react";
 import { m as motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { productionAPI, productsAPI } from "@/lib/api";
@@ -22,6 +22,13 @@ function StandardTimeModal({ item, department, onClose }) {
     dimensione: item?.dimensione || "",
     label:      item?.label      || "",
     tempo:      item ? fmtMinutes(item.minuti) : "",
+    // Dati del pezzo (vuoti per un tempo generico per tipologia)
+    commessa:   item?.commessa   || "",
+    posizione:  item?.posizione  || "",
+    cliente:    item?.cliente    || "",
+    quantita:   item?.quantita ? String(item.quantita) : "",
+    dn:         item?.dn         || "",
+    diametro:   item?.diametro   || "",
   });
   const minuti = parseDuration(form.tempo);
   const mut = useMutation({
@@ -30,7 +37,9 @@ function StandardTimeModal({ item, department, onClose }) {
     onError: e => toast.error(e.response?.data?.message || "Errore"),
   });
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
-  const valid = form.tipologia.trim() && form.label.trim() && minuti > 0;
+  const qty = form.quantita.trim() ? Number(form.quantita) : null;
+  const qtyOk = qty === null || (Number.isInteger(qty) && qty >= 1);
+  const valid = form.tipologia.trim() && form.label.trim() && minuti > 0 && qtyOk;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -64,10 +73,28 @@ function StandardTimeModal({ item, department, onClose }) {
             <input className="form-input" value={form.tempo} onChange={set("tempo")} placeholder="es. 1:30"/>
             {form.tempo && !minuti && <p className="form-error">Formato non valido: usa ore:minuti, es. 1:30</p>}
           </div>
+          <fieldset className="rounded-(--radius) border border-gray-200 dark:border-white/10 p-3 space-y-3">
+            <legend className="px-1 text-xs font-semibold text-gray-500">Dati del pezzo (facoltativi)</legend>
+            <div className="grid grid-cols-3 gap-3">
+              <div><label className="form-label">Comm.</label><input className="form-input" value={form.commessa} onChange={set("commessa")} placeholder="2630"/></div>
+              <div><label className="form-label">Pos.</label><input className="form-input" value={form.posizione} onChange={set("posizione")} placeholder="1"/></div>
+              <div><label className="form-label">Q.tà</label><input className="form-input" inputMode="numeric" value={form.quantita} onChange={set("quantita")} placeholder="1"/></div>
+            </div>
+            <div><label className="form-label">Cliente</label><input className="form-input" value={form.cliente} onChange={set("cliente")}/></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="form-label">DN</label><input className="form-input" value={form.dn} onChange={set("dn")} placeholder="95"/></div>
+              <div><label className="form-label">Ø Elem. (mm)</label><input className="form-input" value={form.diametro} onChange={set("diametro")} placeholder="10"/></div>
+            </div>
+            {!qtyOk && <p className="form-error">La quantità deve essere un numero intero da 1 in su</p>}
+          </fieldset>
           <div className="flex gap-3">
             <button className="btn btn-md btn-secondary flex-1" onClick={onClose}>Annulla</button>
             <button className="btn btn-md btn-primary flex-1" disabled={mut.isPending || !valid}
-              onClick={() => mut.mutate({ department: department._id, tipologia: form.tipologia, dimensione: form.dimensione, label: form.label, minuti })}>
+              onClick={() => mut.mutate({
+                department: department._id, tipologia: form.tipologia, dimensione: form.dimensione, label: form.label, minuti,
+                commessa: form.commessa.trim(), posizione: form.posizione.trim(), cliente: form.cliente.trim(),
+                quantita: qty, dn: form.dn.trim(), diametro: form.diametro.trim(),
+              })}>
               {mut.isPending ? "..." : "Salva"}
             </button>
           </div>
@@ -78,10 +105,23 @@ function StandardTimeModal({ item, department, onClose }) {
 }
 
 // ── Import da Excel: scegli file → anteprima → conferma ───────────
+// Etichette leggibili dei campi, per spiegare cosa cambia in un pezzo già presente.
+const FIELD_LABEL = {
+  cliente: "Cliente", quantita: "Q.tà", tipologia: "Tipologia", dimensione: "Dimensione",
+  dn: "DN", diametro: "Ø Elem.", label: "Nome breve", minuti: "Tempo", riattivato: "Riattivato",
+};
+const STATUS_BADGE = {
+  nuovo:      ["badge-green", "Nuovo"],
+  aggiornato: ["badge-yellow", "Aggiornato"],
+  invariato:  ["badge-gray", "Invariato"],
+};
+const showValue = (f, v) => (v == null || v === "" ? "—" : f === "minuti" ? fmtMinutes(v) : String(v));
+
 function ImportModal({ department, onClose }) {
   const qc = useQueryClient();
   const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(null);   // { rows, errors, summary }
+  const [preview, setPreview] = useState(null);   // { rows, errors, summary, perPiece }
+  const [onlyChanges, setOnlyChanges] = useState(false);
 
   // Passo 1: anteprima (non salva nulla)
   const previewMut = useMutation({
@@ -89,13 +129,14 @@ function ImportModal({ department, onClose }) {
     onSuccess: (data) => setPreview(data),
     onError: (e) => toast.error(e.response?.data?.message || "File non valido"),
   });
-  // Passo 2: conferma e salva (rimanda lo stesso file)
+  // Passo 2: conferma e salva (rimanda lo stesso file: il server non si fida di righe pre-lette)
   const commitMut = useMutation({
     mutationFn: () => productionAPI.importStandardTimes(department._id, file, true).then(r => r.data),
     onSuccess: (data) => {
       const s = data.summary || {};
       qc.invalidateQueries({ queryKey: ["standard-times"] });
-      toast.success(`Import completato: ${s.created || 0} creati, ${s.updated || 0} aggiornati`);
+      toast.success(`Import completato: ${s.created || 0} aggiunti, ${s.updated || 0} aggiornati, ${s.unchanged || 0} invariati`);
+      if (s.failed) toast.error(`${s.failed} righe non salvate`);
       onClose();
     },
     onError: (e) => toast.error(e.response?.data?.message || "Errore durante il salvataggio"),
@@ -109,60 +150,109 @@ function ImportModal({ department, onClose }) {
   };
 
   const s = preview?.summary;
-  const canSave = preview && s?.valid > 0 && !commitMut.isPending;
+  const toSave = (s?.nuovi || 0) + (s?.aggiornati || 0);
+  const canSave = preview && toSave > 0 && !commitMut.isPending;
+  const piece = preview?.perPiece;
+  const rows = (preview?.rows || []).filter(r => !onlyChanges || r.status !== "invariato");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose}/>
       <motion.div initial={{opacity:0,scale:.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.95}}
-        className="relative z-10 w-full max-w-2xl bg-white dark:bg-gray-900 rounded-lg shadow-modal max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+        className="relative z-10 w-full max-w-5xl card shadow-modal max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-white/8">
           <div>
-            <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2"><FileSpreadsheet size={18}/> Importa da Excel</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Reparto: {department.name} — solo file .xlsx</p>
+            <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2"><FileSpreadsheet size={18}/> Importa tempi standard</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Reparto: <strong>{department.name}</strong> — gli altri reparti non vengono toccati. File .xlsx o .csv.
+            </p>
           </div>
-          <button className="btn btn-ghost btn-sm p-1.5" onClick={onClose}><X size={16}/></button>
+          <button className="btn btn-ghost btn-sm w-8 px-0" onClick={onClose} aria-label="Chiudi"><X size={16}/></button>
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto">
-          <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-md py-8 cursor-pointer hover:border-(--brand-500) transition-colors">
+          <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-(--radius) py-7 cursor-pointer hover:border-(--brand-500) transition-colors">
             <Upload size={22} className="text-gray-400"/>
-            <span className="text-sm text-gray-600 dark:text-gray-300">{file ? file.name : "Scegli un file .xlsx"}</span>
-            <span className="text-xs text-gray-400">Colonne attese: Tipologia, Dimensione, Nome breve, Minuti (o Tempo)</span>
-            <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={onPick}/>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{file ? file.name : "Scegli il foglio (.xlsx o .csv)"}</span>
+            <span className="text-xs text-gray-400 text-center px-4">
+              Foglio di lavorazione: Comm., Pos., Cliente, Q.tà, Tipologia, DN, Ø Elem., Dimensione, Temp standard (una riga = un pezzo).
+              Oppure tabella generica: Tipologia, Dimensione, Minuti.
+            </span>
+            <input type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" className="hidden" onChange={onPick}/>
           </label>
 
           {previewMut.isPending && <p className="text-sm text-gray-500 text-center">Lettura del file…</p>}
 
           {preview && (
             <>
-              <div className="flex flex-wrap gap-3 text-sm">
-                <span className="inline-flex items-center gap-1.5 text-green-600"><CheckCircle2 size={15}/> {s.valid} righe valide</span>
-                {s.errors > 0 && <span className="inline-flex items-center gap-1.5 text-amber-600"><AlertTriangle size={15}/> {s.errors} scartate</span>}
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="badge-green">{s.nuovi} nuovi</span>
+                <span className="badge-yellow">{s.aggiornati} da aggiornare</span>
+                <span className="badge-gray">{s.invariati} invariati</span>
+                {s.duplicates > 0 && <span className="badge-gray">{s.duplicates} righe ripetute unite</span>}
+                {s.errors > 0 && <span className="badge-red"><AlertTriangle size={12}/> {s.errors} scartate</span>}
                 {s.truncated && <span className="text-amber-600">⚠ file troncato al limite righe</span>}
+                {s.invariati > 0 && (
+                  <label className="ml-auto inline-flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+                    <input type="checkbox" className="accent-(--brand-500)" checked={onlyChanges} onChange={e => setOnlyChanges(e.target.checked)}/>
+                    Mostra solo le modifiche
+                  </label>
+                )}
               </div>
 
-              {s.valid > 0 && (
-                <div className="table-wrap max-h-56 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-md">
+              {rows.length > 0 && (
+                <div className="table-wrap max-h-[42vh] overflow-y-auto border border-gray-100 dark:border-white/8 rounded-(--radius)">
                   <table className="data-table">
-                    <thead><tr><th>Tipologia</th><th>Dimensione</th><th>Nome breve</th><th>Tempo</th></tr></thead>
+                    <thead><tr>
+                      <th>Stato</th>
+                      {piece && <><th>Comm.</th><th>Pos.</th><th>Cliente</th><th>Q.tà</th></>}
+                      <th>Tipologia</th>{piece && <><th>DN</th><th>Ø Elem.</th></>}<th>Dimensione</th>
+                      {!piece && <th>Nome breve</th>}<th>Tempo</th>
+                    </tr></thead>
                     <tbody>
-                      {preview.rows.map((r, i) => (
-                        <tr key={i}>
-                          <td className="font-medium">{r.tipologia}</td>
-                          <td className="text-gray-500 text-sm">{r.dimensione || "—"}</td>
-                          <td><span className="badge badge-blue">{r.label}</span></td>
-                          <td className="tabular-nums">{fmtMinutes(r.minuti)}</td>
-                        </tr>
-                      ))}
+                      {rows.map((r) => {
+                        const [cls, text] = STATUS_BADGE[r.status] || STATUS_BADGE.nuovo;
+                        const changed = new Set(r.changes || []);
+                        const hl = (f) => changed.has(f) ? "font-semibold text-amber-600 dark:text-amber-400" : "";
+                        return (
+                          <tr key={r.row} className={r.status === "invariato" ? "opacity-60" : ""}>
+                            <td className="whitespace-nowrap">
+                              <span className={cls}
+                                title={r.status === "aggiornato"
+                                  ? r.changes.map(f => f === "riattivato" ? "Riattivato" : `${FIELD_LABEL[f]}: ${showValue(f, r.before?.[f])} → ${showValue(f, r[f])}`).join("\n")
+                                  : undefined}>
+                                {text}
+                              </span>
+                            </td>
+                            {piece && <>
+                              <td className="font-medium text-gray-900 dark:text-white">{r.commessa}</td>
+                              <td className="text-gray-500">{r.posizione || "—"}</td>
+                              <td className={`truncate max-w-48 ${hl("cliente")}`} title={r.cliente}>{r.cliente || "—"}</td>
+                              <td className={`tabular-nums ${hl("quantita")}`}>{r.quantita ?? "—"}</td>
+                            </>}
+                            <td className={hl("tipologia")}>{r.tipologia}</td>
+                            {piece && <>
+                              <td className={`tabular-nums ${hl("dn")}`}>{r.dn || "—"}</td>
+                              <td className={`tabular-nums ${hl("diametro")}`}>{r.diametro || "—"}</td>
+                            </>}
+                            <td className={hl("dimensione")}>{r.dimensione || "—"}</td>
+                            {!piece && <td><span className="badge badge-blue">{r.label}</span></td>}
+                            <td className={`tabular-nums whitespace-nowrap ${hl("minuti")}`}>
+                              {changed.has("minuti") && <span className="text-gray-400 line-through mr-1.5">{fmtMinutes(r.before?.minuti)}</span>}
+                              {fmtMinutes(r.minuti)}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               )}
 
               {preview.errors?.length > 0 && (
-                <div className="text-xs text-amber-700 dark:text-amber-400 space-y-1 max-h-28 overflow-y-auto">
-                  {preview.errors.slice(0, 20).map((e, i) => (
+                <div className="rounded-(--radius) bg-amber-50 dark:bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300 space-y-1 max-h-32 overflow-y-auto">
+                  <p className="font-semibold">Righe scartate (non verranno salvate):</p>
+                  {preview.errors.slice(0, 30).map((e, i) => (
                     <div key={i}>Riga {e.row}: {e.message}</div>
                   ))}
                 </div>
@@ -171,11 +261,12 @@ function ImportModal({ department, onClose }) {
           )}
         </div>
 
-        <div className="flex gap-3 px-5 py-4 border-t border-gray-100 dark:border-gray-800">
+        <div className="flex gap-3 px-5 py-4 border-t border-gray-100 dark:border-white/8">
           <button className="btn btn-md btn-secondary flex-1" onClick={onClose}>Annulla</button>
-          <button className="btn btn-md btn-primary flex-1" disabled={!canSave}
-            onClick={() => commitMut.mutate()}>
-            {commitMut.isPending ? "Salvataggio…" : `Salva ${s?.valid || 0} righe`}
+          <button className="btn btn-md btn-primary flex-1" disabled={!canSave} onClick={() => commitMut.mutate()}>
+            {commitMut.isPending ? "Salvataggio…"
+              : preview && toSave === 0 ? "Niente da aggiornare"
+              : `Salva ${toSave} ${toSave === 1 ? "modifica" : "modifiche"}`}
           </button>
         </div>
       </motion.div>
@@ -302,6 +393,14 @@ export default function StandardTimesPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["standard-times"] }); toast.success("Tempo rimosso"); },
     onError: e => toast.error(e.response?.data?.message || "Errore"),
   });
+  const [search, setSearch] = useState("");
+  // Colonne del pezzo solo se il reparto ha tempi per pezzo (es. Prima Saldatura)
+  const hasPieces = (data || []).some(t => t.commessa);
+  const needle = search.trim().toLowerCase();
+  const shown = (data || [])
+    .filter(t => !needle || [t.commessa, t.cliente, t.tipologia, t.dimensione, t.label].some(v => String(v || "").toLowerCase().includes(needle)))
+    .sort((a, b) => (a.commessa || "").localeCompare(b.commessa || "", "it", { numeric: true })
+      || (a.posizione || "").localeCompare(b.posizione || "", "it", { numeric: true }));
 
   return (
     <div>
@@ -312,7 +411,7 @@ export default function StandardTimesPage() {
         </div>
         {canEdit && department && (
           <div className="flex gap-2">
-            <button className="btn btn-md btn-secondary gap-2" onClick={() => setImportOpen(true)}><FileSpreadsheet size={16}/> Importa Excel</button>
+            <button className="btn btn-md btn-secondary gap-2" onClick={() => setImportOpen(true)}><FileSpreadsheet size={16}/> Importa Excel / CSV</button>
             <button className="btn btn-md btn-primary gap-2" onClick={() => setModal("new")}><Plus size={16}/> Nuovo</button>
           </div>
         )}
@@ -320,19 +419,41 @@ export default function StandardTimesPage() {
 
       <DepartmentSelector departments={departments} value={departmentId} onChange={select} className="mb-4"/>
 
+      {(data?.length || 0) > 8 && (
+        <div className="relative mb-4 max-w-md">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
+          <input className="form-input pl-9" placeholder="Cerca per commessa, cliente, tipologia…" value={search}
+            onChange={e => setSearch(e.target.value)} aria-label="Cerca tempi standard"/>
+        </div>
+      )}
+
       <div className="card overflow-hidden">
         {isLoading ? (
           <div className="p-8 flex justify-center"><div className="w-6 h-6 border-2 border-(--brand-500) border-t-transparent rounded-full animate-spin"/></div>
         ) : (
           <div className="table-wrap">
             <table className="data-table">
-              <thead><tr><th>Tipologia custodia</th><th>Dimensione</th><th>Nome breve</th><th>Tempo STD</th>{canEdit && <th/>}</tr></thead>
+              <thead><tr>
+                {hasPieces && <><th>Comm.</th><th>Pos.</th><th>Cliente</th><th>Q.tà</th></>}
+                <th>Tipologia</th>{hasPieces && <><th>DN</th><th>Ø Elem. (mm)</th></>}<th>Dimensione</th>
+                {!hasPieces && <th>Nome breve</th>}<th>Tempo STD</th>{canEdit && <th/>}
+              </tr></thead>
               <tbody>
-                {(data || []).map(t => (
+                {shown.map(t => (
                   <tr key={t._id}>
+                    {hasPieces && <>
+                      <td className="font-semibold text-gray-900 dark:text-white whitespace-nowrap">{t.commessa || <span className="text-gray-400 font-normal">generico</span>}</td>
+                      <td className="text-gray-500">{t.posizione || "—"}</td>
+                      <td className="text-sm truncate max-w-56" title={t.cliente}>{t.cliente || "—"}</td>
+                      <td className="tabular-nums">{t.quantita ?? "—"}</td>
+                    </>}
                     <td className="font-medium text-gray-900 dark:text-white">{t.tipologia}</td>
+                    {hasPieces && <>
+                      <td className="text-gray-500 tabular-nums">{t.dn || "—"}</td>
+                      <td className="text-gray-500 tabular-nums">{t.diametro || "—"}</td>
+                    </>}
                     <td className="text-gray-500 text-sm">{t.dimensione || "—"}</td>
-                    <td><span className="badge badge-blue">{t.label}</span></td>
+                    {!hasPieces && <td><span className="badge badge-blue">{t.label}</span></td>}
                     <td className="font-semibold tabular-nums"><span className="inline-flex items-center gap-1.5"><Clock size={13} className="text-gray-400"/>{fmtMinutes(t.minuti)}</span></td>
                     {canEdit && (
                       <td className="text-right whitespace-nowrap">
@@ -349,8 +470,11 @@ export default function StandardTimesPage() {
             {!data?.length && (
               <div className="py-12 text-center text-gray-400">
                 Nessun tempo standard{department ? ` in ${department.name}` : ""}
-                {canEdit && department && <p className="text-xs mt-1">Aggiungili con "Nuovo".</p>}
+                {canEdit && department && <p className="text-xs mt-1">Importa il foglio con "Importa Excel / CSV" o aggiungili con "Nuovo".</p>}
               </div>
+            )}
+            {data?.length > 0 && !shown.length && (
+              <div className="py-10 text-center text-sm text-gray-400">Nessun risultato per “{search}”</div>
             )}
           </div>
         )}

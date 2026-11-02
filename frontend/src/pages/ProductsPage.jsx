@@ -241,7 +241,10 @@ const ProductRow = memo(function ProductRow({ p, isAdmin, onMove, onEdit, onDele
   return (
     <tr>
       <td>
-        <code className="text-sm font-bold bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-(--radius)">
+        <Link to={"/products/" + p._id} className="block font-medium text-gray-900 dark:text-white hover:text-(--brand-600) truncate max-w-64">
+          {p.name}
+        </Link>
+        <code className="text-xs font-semibold text-gray-500 bg-gray-100 dark:bg-white/6 px-1.5 py-0.5 rounded-(--radius-sm)">
           {p.code}
         </code>
         {p.isLowStock && (
@@ -293,25 +296,71 @@ const ProductRow = memo(function ProductRow({ p, isAdmin, onMove, onEdit, onDele
   );
 });
 
+/** Telefono: una scheda per articolo, azioni grandi per il pollice. Tocco sulla scheda = dettaglio. */
+const ProductCard = memo(function ProductCard({ p, isAdmin, onMove, onEdit, onDelete }) {
+  const where = p.floor || p.pallet ? `Piano ${p.floor || "?"} · Pedana ${p.pallet || "?"}` : null;
+  return (
+    <li className="p-4">
+      <Link to={"/products/" + p._id} className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-gray-900 dark:text-white truncate">{p.name}</p>
+          <p className="text-xs text-gray-400 font-mono mt-0.5">{p.code}</p>
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            {p.category && <span className="badge badge-gray gap-1">{p.category.icon} {p.category.name}</span>}
+            {where && <span className="text-xs text-gray-500">{where}</span>}
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <p className={clsx("text-2xl font-bold tabular-nums leading-none", p.isLowStock ? "text-amber-600" : "text-gray-900 dark:text-white")}>
+            {p.quantity}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">{p.unit}</p>
+          {p.isLowStock && <p className="text-[11px] font-semibold text-amber-600 mt-1 flex items-center gap-1 justify-end"><AlertTriangle size={10}/> bassa</p>}
+        </div>
+      </Link>
+      <div className="flex items-center gap-2 mt-3">
+        <button className="btn btn-md btn-secondary flex-1" onClick={() => onMove(p)}>
+          <ArrowDown size={15} className="text-emerald-600"/> Movimento
+        </button>
+        <button className="btn btn-md btn-ghost w-11 px-0" aria-label={`Modifica ${p.name}`} onClick={() => onEdit(p)}>
+          <Edit size={16}/>
+        </button>
+        {isAdmin && (
+          <button className="btn btn-md btn-ghost w-11 px-0 text-red-500" aria-label={`Elimina ${p.name}`} onClick={() => onDelete(p)}>
+            <Trash2 size={16}/>
+          </button>
+        )}
+      </div>
+    </li>
+  );
+});
+
 export default function ProductsPage() {
   const { user } = useAuthStore();
   const isAdmin  = user?.role === "admin";
   const [search,     setSearch]     = useState("");
   const [category,   setCategory]   = useState("");
-  const [lowOnly,    setLowOnly]    = useState(false);
+  const [sp, setSp] = useSearchParams();
+  // Il filtro arriva anche dall'URL (Home → "Sotto scorta"): parte da lì, e il pulsante lo
+  // può spegnere (prima restava sempre attivo perché l'URL vinceva sul pulsante).
+  const [lowOnly,    setLowOnly]    = useState(() => sp.get("lowStock") === "true");
   const [page,       setPage]       = useState(1);
   const [modal,      setModal]      = useState(null);
   const [movModal,   setMovModal]   = useState(null);
   const [frozenCats, setFrozenCats] = useState([]);
   const qc = useQueryClient();
-  const [sp] = useSearchParams();
 
   const debouncedSearch = useDebouncedValue(search.trim(), 300);
+  const toggleLow = () => {
+    setLowOnly(v => !v);
+    setPage(1);
+    if (sp.has("lowStock")) { const next = new URLSearchParams(sp); next.delete("lowStock"); setSp(next, { replace: true }); }
+  };
 
   const params = {
     search:   debouncedSearch || undefined,
     category: category || undefined,
-    lowStock: (lowOnly || sp.get("lowStock") === "true") ? "true" : undefined,
+    lowStock: lowOnly ? "true" : undefined,
     page,
     limit: 20,
   };
@@ -367,9 +416,9 @@ export default function ProductsPage() {
           <option value="">Tutte le categorie</option>
           {(cats || []).map(c => <option key={c._id} value={c._id}>{c.icon} {c.name}</option>)}
         </select>
-        <button
-          className={clsx("btn btn-md gap-2", lowOnly ? "bg-yellow-500 text-white" : "btn-secondary")}
-          onClick={() => { setLowOnly(v => !v); setPage(1); }}>
+        <button aria-pressed={lowOnly}
+          className={clsx("btn btn-md gap-2", lowOnly ? "bg-amber-500 hover:bg-amber-600 text-white" : "btn-secondary")}
+          onClick={toggleLow}>
           <AlertTriangle size={14}/> Scorte basse
         </button>
       </div>
@@ -380,19 +429,27 @@ export default function ProductsPage() {
             <div className="w-6 h-6 border-2 border-(--brand-500) border-t-transparent rounded-full animate-spin"/>
           </div>
         ) : (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Codice</th><th>Categoria</th><th>Piano/Pedana</th><th>Quantità</th><th>Note</th><th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.products || []).map(p => (
-                  <ProductRow key={p._id} p={p} isAdmin={isAdmin} onMove={setMovModal} onEdit={openModal} onDelete={handleDelete}/>
-                ))}
-              </tbody>
-            </table>
+          <div>
+            {/* Telefono: schede; desktop: tabella */}
+            <ul className="lg:hidden divide-y divide-gray-100 dark:divide-white/6">
+              {(data?.products || []).map(p => (
+                <ProductCard key={p._id} p={p} isAdmin={isAdmin} onMove={setMovModal} onEdit={openModal} onDelete={handleDelete}/>
+              ))}
+            </ul>
+            <div className="hidden lg:block table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Articolo</th><th>Categoria</th><th>Piano/Pedana</th><th>Quantità</th><th>Note</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data?.products || []).map(p => (
+                    <ProductRow key={p._id} p={p} isAdmin={isAdmin} onMove={setMovModal} onEdit={openModal} onDelete={handleDelete}/>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             {!data?.products?.length && (
               <div className="py-12 text-center">
                 <Package size={32} className="mx-auto text-gray-300 mb-3"/>

@@ -174,10 +174,28 @@ export const productionAPI = {
   finishEntry:        (id)   => api.post(`/production/entries/${id}/finish`),
   undoEntryStep:      (id)   => api.post(`/production/entries/${id}/undo`),
   stats:              (p)    => api.get("/production/stats", { params: p }),
+  // Panoramica di tutti i reparti visibili (Home): oggi, 7 giorni, in lavorazione, 5S, andamento 14 gg
+  overview:           ()     => api.get("/production/overview"),
   report:             (p)    => api.get("/production/report", { params: p }),
   // File .xlsx come blob; timeout più lungo perché il file si genera al momento
   exportExcel:        (p)    => api.get("/production/export", { params: p, responseType: "blob", timeout: 60_000 }),
 };
+// ── Bolle PDF per posizione di commessa (funzione accesa dal super-admin) ──
+// Commessa e posizione nella query: la posizione può essere vuota.
+const bollaQuery = (commessa, posizione) => new URLSearchParams({ commessa, posizione: posizione || "" }).toString();
+export const bolleAPI = {
+  list:   ()  => api.get("/bolle"),
+  // URL del PDF da aprire in una nuova scheda: stessa origine dell'app, il cookie viaggia da solo
+  fileUrl: (commessa, posizione) => `${api.defaults.baseURL}/bolle/file?${bollaQuery(commessa, posizione)}`,
+  upload: (commessa, posizione, file) => {
+    const form = new FormData();
+    form.append("file", file);
+    return api.put(`/bolle?${bollaQuery(commessa, posizione)}`, form, { headers: { "Content-Type": "multipart/form-data" }, timeout: 60_000 });
+  },
+  remove: (commessa, posizione) => api.delete(`/bolle?${bollaQuery(commessa, posizione)}`),
+};
+/** Chiave di una bolla nella mappa del frontend: commessa + posizione. */
+export const bollaKey = (commessa, posizione) => `${commessa}|${posizione || ""}`;
 export const departmentsAPI = {
   list:   ()     => api.get("/departments"),
   create: (d)    => api.post("/departments", d),
