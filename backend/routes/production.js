@@ -46,16 +46,6 @@ const uploadSheet = secureUpload({
   signature:   ["xlsx", "csv"],
 });
 
-// Express 4 does not forward rejected promises: without this, a DB error in an async
-// handler becomes an unhandled rejection and takes the whole process down.
-for (const method of ["get", "post", "put", "delete"]) {
-  const register = router[method].bind(router);
-  router[method] = (path, ...handlers) => register(path, ...handlers.map((h) =>
-    typeof h === "function" && h.constructor.name === "AsyncFunction"
-      ? (req, res, next) => h(req, res, next).catch(next)
-      : h));
-}
-
 router.use(protect);
 
 const isSupervisor = (user) => ["admin", "supervisore"].includes(user?.role);

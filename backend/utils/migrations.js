@@ -170,6 +170,19 @@ const MIGRATIONS = [
       return { vecchioIndiceRimosso: dropped };
     },
   },
+  {
+    // L'accento del tema ora accetta solo un colore predefinito o un esadecimale (finisce in
+    // una variabile CSS). Valori vecchi diversi (es. "custom") farebbero fallire la validazione
+    // a ogni salvataggio dell'utente, cambio password compreso: tornano al blu. Idempotente.
+    name: "2026-11-02-tema-accento-valido",
+    async run() {
+      const r = await User.collection.updateMany(
+        { "theme.accentColor": { $exists: true, $not: User.ACCENT_COLOR } },
+        { $set: { "theme.accentColor": "#3b82f6" } },
+      );
+      return { accentiCorretti: r.modifiedCount };
+    },
+  },
 ];
 
 async function runMigrations({ log = console.log } = {}) {

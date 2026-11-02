@@ -4,7 +4,9 @@ Riferimento rapido di tutti gli endpoint REST esposti dal backend. Base URL: `{P
 
 Convenzioni generali:
 
-- Autenticazione tramite cookie httpOnly `wh_token` (JWT), impostato dal server al login. Le route protette rispondono `401` se il cookie manca, è scaduto o non valido.
+- Autenticazione tramite cookie httpOnly `wh_token` (JWT), impostato dal server al login. Le route protette rispondono `401` se il cookie manca, è scaduto o non valido, oppure se è stato **revocato** (cambio/reset password o logout: il JWT porta una versione, `tokenVersion` sull'utente).
+- Password nuove: da 8 a 128 caratteri (regola unica in `utils/passwordPolicy.js`).
+- Liste paginate: `limit` è sempre tra 1 e 100, qualunque valore arrivi (`utils/query.js`).
 - I ruoli utente sono `admin`, `supervisore`, `operatore`. `admin` non è mai assegnabile via API (solo tramite `npm run seed`).
 - Le risposte di errore hanno sempre la forma `{ "message": "..." }`; gli errori di validazione (`express-validator`) rispondono `400` con `{ "message": "...", "errors": [...] }`.
 - Le liste paginate rispondono con `{ items..., pagination: { page, limit, total, pages } }`.
@@ -19,13 +21,13 @@ Convenzioni generali:
 | POST | `/badge/regenerate` | protetta | Genera/rigenera il proprio badge. Il segreto in chiaro è restituito **una sola volta** in `url`/`nfcUrl`/`qrImage` (data URL PNG); rigenerare invalida il badge precedente. |
 | PUT | `/badge/status` | protetta | Body `{ enabled: boolean }`: abilita/disabilita il proprio badge senza revocarlo. |
 | DELETE | `/badge` | protetta | Revoca il proprio badge (nessun QR/NFC esistente funzionerà più). |
-| POST | `/logout` | protetta | Cancella il cookie di sessione. |
+| POST | `/logout` | protetta | Cancella il cookie e revoca i token emessi finora (esce da tutti i dispositivi). |
 | GET | `/me` | protetta | Utente corrente + conteggio notifiche non lette. |
 | PUT | `/email` | protetta | Body `{ email }`: imposta/aggiorna la propria email (necessaria per il recupero password). `409` se già in uso. |
 | POST | `/forgot-password` | pubblica (rate limit) | Body `{ username }`. Risposta **sempre identica** (anti-enumeration) indipendentemente dall'esistenza dell'account o dalla presenza di un'email. Se possibile, invia un'email col link di reset (valido 1 ora). |
 | POST | `/reset-password` | pubblica | Body `{ userId, token, newPassword }`. Se il token è valido imposta la nuova password ed esegue login automatico (stesso comportamento del login da badge). |
-| PUT | `/theme` | protetta | Body `{ mode, accentColor, radius }`: salva il tema personale sul profilo. |
-| PUT | `/password` | protetta | Body `{ currentPassword, newPassword }`: cambio password self-service. |
+| PUT | `/theme` | protetta | Body `{ mode?, accentColor?, radius? }`: salva il tema personale. `accentColor` solo esadecimale `#rrggbb` o un accento predefinito (`blue`, `green`, `purple`, `orange`, `red`, `teal`); i campi assenti non cambiano. |
+| PUT | `/password` | protetta | Body `{ currentPassword, newPassword }`: cambio password self-service. Chiude le sessioni sugli altri dispositivi; questo riceve un cookie nuovo. |
 
 ## Utenti — `/api/users` (richiede ruolo supervisore o admin)
 
@@ -114,9 +116,26 @@ Le notifiche scadono automaticamente dopo 90 giorni (indice TTL su `createdAt`).
 | POST | `/scan` | Body `{ image: "<base64 o data URL>", mediaType? }`. Estrae codice/quantità/categoria da etichette, bolle DDT o foto tramite il provider IA configurato (`AI_VISION_PROVIDER`: `huggingface` / `gemini` / `ollama` / `mock`). `422` se il modello non restituisce JSON valido (risposta grezza inclusa in `raw`). |
 | GET | `/provider` | Info sul provider attivo e se è configurato correttamente (nessuna chiave esposta). |
 
+`mediaType` ammessi: `image/jpeg`, `image/png`, `image/webp`, `image/heic`, `image/heif`. Gli errori del provider non arrivano al client (solo nei log): `503` con messaggio per quota esaurita / modello in avvio, altrimenti `500` generico.
+
+## Bolle PDF — `/api/bolle` (richiede autenticazione; `404` se il super-admin non ha attivato `features.bollaPdf`)
+
+| Metodo | Path | Ruolo | Descrizione |
+|---|---|---|---|
+| GET | `/` | tutti | Elenco delle bolle presenti (`commessa`, `posizione`, nome file, dimensione, chi l'ha caricata). |
+| GET | `/file?commessa=&posizione=` | tutti | Il PDF, servito `inline` con `nosniff` e `Cache-Control: private, no-store`. |
+| PUT | `/?commessa=&posizione=` | supervisore/admin | Multipart, campo `file`: carica o sostituisce. Solo PDF veri (primi byte `%PDF-`), max 10 MB. File in MongoDB GridFS. |
+| DELETE | `/?commessa=&posizione=` | supervisore/admin | Elimina bolla e file. |
+
+`commessa`: lettere, cifre, spazio, `._-` (max 50). `posizione`: lettere, cifre, `._-` (max 20), può essere vuota.
+
+## Produzione — panoramica per la Home
+
+`GET /api/production/overview` (protetta) — per ogni reparto visibile: oggi e ultimi 7 giorni (righe, pezzi, efficienza), commesse in lavorazione e da avviare, andamento di 14 giorni, checklist 5S di oggi. Stessa visibilità dell'Andon.
+
 ## Health check
 
-`GET /api/health` (pubblica) — `{ status: "ok", db: "connected"|"disconnected", ts, env }`. Utile per i probe di uptime su Render/Railway.
+`GET /api/health` (pubblica) — `{ status: "ok", db: "connected"|"disconnected", ts }` (l'ambiente non viene più rivelato). Utile per i probe di uptime su Render/Railway.
 
 ## Rate limiting
 
@@ -124,7 +143,11 @@ Le notifiche scadono automaticamente dopo 90 giorni (indice TTL su `createdAt`).
 |---|---|---|
 | `loginLimiter` | `POST /api/auth/login` | 10 tentativi / 15 min |
 | `badgeLoginLimiter` | `GET /api/auth/badge/:userId/:secret` | 30 tentativi / 15 min (non conta i successi) |
-| `forgotPasswordLimiter` | `POST /api/auth/forgot-password` | 5 richieste / 15 min |
+| `loginIpLimiter` | `POST /api/auth/login` | 50 tentativi falliti / 15 min per IP (anti password spraying) |
+| `forgotPasswordLimiter` + `forgotPasswordUserLimiter` | `POST /api/auth/forgot-password` | 5 richieste / 15 min per IP **e** per username (cambiare IP non permette di inondare di email un utente) |
+| `importLimiter` | import Excel/CSV, upload bolle | 20 / 5 min per utente |
+| `exportLimiter` | `GET /api/production/export` | 10 / 5 min per utente |
+| `apiLimiter` | tutte le `/api` | 1000 / 15 min **per utente** (letto dal cookie firmato), per IP solo senza sessione |
 | `visionLimiter` | `POST /api/vision/scan` | 20 richieste / 15 min, per utente autenticato (non per IP) |
 
 Valori configurabili via `.env` (`RATE_LIMIT_*`, vedi `.env.example`).

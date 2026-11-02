@@ -126,7 +126,7 @@ function UserModal({ user, me, departments, users = [], onClose }) {
   const handleSubmit = () => {
     if (!form.name.trim())     return toast.error("Nome obbligatorio");
     if (!form.username.trim()) return toast.error("Username obbligatorio");
-    if (!isEdit && form.password.length < 6) return toast.error("Password minimo 6 caratteri");
+    if (!isEdit && form.password.length < 8) return toast.error("Password minimo 8 caratteri");
     if (changePw && form.password.length < minPw) return toast.error(`Password minimo ${minPw} caratteri`);
     mut.mutate(form);
   };
@@ -166,7 +166,7 @@ function UserModal({ user, me, departments, users = [], onClose }) {
               <label className="form-label">Password *</label>
               <div className="relative">
                 <input className="form-input pr-10" type={showPw ? "text" : "password"} value={form.password}
-                  onChange={e => s("password", e.target.value)} placeholder="Minimo 6 caratteri"/>
+                  onChange={e => s("password", e.target.value)} placeholder="Minimo 8 caratteri"/>
                 <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" onClick={() => setShowPw(v => !v)}>
                   {showPw ? <EyeOff size={14}/> : <Eye size={14}/>}
                 </button>

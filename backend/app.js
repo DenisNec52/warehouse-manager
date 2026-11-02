@@ -10,6 +10,7 @@
  * dotenv+validateEnv, i test lo fanno nel proprio setup).
  */
 const express       = require("express");
+require("./utils/asyncErrors"); // errori async → error handler, mai crash del processo
 const mongoose      = require("mongoose");
 const cors          = require("cors");
 const helmet        = require("helmet");
@@ -82,7 +83,6 @@ app.get("/api/health", (_req, res) => res.json({
   status: "ok",
   db:     mongoose.connection.readyState === 1 ? "connected" : "disconnected",
   ts:     new Date().toISOString(),
-  env:    process.env.NODE_ENV,
 }));
 
 // ── 404 handler ───────────────────────────────────────────────

@@ -4,7 +4,25 @@
  * Rate limiting per prevenire abusi e brute-force.
  */
 const rateLimit = require("express-rate-limit");
+const jwt       = require("jsonwebtoken");
 const { clientIp } = require("../utils/clientIp");
+
+/**
+ * Chiave per utente anche PRIMA di protect: l'apiLimiter è montato in app.js davanti alle
+ * route, quando req.user non esiste ancora. Si legge l'id dal cookie di sessione verificandone
+ * la firma (niente DB); senza cookie valido si ricade sull'IP.
+ */
+function sessionKey(req) {
+  if (req.user?._id) return `u:${req.user._id}`;
+  const token = req.cookies?.wh_token;
+  if (token) {
+    try {
+      const { id } = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
+      if (id) return `u:${id}`;
+    } catch { /* token non valido: chiave per IP */ }
+  }
+  return `ip:${clientIp(req)}`;
+}
 
 const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
 
@@ -13,7 +31,7 @@ const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
 exports.apiLimiter = rateLimit({
   windowMs,
   max:     parseInt(process.env.RATE_LIMIT_MAX) || 1000,
-  keyGenerator: (req) => req.user?._id?.toString() || clientIp(req),
+  keyGenerator: sessionKey,
   message: { message: "Troppe richieste. Riprova tra qualche minuto." },
   standardHeaders: true,
   legacyHeaders:   false,
@@ -118,9 +136,26 @@ exports.importLimiter = rateLimit({
   legacyHeaders:   false,
 });
 
-/** Limiter per "password dimenticata" — anti spam/email-bombing */
+/** Limiter per "password dimenticata" — anti spam/email-bombing, per IP... */
 exports.forgotPasswordLimiter = rateLimit({
   keyGenerator: clientIp,
+  windowMs,
+  max:     parseInt(process.env.RATE_LIMIT_FORGOT_MAX) || 5,
+  message: { message: "Troppe richieste. Riprova tra qualche minuto." },
+  standardHeaders: true,
+  legacyHeaders:   false,
+});
+
+/**
+ * ...e per username: l'IP si può falsificare chiamando Render direttamente (vedi utils/clientIp.js),
+ * lo username no. Senza questo, cambiando IP a ogni richiesta si inonderebbe di email di reset
+ * la casella di un collega.
+ */
+exports.forgotPasswordUserLimiter = rateLimit({
+  keyGenerator: (req) => {
+    const username = typeof req.body?.username === "string" ? req.body.username.trim().toLowerCase() : "";
+    return username ? `user:${username}` : `ip:${clientIp(req)}`;
+  },
   windowMs,
   max:     parseInt(process.env.RATE_LIMIT_FORGOT_MAX) || 5,
   message: { message: "Troppe richieste. Riprova tra qualche minuto." },

@@ -15,8 +15,18 @@ const { runMigrations } = require("./utils/migrations");
 
 const PORT = process.env.PORT || 5000;
 
+// Rete di sicurezza: un errore asincrono sfuggito a tutto viene registrato invece di
+// spegnere il server (le route sono già coperte da utils/asyncErrors.js).
+process.on("unhandledRejection", (err) => console.error("[unhandledRejection]", err?.stack || err));
+
 // ── Connect MongoDB + Start server ───────────────────────────
-mongoose.connect(process.env.MONGODB_URI)
+// maxPoolSize: un tetto alle connessioni verso Atlas (il piano gratuito ne regge poche
+// centinaia in tutto); i timeout evitano richieste appese se il cluster non risponde.
+mongoose.connect(process.env.MONGODB_URI, {
+  maxPoolSize:              Number(process.env.MONGODB_MAX_POOL) || 20,
+  serverSelectionTimeoutMS: 10_000,
+  socketTimeoutMS:          45_000,
+})
   .then(async () => {
     console.log("✅  MongoDB connesso");
     // Migrazioni dati prima di accettare richieste (una sola volta ciascuna, vedi utils/migrations.js)

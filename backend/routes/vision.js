@@ -51,6 +51,12 @@ const { visionLimiter } = require("../middleware/rateLimiter");
 const router = express.Router();
 router.use(protect);
 
+/** Errore con un messaggio pensato per l'utente (es. quota finita): l'unico che arriva al client. */
+class VisionError extends Error {}
+
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]; // heic/heif: foto da iPhone
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
 // ─────────────────────────────────────────────────────────────
 // PROMPT — identico per tutti i provider che lo supportano.
 // Calibrato sui codici e categorie reali del magazzino.
@@ -117,8 +123,8 @@ async function scanWithHuggingFace(base64, mediaType) {
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    if (response.status === 503) throw new Error("Modello HF in avvio (cold start) — riprova tra 20 secondi");
-    if (response.status === 429) throw new Error("Limite giornaliero HF raggiunto — riprova domani");
+    if (response.status === 503) throw new VisionError("Modello HF in avvio (cold start) — riprova tra 20 secondi");
+    if (response.status === 429) throw new VisionError("Limite giornaliero HF raggiunto — riprova domani");
     throw new Error("Errore HF: " + (err?.error || response.statusText));
   }
 
@@ -172,7 +178,7 @@ async function scanWithGemini(base64, mediaType) {
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    if (response.status === 429) throw new Error("Limite giornaliero Gemini raggiunto (1500/giorno)");
+    if (response.status === 429) throw new VisionError("Limite giornaliero Gemini raggiunto (1500/giorno)");
     throw new Error("Errore Gemini: " + (err?.error?.message || response.statusText));
   }
 
@@ -232,10 +238,13 @@ async function scanWithMock() {
 // ─────────────────────────────────────────────────────────────
 router.post("/scan", visionLimiter, async (req, res) => {
   const { image, mediaType = "image/jpeg" } = req.body;
-  if (!image) return res.status(400).json({ message: "Immagine obbligatoria (base64)." });
+  if (typeof image !== "string" || !image) return res.status(400).json({ message: "Immagine obbligatoria (base64)." });
+  // mediaType finisce in un header e nel payload verso il provider: solo valori noti.
+  if (!IMAGE_TYPES.includes(mediaType)) return res.status(400).json({ message: "Formato immagine non supportato (JPEG, PNG, WebP o HEIC)." });
 
   const provider = (process.env.AI_VISION_PROVIDER || "huggingface").toLowerCase();
   const base64   = image.replace(/^data:image\/\w+;base64,/, "");
+  if (!BASE64.test(base64)) return res.status(400).json({ message: "Immagine non valida (base64)." });
 
   let raw = "";
   try {
@@ -267,7 +276,11 @@ router.post("/scan", visionLimiter, async (req, res) => {
         provider,
       });
     }
-    res.status(500).json({ message: err.message, provider });
+    // Errori del provider o di configurazione: il testo resta nei log, al client un messaggio generico.
+    res.status(err instanceof VisionError ? 503 : 500).json({
+      message: err instanceof VisionError ? err.message : "Scansione non riuscita. Riprova più tardi.",
+      provider,
+    });
   }
 });
 

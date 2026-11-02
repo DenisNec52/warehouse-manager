@@ -34,17 +34,18 @@ const uploadPdf = secureUpload({
 });
 
 const bucket = () => new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: "bolle" });
-// Express 4 non cattura le Promise rifiutate: senza questo un errore lascerebbe la richiesta appesa.
-const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+// Cancellazione in background: un errore non blocca la risposta, ma resta nei log
+// (altrimenti i file orfani in GridFS crescerebbero senza che nessuno se ne accorga).
+const removeFile = (id) => bucket().delete(id).catch((err) => console.error("[bolle] file non eliminato", String(id), err?.message));
 
 router.use(protect);
 
 // Funzione spenta → 404: come se la route non esistesse.
-router.use(wrap(async (_req, res, next) => {
+router.use(async (_req, res, next) => {
   const s = await AppSettings.getSettings();
   if (!s.features?.bollaPdf) return res.status(404).json({ message: "Funzione bolle PDF non attiva." });
   next();
-}));
+});
 
 /** { commessa, posizione } validati dalla query, oppure null dopo aver risposto 400. */
 function target(req, res) {
@@ -62,13 +63,13 @@ const publicBolla = (b) => ({
   uploadedByName: b.uploadedByName, updatedAt: b.updatedAt,
 });
 
-router.get("/", wrap(async (_req, res) => {
+router.get("/", async (_req, res) => {
   const bolle = await Bolla.find().select("commessa posizione filename size uploadedByName updatedAt")
     .sort({ commessa: 1, posizione: 1 }).lean();
   res.json({ bolle: bolle.map(publicBolla) });
-}));
+});
 
-router.get("/file", wrap(async (req, res) => {
+router.get("/file", async (req, res) => {
   const t = target(req, res);
   if (!t) return;
   const b = await Bolla.findOne(t).lean();
@@ -89,9 +90,9 @@ router.get("/file", wrap(async (req, res) => {
   bucket().openDownloadStream(b.fileId)
     .on("error", () => { if (!res.headersSent) res.status(404).end(); else res.destroy(); })
     .pipe(res);
-}));
+});
 
-router.put("/", requireSupervisor, importLimiter, uploadPdf, wrap(async (req, res) => {
+router.put("/", requireSupervisor, importLimiter, uploadPdf, async (req, res) => {
   const t = target(req, res);
   if (!t) return;
 
@@ -108,24 +109,30 @@ router.put("/", requireSupervisor, importLimiter, uploadPdf, wrap(async (req, re
 
   // Prima si aggiorna il riferimento, poi si cancella il vecchio file: se qualcosa va
   // storto resta al massimo un file orfano, mai una bolla che punta al nulla.
-  const previous = await Bolla.findOneAndUpdate(
-    t,
-    { $set: { fileId: upload.id, filename, size: req.file.size, uploadedBy: req.user._id, uploadedByName: req.user.name || req.user.username } },
-    { upsert: true, new: false },
-  ).lean();
-  if (previous?.fileId) bucket().delete(previous.fileId).catch(() => {});
+  let previous;
+  try {
+    previous = await Bolla.findOneAndUpdate(
+      t,
+      { $set: { fileId: upload.id, filename, size: req.file.size, uploadedBy: req.user._id, uploadedByName: req.user.name || req.user.username } },
+      { upsert: true, new: false },
+    ).lean();
+  } catch (err) {
+    removeFile(upload.id); // il riferimento non è stato salvato: il file appena caricato non serve
+    throw err;
+  }
+  if (previous?.fileId) removeFile(previous.fileId);
 
   const saved = await Bolla.findOne(t).lean();
   res.status(previous ? 200 : 201).json({ bolla: publicBolla(saved) });
-}));
+});
 
-router.delete("/", requireSupervisor, wrap(async (req, res) => {
+router.delete("/", requireSupervisor, async (req, res) => {
   const t = target(req, res);
   if (!t) return;
   const b = await Bolla.findOneAndDelete(t).lean();
   if (!b) return res.status(404).json({ message: `Nessuna bolla per ${where(t)}.` });
-  bucket().delete(b.fileId).catch(() => {});
+  removeFile(b.fileId);
   res.json({ message: "Bolla eliminata." });
-}));
+});
 
 module.exports = router;

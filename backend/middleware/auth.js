@@ -22,6 +22,11 @@ exports.protect = async (req, res, next) => {
     if (!user || !user.isActive)
       return res.status(401).json({ message: "Utente non trovato o disabilitato." });
 
+    // Token emesso prima di un cambio password o di un logout: revocato.
+    // (I token precedenti a questo controllo non hanno "tv" e valgono come versione 0.)
+    if ((decoded.tv ?? 0) !== (user.tokenVersion ?? 0))
+      return res.status(401).json({ message: "Sessione non più valida. Effettua di nuovo il login." });
+
     // Aggiorna lastSeen ogni 5 minuti (evita write eccessive)
     const fiveMin = 5 * 60 * 1000;
     if (!user.lastSeen || Date.now() - user.lastSeen > fiveMin) {

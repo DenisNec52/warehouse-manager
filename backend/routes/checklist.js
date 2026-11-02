@@ -9,6 +9,7 @@ const ChecklistSubmission = require("../models/ChecklistSubmission");
 const { protect, requireAdmin, requireSupervisor } = require("../middleware/auth");
 const validate = require("../middleware/validate");
 const { checkDepartment } = require("../utils/departmentAccess");
+const { str, month, pagination } = require("../utils/query");
 
 const router = express.Router();
 router.use(protect);
@@ -135,43 +136,47 @@ router.get("/submissions/today", requireSupervisor, async (req, res) => {
 // ── GET /api/checklist/submissions (admin/supervisore) ─────────
 router.get("/submissions", requireSupervisor, async (req, res) => {
   try {
-    const { page = 1, limit = 50, date, shift, userId, month, department } = req.query;
+    if (req.query.month !== undefined && !month(req.query.month))
+      return res.status(400).json({ message: "Mese non valido (formato YYYY-MM)." });
+    const { page, limit, skip, meta } = pagination(req.query, { defaultLimit: 50 });
+    const date = str(req.query.date), shift = str(req.query.shift);
+    const { userId, department } = req.query;
     const filter = {};
-    if (date)   filter.date  = date;
-    if (shift)  filter.shift = shift;
-    if (userId) filter.submittedBy = userId;
-    if (month)  filter.date = { $regex: `^${month}` };  // YYYY-MM
+    if (date)  filter.date  = date;
+    if (shift) filter.shift = shift;
+    if (userId && mongoose.isValidObjectId(userId)) filter.submittedBy = userId;
+    // Il mese è già validato come YYYY-MM: la regex resta un semplice prefisso, mai input libero.
+    if (month(req.query.month)) filter.date = { $regex: `^${month(req.query.month)}` };
     if (department && mongoose.isValidObjectId(department)) filter.department = department;
 
-    const skip  = (parseInt(page) - 1) * parseInt(limit);
     const total = await ChecklistSubmission.countDocuments(filter);
     const subs  = await ChecklistSubmission.find(filter)
       .populate("submittedBy", "name username role")
-      .sort("-date -createdAt").skip(skip).limit(parseInt(limit));
+      .sort("-date -createdAt").skip(skip).limit(limit);
 
-    res.json({ submissions: subs, pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total/parseInt(limit)) } });
+    res.json({ submissions: subs, pagination: { ...meta(total), page, limit } });
   } catch (err) { res.status(500).json({ message: "Errore." }); }
 });
 
 // ── GET /api/checklist/monthly-report (admin/supervisore) ─────
 router.get("/monthly-report", requireSupervisor, async (req, res) => {
   try {
-    const { month } = req.query;  // YYYY-MM
-    if (!month) return res.status(400).json({ message: "Parametro month obbligatorio (YYYY-MM)" });
+    const monthValue = month(req.query.month);
+    if (!monthValue) return res.status(400).json({ message: "Parametro month obbligatorio (YYYY-MM)" });
 
     const User = require("../models/User");
     const users = await User.find({ isActive: true }).select("name username role").lean();
 
     // Tutte le compilazioni del mese
-    const subs = await ChecklistSubmission.find({ date: { $regex: `^${month}` } })
+    const subs = await ChecklistSubmission.find({ date: { $regex: `^${monthValue}` } })
       .populate("submittedBy", "name username").lean();
 
     // Calcola giorni del mese
-    const [year, mon] = month.split("-").map(Number);
+    const [year, mon] = monthValue.split("-").map(Number);
     const daysInMonth = new Date(year, mon, 0).getDate();
     const days = Array.from({ length: daysInMonth }, (_, i) => {
       const d = String(i + 1).padStart(2, "0");
-      return `${month}-${d}`;
+      return `${monthValue}-${d}`;
     });
 
     // Mappa compilazioni per utente e giorno
@@ -224,7 +229,7 @@ router.get("/monthly-report", requireSupervisor, async (req, res) => {
     }));
 
     res.json({
-      month, days, daysInMonth,
+      month: monthValue, days, daysInMonth,
       users:          Object.values(byUser),
       stats:          { totalExpected, totalCompiled, totalMissing: totalExpected - totalCompiled, completionRate },
       cleaningDist,
