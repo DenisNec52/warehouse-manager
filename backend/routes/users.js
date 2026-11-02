@@ -17,6 +17,7 @@ const User       = require("../models/User");
 const Department = require("../models/Department");
 const { protect, requireSupervisor, requireAdmin } = require("../middleware/auth");
 const validate = require("../middleware/validate");
+const { passwordRule } = require("../utils/passwordPolicy");
 const badge    = require("../utils/badge");
 const { hideSuperAdmin, supervisorCanManage } = require("../utils/colleagues");
 const router   = express.Router();
@@ -151,7 +152,7 @@ router.get("/:id", async (req, res) => {
 router.post("/",
   [
     body("username").trim().isLength({ min: 3 }).withMessage("Username min 3 caratteri"),
-    body("password").isLength({ min: 6 }).withMessage("Password min 6 caratteri"),
+    passwordRule("password"),
     body("name").trim().notEmpty().withMessage("Nome obbligatorio"),
     body("role").isIn(ROLES).withMessage("Ruolo non valido"),
     body("email").optional({ checkFalsy: true }).isEmail().withMessage("Email non valida").normalizeEmail(),
@@ -253,7 +254,7 @@ router.put("/:id/status", loadManageableTarget,
 // Reset password utente (il super-admin cambia la propria da /api/auth/password)
 router.put("/:id/password",
   loadManageableTarget,
-  [body("newPassword").isLength({ min: 8 }).withMessage("Password min 8 caratteri")],
+  [passwordRule("newPassword")],
   validate,
   async (req, res) => {
     const user = await User.findById(req.target._id);

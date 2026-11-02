@@ -10,6 +10,7 @@
  * GET    /api/products/low-stock — prodotti sotto soglia
  */
 const express  = require("express");
+const mongoose = require("mongoose");
 const { body } = require("express-validator");
 const Product  = require("../models/Product");
 const Notification = require("../models/Notification");
@@ -18,6 +19,7 @@ const { protect, requireAdmin } = require("../middleware/auth");
 const validate = require("../middleware/validate");
 const email    = require("../utils/email");
 const { parseCode } = require("../utils/codeParser");
+const { str, pagination } = require("../utils/query");
 const { makeUploader, cloudinary, ENABLED: CLOUDINARY_ENABLED } = require("../config/cloudinary");
 
 const router = express.Router();
@@ -27,23 +29,21 @@ router.use(protect);  // tutte le route richiedono autenticazione
 // ── GET /api/products — lista con ricerca e filtri ────────────
 router.get("/", async (req, res) => {
   try {
-    // I parametri arrivano dalla query string: forziamo il tipo così un valore inatteso
-    // (es. ?search[$ne]=) non manda in errore 500 la ricerca.
-    const asStr = (v) => (typeof v === "string" ? v : "");
-    const search = asStr(req.query.search).trim();
-    const category = asStr(req.query.category);
-    const lowStock = asStr(req.query.lowStock);
+    // Solo stringhe dalla query (?search[$ne]= arriverebbe come oggetto), ricerca non enorme.
+    const search = (str(req.query.search) || "").slice(0, 100);
+    const category = str(req.query.category);
+    const lowStock = str(req.query.lowStock);
+    if (category && !mongoose.isValidObjectId(category)) return res.status(400).json({ message: "Categoria non valida." });
     const sortFields = ["createdAt", "-createdAt", "name", "-name", "quantity", "-quantity", "code", "-code"];
     const sort = sortFields.includes(req.query.sort) ? req.query.sort : "-createdAt";
-    const page  = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const { limit, skip, meta } = pagination(req.query);
     const filter = { isActive: true };
 
     // Se la ricerca è nel formato "commessa-posizione" (es. "1684-2" o
     // "1684/2"), match esatto: mai risultati di commesse diverse che
     // condividono solo la posizione. Altrimenti ricerca full-text normale.
     if (search) {
-      const posMatch = search.trim().match(/^(.+?)[-/](\d+)$/);
+      const posMatch = search.match(/^(.+?)[-/](\d+)$/);
       if (posMatch) {
         filter.commessa  = posMatch[1].trim().toUpperCase();
         filter.posizione = parseInt(posMatch[2], 10);
@@ -54,14 +54,13 @@ router.get("/", async (req, res) => {
     if (category) filter.category = category;
     if (lowStock === "true") filter.$expr = { $lte: ["$quantity", "$minQuantity"] };
 
-    const skip  = (parseInt(page) - 1) * parseInt(limit);
     const total = await Product.countDocuments(filter);
 
     const products = await Product.find(filter)
       .populate("category", "name color icon")
       .sort(sort)
       .skip(skip)
-      .limit(parseInt(limit))
+      .limit(limit)
       .lean();
 
     // Aggiunge flag isLowStock a ogni prodotto
@@ -72,12 +71,7 @@ router.get("/", async (req, res) => {
 
     res.json({
       products: result,
-      pagination: {
-        page:  parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit)),
-      },
+      pagination: meta(total),
     });
   } catch (err) {
     res.status(500).json({ message: "Errore nel recupero prodotti." });

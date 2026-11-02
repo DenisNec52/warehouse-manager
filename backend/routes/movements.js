@@ -17,6 +17,7 @@ const Movement = require("../models/Movement");
 const Product  = require("../models/Product");
 const Notification = require("../models/Notification");
 const { visibleColleagueIds, maskMovements, visibilityContext } = require("../utils/colleagues");
+const { str, pagination } = require("../utils/query");
 
 // MongoDB può annullare una transazione con un errore "transitorio" (TransientTransactionError,
 // es. WriteConflict con due movimenti simultanei sullo stesso prodotto): niente è stato scritto
@@ -49,24 +50,30 @@ router.use(protect);
 // ── GET /api/movements — lista con filtri ─────────────────────
 router.get("/", async (req, res) => {
   try {
-    const { type, productId, userId, page = 1, limit = 30, from, to } = req.query;
+    const { limit, skip, meta } = pagination(req.query, { defaultLimit: 30 });
+    const type = str(req.query.type), from = str(req.query.from), to = str(req.query.to);
+    const { productId, userId } = req.query;
     const filter = {};
 
-    if (type)      filter.type    = type;
-    if (productId) filter.product = productId;
-    if (userId) {
+    if (type) filter.type = type;
+    if (productId !== undefined) {
+      if (!mongoose.isValidObjectId(productId)) return res.status(400).json({ message: "Prodotto non valido." });
+      filter.product = productId;
+    }
+    if (userId !== undefined) {
+      if (!mongoose.isValidObjectId(userId)) return res.status(400).json({ message: "Utente non valido." });
       // Un operaio può filtrare solo per i colleghi che vede (altrimenti il filtro rivelerebbe chi ha fatto cosa)
       const ids = await visibleColleagueIds(req);
       if (ids && !ids.has(String(userId))) return res.status(403).json({ message: "Non puoi vedere i movimenti di questo utente." });
       filter.performedBy = userId;
     }
     if (from || to) {
-      filter.createdAt = {};
-      if (from) filter.createdAt.$gte = new Date(from);
-      if (to)   filter.createdAt.$lte = new Date(to);
+      const range = { ...(from && { $gte: new Date(from) }), ...(to && { $lte: new Date(to) }) };
+      if (Object.values(range).some((d) => Number.isNaN(d.getTime())))
+        return res.status(400).json({ message: "Data non valida." });
+      filter.createdAt = range;
     }
 
-    const skip  = (parseInt(page) - 1) * parseInt(limit);
     const total = await Movement.countDocuments(filter);
 
     const movements = await Movement.find(filter)
@@ -74,12 +81,12 @@ router.get("/", async (req, res) => {
       .populate("performedBy", "name username role")
       .sort("-createdAt")
       .skip(skip)
-      .limit(parseInt(limit))
+      .limit(limit)
       .lean();
 
     res.json({
       movements: maskMovements(movements, await visibilityContext(req)),
-      pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / parseInt(limit)) },
+      pagination: meta(total),
     });
   } catch (err) {
     res.status(500).json({ message: "Errore recupero movimenti." });

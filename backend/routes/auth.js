@@ -19,8 +19,9 @@ const jwt      = require("jsonwebtoken");
 const User     = require("../models/User");
 const Notification = require("../models/Notification");
 const { protect }  = require("../middleware/auth");
-const { loginLimiter, loginIpLimiter, badgeLoginLimiter, forgotPasswordLimiter } = require("../middleware/rateLimiter");
+const { loginLimiter, loginIpLimiter, badgeLoginLimiter, forgotPasswordLimiter, forgotPasswordUserLimiter } = require("../middleware/rateLimiter");
 const validate = require("../middleware/validate");
+const { passwordRule, PASSWORD_MAX } = require("../utils/passwordPolicy");
 const email    = require("../utils/email");
 const { lookupLocation } = require("../utils/geoip");
 const badge    = require("../utils/badge");
@@ -49,13 +50,18 @@ const METHOD_LABELS = { password: "credenziali", qr: "QR code", nfc: "tag NFC" }
 // Usata sia dal login classico sia dal login automatico via badge,
 // così ogni accesso (qualunque sia il metodo) viene registrato allo
 // stesso modo: lastLogin/IP, geolocalizzazione best-effort, notifica.
-async function startSession(req, res, user, method = "password") {
+/** Firma il JWT (id + versione dei token, nient'altro: ruolo e stato si leggono dal DB) e lo mette nel cookie. */
+function setSessionCookie(res, user) {
   const token = jwt.sign(
-    { id: user._id, role: user.role },
+    { id: user._id, tv: user.tokenVersion || 0 },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+    { algorithm: "HS256", expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
   );
   res.cookie("wh_token", token, cookieOpts);
+}
+
+async function startSession(req, res, user, method = "password") {
+  setSessionCookie(res, user);
 
   const ip = clientIp(req);
   await User.findByIdAndUpdate(user._id, { lastLogin: new Date(), lastLoginIP: ip });
@@ -82,7 +88,7 @@ router.post("/login",
   loginLimiter,
   [
     body("username").trim().notEmpty().withMessage("Username obbligatorio"),
-    body("password").notEmpty().withMessage("Password obbligatoria"),
+    body("password").isString().notEmpty().isLength({ max: PASSWORD_MAX }).withMessage("Password obbligatoria"),
   ],
   validate,
   async (req, res) => {
@@ -187,7 +193,10 @@ router.delete("/badge", protect, async (req, res) => {
 });
 
 // ── POST /api/auth/logout ─────────────────────────────────────
-router.post("/logout", protect, (req, res) => {
+// Revoca anche il token: una copia del cookie presa prima del logout non funziona più
+// (vale per tutti i dispositivi dell'utente, come "esci ovunque").
+router.post("/logout", protect, async (req, res) => {
+  await User.updateOne({ _id: req.user._id }, { $inc: { tokenVersion: 1 } });
   res.clearCookie("wh_token", { httpOnly: true, secure: cookieOpts.secure, sameSite: cookieOpts.sameSite });
   res.json({ message: "Logout effettuato." });
 });
@@ -225,7 +234,7 @@ router.put("/email", protect,
 // Risposta SEMPRE generica (stesso messaggio, stesso status) sia che
 // l'utente esista o meno, sia che abbia un'email associata o meno:
 // evita di far scoprire a chi non è autorizzato quali username esistono.
-router.post("/forgot-password", forgotPasswordLimiter,
+router.post("/forgot-password", forgotPasswordLimiter, forgotPasswordUserLimiter,
   [body("username").trim().notEmpty().withMessage("Username obbligatorio")],
   validate,
   async (req, res) => {
@@ -255,7 +264,7 @@ router.post("/reset-password",
   [
     body("userId").isMongoId().withMessage("Richiesta non valida"),
     body("token").isLength({ min: 20, max: 128 }).withMessage("Richiesta non valida"),
-    body("newPassword").isLength({ min: 6 }).withMessage("Nuova password minimo 6 caratteri"),
+    passwordRule("newPassword"),
   ],
   validate,
   async (req, res) => {
@@ -288,25 +297,28 @@ router.post("/reset-password",
 );
 
 // ── PUT /api/auth/theme — salva tema nel profilo ──────────────
-router.put("/theme", protect, async (req, res) => {
-  try {
-    const { mode, accentColor, radius } = req.body;
-    const updated = await User.findByIdAndUpdate(
-      req.user._id,
-      { "theme.mode": mode, "theme.accentColor": accentColor, "theme.radius": radius },
-      { new: true, runValidators: true }
-    );
+router.put("/theme", protect,
+  [
+    body("mode").optional().isIn(["light", "dark", "steel"]),
+    body("accentColor").optional().isString().matches(User.ACCENT_COLOR),
+    body("radius").optional().isIn(["none", "sm", "md", "lg", "full"]),
+  ],
+  validate,
+  async (req, res) => {
+    // Solo i campi inviati: un client che manda solo il colore non azzera il resto.
+    const set = Object.fromEntries(["mode", "accentColor", "radius"]
+      .filter((k) => req.body[k] !== undefined)
+      .map((k) => [`theme.${k}`, req.body[k]]));
+    const updated = await User.findByIdAndUpdate(req.user._id, { $set: set }, { new: true, runValidators: true });
     res.json({ theme: updated.theme });
-  } catch (err) {
-    res.status(500).json({ message: "Errore salvataggio tema." });
   }
-});
+);
 
 // ── PUT /api/auth/password ────────────────────────────────────
 router.put("/password", protect,
   [
     body("currentPassword").notEmpty().withMessage("Password attuale obbligatoria"),
-    body("newPassword").isLength({ min: 6 }).withMessage("Nuova password minimo 6 caratteri"),
+    passwordRule("newPassword"),
   ],
   validate,
   async (req, res) => {
@@ -316,7 +328,8 @@ router.put("/password", protect,
       if (!ok) return res.status(400).json({ message: "Password attuale non corretta." });
 
       user.password = req.body.newPassword;
-      await user.save();
+      await user.save(); // incrementa tokenVersion: gli altri dispositivi escono
+      setSessionCookie(res, user); // questo dispositivo resta collegato
       res.json({ message: "Password aggiornata con successo." });
     } catch (err) {
       res.status(500).json({ message: "Errore aggiornamento password." });

@@ -12,12 +12,13 @@ const validate = require("../middleware/validate");
 const { checkDepartment, visibleScope } = require("../utils/departmentAccess");
 const { colleagueFilter, hiddenSuperAdminId } = require("../utils/colleagues");
 const Department = require("../models/Department");
+const ChecklistSubmission = require("../models/ChecklistSubmission");
 const { PERIODS, resolvePeriod } = require("../utils/reportPeriod");
 const { exportLimiter, importLimiter } = require("../middleware/rateLimiter");
 const { buildReport, maskSuperAdmin } = require("../utils/andonReport");
 const { buildAndonWorkbook } = require("../utils/andonExcel");
 const { secureUpload } = require("../middleware/secureUpload");
-const { parseStandardTimesXlsx } = require("../utils/xlsxImport");
+const { parseStandardTimesFile } = require("../utils/xlsxImport");
 const { parseAndonXlsx } = require("../utils/xlsxAndonImport");
 const BomRecipe   = require("../models/BomRecipe");
 const Product     = require("../models/Product");
@@ -34,16 +35,16 @@ const uploadXlsx = secureUpload({
   allowedMime: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
   signature:   "xlsx",
 });
-
-// Express 4 does not forward rejected promises: without this, a DB error in an async
-// handler becomes an unhandled rejection and takes the whole process down.
-for (const method of ["get", "post", "put", "delete"]) {
-  const register = router[method].bind(router);
-  router[method] = (path, ...handlers) => register(path, ...handlers.map((h) =>
-    typeof h === "function" && h.constructor.name === "AsyncFunction"
-      ? (req, res, next) => h(req, res, next).catch(next)
-      : h));
-}
+// Tempi standard: anche .csv (es. esportato da Excel). Il CSV non ha magic bytes:
+// secureUpload verifica che sia testo e non un binario travestito.
+const uploadSheet = secureUpload({
+  field:       "file",
+  maxBytes:    1.5 * 1024 * 1024,
+  allowedExt:  [".xlsx", ".csv"],
+  allowedMime: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/csv", "text/plain", "application/csv", "application/vnd.ms-excel", "application/octet-stream"],
+  signature:   ["xlsx", "csv"],
+});
 
 router.use(protect);
 
@@ -89,36 +90,54 @@ const standardTimeRules = [
   body("dimensione").optional().trim(),
   body("label").trim().notEmpty().withMessage("Nome breve obbligatorio"),
   body("minuti").isInt({ min: 1, max: 24 * 60 }).withMessage("Minuti tra 1 e 1440").toInt(),
+  // Dati del pezzo (facoltativi: vuoti = tempo generico per tipologia)
+  body("commessa").optional().trim().isLength({ max: 50 }),
+  body("posizione").optional().trim().isLength({ max: 20 }),
+  body("cliente").optional().trim().isLength({ max: 200 }),
+  body("quantita").optional({ values: "falsy" }).isInt({ min: 1, max: 100000 }).withMessage("Quantità non valida").toInt(),
+  body("dn").optional().trim().isLength({ max: 50 }),
+  body("diametro").optional().trim().isLength({ max: 50 }),
 ];
+
+/** Campi salvabili di un tempo standard (whitelist: nient'altro dal body finisce nel DB). */
+const standardTimeFields = (b) => ({
+  tipologia: b.tipologia, dimensione: b.dimensione || "", label: b.label, minuti: b.minuti,
+  commessa: b.commessa || "", posizione: b.posizione || "", cliente: b.cliente || "",
+  quantita: b.quantita || null, dn: b.dn || "", diametro: b.diametro || "",
+});
+const DUPLICATE_STD = "In questo reparto esiste già un tempo per questo pezzo (commessa e posizione) o per questa tipologia e dimensione.";
 
 router.post("/standard-times", requireSupervisor, standardTimeRules, validate, async (req, res) => {
   const check = await checkDepartment(req.user, req.body.department, { forWrite: true });
   if (check.status) return res.status(check.status).json({ message: check.message });
-  const { tipologia, dimensione = "", label, minuti } = req.body;
   try {
     const item = await StandardTime.create({
-      department: check.department._id, tipologia, dimensione, label, minuti, updatedBy: req.user._id,
+      department: check.department._id, ...standardTimeFields(req.body), updatedBy: req.user._id,
     });
     res.status(201).json({ standardTime: item });
   } catch (err) {
-    if (err.code === 11000) return res.status(409).json({ message: "In questo reparto esiste già un tempo per questa tipologia e dimensione." });
+    if (err.code === 11000) return res.status(409).json({ message: DUPLICATE_STD });
     res.status(500).json({ message: "Errore." });
   }
 });
 
 router.put("/standard-times/:id", requireSupervisor, standardTimeRules, validate, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ message: "Tempo standard non trovato." });
-  const { tipologia, dimensione = "", label, minuti } = req.body;
+  // I dati del pezzo si aggiornano solo se inviati: un client che modifica solo tempo e
+  // tipologia non deve cancellare commessa, posizione, cliente ecc. di un pezzo importato.
+  const all = standardTimeFields(req.body);
+  const update = Object.fromEntries(Object.entries(all).filter(([k]) =>
+    ["tipologia", "dimensione", "label", "minuti"].includes(k) || req.body[k] !== undefined));
   try {
     const item = await StandardTime.findByIdAndUpdate(
       req.params.id,
-      { tipologia, dimensione, label, minuti, updatedBy: req.user._id },
+      { ...update, updatedBy: req.user._id },
       { new: true, runValidators: true },
     );
     if (!item) return res.status(404).json({ message: "Tempo standard non trovato." });
     res.json({ standardTime: item });
   } catch (err) {
-    if (err.code === 11000) return res.status(409).json({ message: "In questo reparto esiste già un tempo per questa tipologia e dimensione." });
+    if (err.code === 11000) return res.status(409).json({ message: DUPLICATE_STD });
     res.status(500).json({ message: "Errore." });
   }
 });
@@ -140,49 +159,82 @@ router.delete("/standard-times/:id", requireSupervisor, async (req, res) => {
 // Catena di sicurezza: importLimiter (anti-DoS) → requireSupervisor (ruolo) →
 // uploadXlsx (solo .xlsx vero, in memoria) → parser in sola lettura (anti
 // zip-bomb / formula-injection / prototype-pollution).
-router.post("/standard-times/import", importLimiter, requireSupervisor, uploadXlsx, async (req, res) => {
+// Campi che un import può scrivere su un tempo standard (whitelist fissa).
+const IMPORT_FIELDS = ["cliente", "quantita", "tipologia", "dimensione", "dn", "diametro", "label", "minuti"];
+// Nel reparto un pezzo è commessa+posizione; un tempo generico (senza commessa) è tipologia+dimensione.
+const stdKey = (t) => (t.commessa
+  ? `P\u0000${t.commessa}\u0000${t.posizione || ""}`
+  : `G\u0000${t.tipologia}\u0000${t.dimensione || ""}`);
+
+router.post("/standard-times/import", importLimiter, requireSupervisor, uploadSheet, async (req, res) => {
   const check = await checkDepartment(req.user, req.body.department, { forWrite: true });
   if (check.status) return res.status(check.status).json({ message: check.message });
 
   let parsed;
   try {
-    parsed = await parseStandardTimesXlsx(req.file.buffer);
+    parsed = await parseStandardTimesFile(req.file.buffer, req.fileKind);
   } catch (err) {
-    return res.status(err.status || 400).json({ message: err.message || "File Excel non leggibile." });
+    return res.status(err.status || 400).json({ message: err.message || "File non leggibile." });
   }
+
+  // Confronto con i tempi già presenti NEL REPARTO SCELTO: gli altri reparti non vengono
+  // mai letti né toccati, quindi Prima e Seconda Saldatura non possono entrare in conflitto.
+  const existing = await StandardTime.find({ department: check.department._id }).lean();
+  const byKey = new Map(existing.map((t) => [stdKey(t), t]));
+  const rows = parsed.rows.map((r) => {
+    const cur = byKey.get(stdKey(r));
+    if (!cur) return { ...r, status: "nuovo" };
+    const changes = IMPORT_FIELDS.filter((f) => (cur[f] ?? null) !== (r[f] ?? null) && !(cur[f] == null && r[f] === ""));
+    if (!cur.isActive) changes.push("riattivato");
+    return { ...r, status: changes.length ? "aggiornato" : "invariato", changes, id: String(cur._id),
+      before: changes.length ? Object.fromEntries(IMPORT_FIELDS.filter((f) => changes.includes(f)).map((f) => [f, cur[f]])) : undefined };
+  });
+  const count = (s) => rows.filter((r) => r.status === s).length;
 
   const commit = req.body.commit === "true" || req.body.commit === true;
   if (!commit) {
     return res.json({
-      preview:   true,
+      preview:    true,
       department: check.department._id,
-      summary:   { valid: parsed.rows.length, errors: parsed.errors.length, truncated: parsed.truncated },
-      rows:      parsed.rows,
-      errors:    parsed.errors,
+      perPiece:   parsed.perPiece,
+      summary: {
+        valid: rows.length, nuovi: count("nuovo"), aggiornati: count("aggiornato"), invariati: count("invariato"),
+        errors: parsed.errors.length, duplicates: parsed.duplicates, truncated: parsed.truncated,
+      },
+      rows,
+      errors: parsed.errors,
     });
   }
 
-  // Salvataggio: upsert riga per riga (whitelist fissa di campi).
+  // Salvataggio: aggiunge i nuovi, aggiorna i cambiati, non tocca gli invariati, non cancella nulla.
   let created = 0, updated = 0, failed = 0;
-  for (const r of parsed.rows) {
+  const saveErrors = [];
+  for (const r of rows) {
+    if (r.status === "invariato") continue;
+    const fields = Object.fromEntries(IMPORT_FIELDS.map((f) => [f, r[f] ?? (f === "quantita" ? null : "")]));
     try {
-      const resUp = await StandardTime.updateOne(
-        { department: check.department._id, tipologia: r.tipologia, dimensione: r.dimensione || "" },
-        { $set: { label: r.label, minuti: r.minuti, isActive: true, updatedBy: req.user._id } },
-        { upsert: true },
-      );
-      if (resUp.upsertedCount) created++;
-      else if (resUp.modifiedCount || resUp.matchedCount) updated++;
-    } catch {
+      if (r.status === "nuovo") {
+        await StandardTime.create({
+          department: check.department._id, commessa: r.commessa, posizione: r.posizione,
+          ...fields, isActive: true, updatedBy: req.user._id,
+        });
+        created++;
+      } else {
+        await StandardTime.updateOne({ _id: r.id, department: check.department._id },
+          { $set: { ...fields, isActive: true, updatedBy: req.user._id } }, { runValidators: true });
+        updated++;
+      }
+    } catch (err) {
       failed++;
+      saveErrors.push({ row: r.row, message: err.code === 11000 ? DUPLICATE_STD : "Salvataggio non riuscito." });
     }
   }
 
   res.json({
-    preview:  false,
+    preview:    false,
     department: check.department._id,
-    summary:  { created, updated, failed, skipped: parsed.errors.length, truncated: parsed.truncated },
-    errors:   parsed.errors,
+    summary: { created, updated, unchanged: count("invariato"), failed, skipped: parsed.errors.length, truncated: parsed.truncated },
+    errors: [...parsed.errors, ...saveErrors],
   });
 });
 
@@ -686,6 +738,90 @@ router.post("/entries/:id/undo", requireSupervisor, async (req, res) => {
 });
 
 // ── Confronto tempo standard vs impiegato ─────────────────────
+
+// ── Panoramica per la Home: tutti i reparti visibili a colpo d'occhio ──
+// Per ogni reparto: oggi e ultimi 7 giorni (righe, pezzi, efficienza), commesse in lavorazione
+// (iniziate e non finite) e da avviare, andamento degli ultimi 14 giorni, 5S compilate oggi.
+// Stessa visibilità dell'Andon (productionScope): reparti dell'utente e colleghi per gli operai.
+const romeDay = (d = new Date()) => d.toLocaleDateString("sv-SE", { timeZone: "Europe/Rome" });   // YYYY-MM-DD
+const OVERVIEW_DAYS = 14;
+
+router.get("/overview", async (req, res) => {
+  const scope = await productionScope(req, res);
+  if (!scope) return;
+  const today = romeDay();
+  const from = new Date(dayStart(today)); from.setUTCDate(from.getUTCDate() - (OVERVIEW_DAYS - 1));
+  const weekFrom = new Date(dayStart(today)); weekFrom.setUTCDate(weekFrom.getUTCDate() - 6);
+  const sums = {
+    righe:           { $sum: 1 },
+    pezzi:           { $sum: "$quantita" },
+    attesoMinuti:    { $sum: { $multiply: ["$tempoStdMinuti", "$quantita"] } },
+    impiegatoMinuti: { $sum: "$tempoImpiegatoMinuti" },
+  };
+
+  const [departments, [agg], fiveS] = await Promise.all([
+    Department.find({ isActive: true, ...visibleScope(req.user, "_id") }).sort({ order: 1, name: 1 }).select("name").lean(),
+    ProductionEntry.aggregate([
+      { $match: scope },
+      { $facet: {
+        perGiorno: [
+          { $match: { data: { $gte: from } } },
+          { $group: { _id: { dep: "$department", day: { $dateToString: { format: "%Y-%m-%d", date: "$data" } } }, ...sums } },
+        ],
+        inLavorazione: [
+          { $match: { iniziataAt: { $ne: null }, finitaAt: null } },
+          { $group: { _id: "$department", n: { $sum: 1 } } },
+        ],
+        daAvviare: [
+          { $match: { iniziataAt: null, data: { $gte: from } } },
+          { $group: { _id: "$department", n: { $sum: 1 } } },
+        ],
+      } },
+    ]),
+    ChecklistSubmission.aggregate([
+      { $match: { date: today, ...visibleScope(req.user) } },
+      { $group: { _id: "$department", n: { $sum: 1 } } },
+    ]),
+  ]);
+
+  const eff = (r) => (r.impiegatoMinuti > 0 ? Math.round((r.attesoMinuti / r.impiegatoMinuti) * 100) / 100 : null);
+  const add = (a, r) => ({ righe: a.righe + r.righe, pezzi: a.pezzi + r.pezzi,
+    attesoMinuti: a.attesoMinuti + r.attesoMinuti, impiegatoMinuti: a.impiegatoMinuti + r.impiegatoMinuti });
+  const zero = { righe: 0, pezzi: 0, attesoMinuti: 0, impiegatoMinuti: 0 };
+  const count = (rows, id) => rows.find((r) => String(r._id) === id)?.n || 0;
+  const days = Array.from({ length: OVERVIEW_DAYS }, (_, i) => {
+    const d = new Date(from); d.setUTCDate(d.getUTCDate() + i); return d.toISOString().slice(0, 10);
+  });
+
+  const reparti = departments.map((d) => {
+    const id = String(d._id);
+    const mine = agg.perGiorno.filter((r) => String(r._id.dep) === id);
+    const byDay = new Map(mine.map((r) => [r._id.day, r]));
+    const oggi = byDay.get(today) || zero;
+    const settimana = mine.filter((r) => new Date(dayStart(r._id.day)) >= weekFrom).reduce(add, zero);
+    return {
+      id, name: d.name,
+      oggi:      { righe: oggi.righe, pezzi: oggi.pezzi, efficienza: eff(oggi) },
+      settimana: { righe: settimana.righe, pezzi: settimana.pezzi, efficienza: eff(settimana) },
+      inLavorazione: count(agg.inLavorazione, id),
+      daAvviare:     count(agg.daAvviare, id),
+      fiveSOggi:     count(fiveS, id),
+      andamento: days.map((day) => { const r = byDay.get(day) || zero; return { day, pezzi: r.pezzi, efficienza: eff(r) }; }),
+    };
+  });
+
+  const tot = (k) => reparti.reduce((s, r) => s + r[k], 0);
+  const all = agg.perGiorno.reduce(add, zero);
+  const allToday = agg.perGiorno.filter((r) => r._id.day === today).reduce(add, zero);
+  res.json({
+    oggi: today,
+    totale: {
+      pezziOggi: allToday.pezzi, efficienzaOggi: eff(allToday), efficienza14: eff(all),
+      inLavorazione: tot("inLavorazione"), daAvviare: tot("daAvviare"), fiveSOggi: tot("fiveSOggi"),
+    },
+    reparti,
+  });
+});
 
 router.get("/stats", periodRules, validate, async (req, res) => {
   const scope = await productionScope(req, res);

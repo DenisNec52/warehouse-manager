@@ -29,7 +29,11 @@ const publicView = (s) => ({
   appName:          s.appName,
   workPhases:       s.workPhases || [],
   moduleVisibility: s.moduleVisibility || {},
+  features:         { bollaPdf: Boolean(s.features?.bollaPdf) },
 });
+
+// Funzioni facoltative accendibili dal super-admin (solo booleani, chiavi note).
+const FEATURE_KEYS = ["bollaPdf"];
 
 router.get("/", async (_req, res) => {
   const s = await AppSettings.getSettings();
@@ -41,6 +45,7 @@ router.put("/", requireSuperAdmin,
     body("appName").optional().trim().isLength({ min: 1, max: 60 }).withMessage("Nome app 1–60 caratteri"),
     body("workPhases").optional().isArray({ max: 30 }).withMessage("Fasi non valide (max 30)"),
     body("moduleVisibility").optional().isObject().withMessage("Visibilità non valida"),
+    body("features").optional().isObject().withMessage("Funzioni non valide"),
   ],
   validate,
   async (req, res) => {
@@ -60,6 +65,12 @@ router.put("/", requireSuperAdmin,
         mv[k] = [...new Set(v.filter((r) => ROLES.includes(r)))];
       }
       $set.moduleVisibility = mv;
+    }
+
+    if (req.body.features && typeof req.body.features === "object") {
+      for (const k of FEATURE_KEYS) {
+        if (typeof req.body.features[k] === "boolean") $set[`features.${k}`] = req.body.features[k];
+      }
     }
 
     $set.updatedBy = req.user._id;

@@ -72,15 +72,19 @@ export const useThemeStore = create(
       setAccent: (accent, hex)  => { set({ accent, customAccent: hex || "" }); get().applyTheme(); },
       setRadius: (radius)       => { set({ radius });       get().applyTheme(); },
 
-      /** Carica il tema dal profilo utente */
+      /**
+       * Carica il tema dal profilo utente. Il backend salva un solo campo `accentColor`:
+       * il nome di un accento predefinito ("green") oppure l'esadecimale di quello personalizzato.
+       * (Prima si leggeva `theme.accent`, che non esiste: l'accento tornava blu a ogni accesso.)
+       */
       loadFromProfile: (theme) => {
         if (!theme) return;
-        set({
-          mode:        theme.mode   || "light",
-          accent:      theme.accent || "blue",
-          customAccent:theme.customAccent || "",
-          radius:      theme.radius || "md",
-        });
+        const stored = String(theme.accentColor || "");
+        const isHex = /^#[0-9a-f]{6}$/i.test(stored);
+        let accent = "blue", customAccent = "";
+        if (ACCENT_MAP[stored]) accent = stored;
+        else if (isHex && stored.toLowerCase() !== ACCENT_MAP.blue.hex) { accent = "custom"; customAccent = stored; }
+        set({ mode: theme.mode || "light", accent, customAccent, radius: theme.radius || "md" });
         get().applyTheme();
       },
     }),

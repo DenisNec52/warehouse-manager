@@ -6,16 +6,16 @@ const mongoose     = require("mongoose");
 const Notification = require("../models/Notification");
 const { protect }  = require("../middleware/auth");
 const { notificationScope } = require("../utils/colleagues");
+const { pagination } = require("../utils/query");
 const router       = express.Router();
 
 router.use(protect);
 
 router.get("/", async (req, res) => {
-  const { page = 1, limit = 20 } = req.query;
+  const { limit, skip } = pagination(req.query);
   const filter = notificationScope(req.user);
-  const skip   = (parseInt(page) - 1) * parseInt(limit);
   const [notifications, total] = await Promise.all([
-    Notification.find(filter).sort("-createdAt").skip(skip).limit(parseInt(limit)).lean(),
+    Notification.find(filter).sort("-createdAt").skip(skip).limit(limit).lean(),
     Notification.countDocuments(filter),
   ]);
   res.json({ notifications, total, unread: notifications.filter(n => !n.read).length });

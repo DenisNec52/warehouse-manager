@@ -201,7 +201,8 @@ export default function VisionScanner() {
         whileHover={{ scale: 1.08 }}
         whileTap={{ scale: 0.94 }}
         className={clsx(
-          "fixed bottom-6 right-6 z-50",
+          // Su telefono sta sopra la barra di navigazione in basso (h-16 + area sicura)
+          "fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] lg:bottom-6 right-5 lg:right-6 z-50",
           "w-14 h-14 rounded-full shadow-xl",
           "bg-(--brand-500) hover:bg-(--brand-600)",
           "flex items-center justify-center text-white",

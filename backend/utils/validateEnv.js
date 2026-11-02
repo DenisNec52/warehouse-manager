@@ -87,6 +87,23 @@ module.exports = function validateEnv() {
     console.warn(`\n⚠️  ${msg}\n`);
   }
 
+  // Database esterno: in produzione la connessione deve essere cifrata e verificata.
+  // mongodb+srv:// (Atlas) usa TLS di default; con mongodb:// serve tls=true esplicito.
+  // Disattivare la verifica dei certificati aprirebbe la porta a un man-in-the-middle
+  // che legge credenziali e dati in transito.
+  if (process.env.NODE_ENV === "production") {
+    const uri = process.env.MONGODB_URI;
+    const params = new URLSearchParams(uri.split("?")[1] || "");
+    const tlsOff = ["tls", "ssl"].some((k) => params.get(k) === "false");
+    const tlsOn = uri.startsWith("mongodb+srv://") || ["tls", "ssl"].some((k) => params.get(k) === "true");
+    const insecure = ["tlsInsecure", "tlsAllowInvalidCertificates", "tlsAllowInvalidHostnames"].some((k) => params.get(k) === "true");
+    if (!tlsOn || tlsOff || insecure) {
+      console.error("\n❌  MONGODB_URI non sicura per la produzione: serve TLS attivo e con verifica dei certificati " +
+        "(usa la stringa mongodb+srv:// di Atlas, senza tls=false / tlsInsecure / tlsAllowInvalid*).\n");
+      process.exit(1);
+    }
+  }
+
   const warnings = [];
   if (process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "true")
     warnings.push("NODE_ENV=production ma COOKIE_SECURE non è 'true': i cookie di sessione non saranno marcati Secure/SameSite=None (rischioso dietro HTTPS con frontend su dominio diverso).");

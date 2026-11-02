@@ -10,9 +10,13 @@
 const mongoose = require("mongoose");
 const bcrypt   = require("bcryptjs");
 
+// Accento: nome di un colore predefinito del frontend (lib/store.js) o esadecimale di uno personalizzato.
+// Mai testo libero: il valore finisce in una variabile CSS.
+const ACCENT_COLOR = /^(#[0-9a-fA-F]{6}|blue|green|purple|orange|red|teal)$/;
+
 const themeSchema = new mongoose.Schema({
   mode:        { type: String, enum: ["light","dark","steel"], default: "light" },
-  accentColor: { type: String, default: "#3b82f6" },
+  accentColor: { type: String, default: "#3b82f6", match: ACCENT_COLOR },
   radius:      { type: String, enum: ["none","sm","md","lg","full"], default: "md" },
 }, { _id: false });
 
@@ -28,7 +32,7 @@ const userSchema = new mongoose.Schema({
   password: {
     type:     String,
     required: [true, "Password obbligatoria"],
-    minlength: [6, "Password minimo 6 caratteri"],
+    minlength: [8, "Password minimo 8 caratteri"],
     select:   false,  // mai restituita nelle query di default
   },
   name: {
@@ -86,6 +90,12 @@ const userSchema = new mongoose.Schema({
   resetPasswordTokenHash: { type: String, select: false, default: null },
   resetPasswordExpires:   { type: Date, select: false, default: null },
 
+  // ── Revoca delle sessioni ─────────────────────────────────────
+  // Copiato nel JWT al login: se qui cambia, tutti i token emessi prima smettono di
+  // valere (vedi middleware/auth.js). Sale a ogni cambio/reset password e al logout,
+  // così un cookie rubato non sopravvive alla reazione dell'utente.
+  tokenVersion: { type: Number, default: 0, min: 0 },
+
   // ── Reparti ───────────────────────────────────────────────────
   // departments: gruppi a cui appartiene l'utente.
   // visibleDepartments: eccezione individuale sui reparti visibili; null = uguale ai gruppi.
@@ -125,6 +135,9 @@ userSchema.methods.visibleDepartmentIds = function() {
 userSchema.pre("save", async function(next) {
   if (!this.isModified("password")) return next();
   this.password = await bcrypt.hash(this.password, 12);
+  // Nuova password = vecchie sessioni chiuse su tutti i dispositivi (chi la cambia ottiene
+  // subito un cookie nuovo, vedi routes/auth.js).
+  if (!this.isNew) this.tokenVersion = (this.tokenVersion || 0) + 1;
   next();
 });
 
@@ -156,3 +169,4 @@ userSchema.methods.toPublic = function() {
 };
 
 module.exports = mongoose.model("User", userSchema);
+module.exports.ACCENT_COLOR = ACCENT_COLOR;

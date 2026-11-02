@@ -10,6 +10,9 @@
  * - moduleVisibility: per ogni modulo di menu, i ruoli ammessi a vederlo. È uno
  *   STRATO di nascondimento lato interfaccia che si somma — non sostituisce — ai
  *   controlli di autorizzazione lato server (quelli restano la vera difesa).
+ * - features: funzioni facoltative accese/spente dal super-admin. Al contrario di
+ *   moduleVisibility sono applicate DAL SERVER (es. routes/bolle.js risponde 404 se spenta).
+ *     bollaPdf — PDF della bolla consultabile accanto a ogni commessa dell'Andon.
  */
 const mongoose = require("mongoose");
 
@@ -21,6 +24,9 @@ const appSettingsSchema = new mongoose.Schema({
   workPhases: { type: [String], default: () => [...DEFAULT_PHASES] },
   // { [moduleKey]: ["admin","supervisore","operatore"] }. Chiave assente = visibile a tutti.
   moduleVisibility: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
+  features: {
+    bollaPdf: { type: Boolean, default: false },
+  },
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 }, { timestamps: true });
 

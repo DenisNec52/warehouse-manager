@@ -34,17 +34,20 @@ const RADII    = [
 export default function ThemePanel({ onClose }) {
   const { mode, accent, customAccent, radius, setMode, setAccent, setRadius } = useThemeStore();
 
-  const save = async (newMode, newAccent, newRadius) => {
+  // Sul server c'è un solo campo: nome dell'accento predefinito oppure esadecimale di quello
+  // personalizzato (salvare "custom" da solo perdeva il colore scelto). Vedi loadFromProfile.
+  const stored = (a, hex) => (a === "custom" ? hex || customAccent : a);
+  const save = async (newMode, accentValue, newRadius) => {
     try {
-      await authAPI.theme({ mode: newMode, accentColor: newAccent, radius: newRadius });
+      await authAPI.theme({ mode: newMode, accentColor: accentValue, radius: newRadius });
     } catch {
       // Preferenza non salvata sul server: il tema resta comunque applicato in questo browser
     }
   };
 
-  const handleMode = (m) => { setMode(m); save(m, accent, radius); };
-  const handleAccent = (a, hex) => { setAccent(a, hex); save(mode, a, radius); };
-  const handleRadius = (r) => { setRadius(r); save(mode, accent, r); };
+  const handleMode = (m) => { setMode(m); save(m, stored(accent), radius); };
+  const handleAccent = (a, hex) => { setAccent(a, hex); save(mode, stored(a, hex), radius); };
+  const handleRadius = (r) => { setRadius(r); save(mode, stored(accent), r); };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-end">

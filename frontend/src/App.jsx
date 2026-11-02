@@ -20,7 +20,6 @@ import NotFoundPage       from "@/pages/NotFoundPage";
 const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage"));
 const ResetPasswordPage  = lazy(() => import("@/pages/ResetPasswordPage"));
 const BadgeLoginPage     = lazy(() => import("@/pages/BadgeLoginPage"));
-const DashboardPage      = lazy(() => import("@/pages/DashboardPage"));
 const ProductsPage       = lazy(() => import("@/pages/ProductsPage"));
 const ProductDetail      = lazy(() => import("@/pages/ProductDetailPage"));
 const MovementsPage      = lazy(() => import("@/pages/MovementsPage"));
@@ -34,7 +33,6 @@ const ChecklistAdminPage = lazy(() => import("@/pages/ChecklistAdminPage"));
 // Modulo produzione saldatura (Andon Board / Tempi standard)
 const AndonBoardPage     = lazy(() => import("@/pages/AndonBoardPage"));
 const StandardTimesPage  = lazy(() => import("@/pages/StandardTimesPage"));
-const AdminPage          = lazy(() => import("@/pages/AdminPage"));
 const DepartmentsPage    = lazy(() => import("@/pages/DepartmentsPage"));
 const SuperAdminPage     = lazy(() => import("@/pages/SuperAdminPage"));
 
@@ -43,6 +41,7 @@ const page = (el) => <Suspense fallback={<RouteLoader/>}>{el}</Suspense>;
 
 // Layout
 import AppLayout from "@/components/layout/AppLayout";
+import SectionLayout from "@/components/layout/SectionLayout";
 
 function RouteLoader() {
   return (
@@ -173,33 +172,45 @@ export default function App() {
         </RequireAuth>
       }>
       <Route index element={<HomePage/>}/>
-      <Route path="warehouse"        element={page(<DashboardPage/>)}/>
-      <Route path="products"         element={page(<ProductsPage/>)}/>
-      <Route path="products/:id"     element={page(<ProductDetail/>)}/>
-      <Route path="movements"        element={page(<MovementsPage/>)}/>
-      <Route path="admin/departments" element={
-        <RequireAdmin>{page(<DepartmentsPage/>)}</RequireAdmin>
-      }/>
-      <Route path="admin" element={
-        <RequireAdmin>{page(<AdminPage/>)}</RequireAdmin>
-      }/>
-      <Route path="categories" element={
-        <RequireAdmin>{page(<CategoriesPage/>)}</RequireAdmin>
-      }/>
       <Route path="notifications"    element={page(<NotificationsPage/>)}/>
-      <Route path="settings"         element={page(<SettingsPage/>)}/>
-      <Route path="checklist"        element={page(<ChecklistPage/>)}/>
-      <Route path="production"       element={page(<AndonBoardPage/>)}/>
-      <Route path="production/standard-times" element={page(<StandardTimesPage/>)}/>
-      <Route path="users" element={
-        <RequireSupervisor>{page(<UsersPage/>)}</RequireSupervisor>
-      }/>
-      <Route path="admin/checklist" element={
-        <RequireSupervisor>{page(<ChecklistAdminPage/>)}</RequireSupervisor>
-      }/>
-      <Route path="superadmin" element={
-        <RequireSuperAdmin>{page(<SuperAdminPage/>)}</RequireSuperAdmin>
-      }/>
+
+      {/* Sezioni con schede: stessi URL di prima, raggruppati */}
+      <Route element={<SectionLayout section="checklist"/>}>
+        <Route path="checklist"        element={page(<ChecklistPage/>)}/>
+        <Route path="admin/checklist" element={
+          <RequireSupervisor>{page(<ChecklistAdminPage/>)}</RequireSupervisor>
+        }/>
+      </Route>
+      <Route element={<SectionLayout section="warehouse"/>}>
+        <Route path="products"         element={page(<ProductsPage/>)}/>
+        <Route path="products/:id"     element={page(<ProductDetail/>)}/>
+        <Route path="movements"        element={page(<MovementsPage/>)}/>
+      </Route>
+      <Route element={<SectionLayout section="production"/>}>
+        <Route path="production"       element={page(<AndonBoardPage/>)}/>
+        <Route path="production/standard-times" element={page(<StandardTimesPage/>)}/>
+      </Route>
+      <Route element={<SectionLayout section="people"/>}>
+        <Route path="users" element={
+          <RequireSupervisor>{page(<UsersPage/>)}</RequireSupervisor>
+        }/>
+      </Route>
+      <Route element={<SectionLayout section="settings"/>}>
+        <Route path="settings"         element={page(<SettingsPage/>)}/>
+        <Route path="admin/departments" element={
+          <RequireAdmin>{page(<DepartmentsPage/>)}</RequireAdmin>
+        }/>
+        <Route path="categories" element={
+          <RequireAdmin>{page(<CategoriesPage/>)}</RequireAdmin>
+        }/>
+        <Route path="superadmin" element={
+          <RequireSuperAdmin>{page(<SuperAdminPage/>)}</RequireSuperAdmin>
+        }/>
+      </Route>
+
+      {/* Pagine unite ad altre: i vecchi link restano validi */}
+      <Route path="warehouse" element={<Navigate to="/" replace/>}/>
+      <Route path="admin"     element={<Navigate to="/settings" replace/>}/>
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />
