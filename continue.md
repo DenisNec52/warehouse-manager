@@ -1,5 +1,21 @@
 # CONTINUE — cosa resta da fare
 
+## Versione 1.1.0 (2026-11-02, branch `release/1.1.0`)
+- Portata la beta del 2/11: bolle PDF per posizione (GridFS, attivabili dal super-admin),
+  tempi standard per pezzo + import CSV, Home unificata (ex Dashboard/Admin), sezioni a schede, Ctrl+K.
+- Sicurezza: simulati 60 attacchi su MongoDB in memoria → 12 falle corrette, 0 rimaste.
+  Regressioni in `backend/tests/security-1.1.test.js`. Dettagli nel commit "security:".
+- Migrazioni automatiche all'avvio: `2026-11-01-tempi-per-pezzo`, `2026-11-02-bolle-per-posizione`,
+  `2026-11-02-tema-accento-valido`.
+- Al primo deploy tutti dovranno rifare il login solo se cambiano password/escono: i token vecchi restano validi.
+
+### Da fare — Denis (database Atlas, non si fa dal codice)
+1. Utente DB dell'app con ruolo **readWrite solo sul database warehouse** (non "Atlas admin").
+2. Network Access: oggi probabilmente `0.0.0.0/0`. Con IP di uscita fissi di Render, restringere a quelli.
+3. Attivare i backup del cluster (o un `mongodump` periodico) e l'avviso di accessi sospetti di Atlas.
+4. Ruotare la password del DB se è mai stata incollata in chat, log o file condivisi.
+
+
 Aggiornato: 2026-10-24. Branch: `fix/import-tempi-standard-intestazioni` → **PR #10**
 (https://github.com/DenisNec52/warehouse-manager/pull/10), base `main` @ `52eec9f` (PR #9 già unita).
 
@@ -50,7 +66,7 @@ Aggiornato: 2026-10-24. Branch: `fix/import-tempi-standard-intestazioni` → **P
 5. Facoltativo: un solo import che crea le righe Andon E aggiorna i Tempi standard.
 
 ## Rimasto in sospeso da prima
-- Bump di versione (package.json è ancora `1.0.0`) e tag di release.
+- ~~Bump di versione~~ fatto (1.1.0). Manca il tag di release `v1.1.0` dopo il merge.
 - Stash `WIP lettore barcode (segreto hex + parser tollerante)` — da riprendere dopo i reparti.
 
 ## Promemoria per chi riprende
